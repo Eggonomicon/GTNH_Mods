@@ -1,0 +1,11 @@
+[
+{
+  "modid": "${modId}",
+  "name": "${modName}",
+  "description": "Server-side: hostile mobs don't spawn in claimed chunks by default. Every ServerUtilities team starts with hostile spawns blocked in its claims and can change it in its team settings (passive animals, bats and water mobs too).",
+  "version": "${modVersion}",
+  "mcversion": "${minecraftVersion}",
+  "authorList": ["Valier"],
+  "dependencies": ["serverutilities"]
+}
+]

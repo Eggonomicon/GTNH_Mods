@@ -1,0 +1,11 @@
+// ServerUtilities (the claims and teams) and fastutil (its config API uses it), straight from a GTNH 2.9 server's own
+// jars: compile-time only, the server already has them at run time.
+// Point -PgtnhInstance=<folder> (or gtnhInstance in ~/.gradle/gradle.properties) at your server's folder; by default
+// it is ../../GTNH_Instance next to this repository.
+def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Instance"
+
+dependencies {
+    compileOnly(files(
+        "${gtnh}/mods/ServerUtilities-2.4.22.jar",
+        "${gtnh}/falsepattern/it.unimi.dsi-fastutil-8.5.18.jar"))
+}
