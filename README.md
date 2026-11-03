@@ -23,7 +23,8 @@ hooks into Matter Manipulator 0.1.75-GTNH and may need updating for other versio
 
 ## Installing
 
-1. Download the jars from the [Releases](../../releases) page, or build them (below).
+1. Download the jars from the [latest release](https://github.com/Eggonomicon/GTNH_Mods/releases/latest) (with
+   `SHA256SUMS.txt` to check them), or build them (below).
 2. Put them in the server's `mods` folder and restart the server.
 3. Each mod writes its config to `config/` on first start; see its README for the settings and commands.
 
