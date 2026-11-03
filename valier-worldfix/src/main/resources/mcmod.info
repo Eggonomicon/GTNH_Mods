@@ -1,0 +1,11 @@
+[
+{
+  "modid": "${modId}",
+  "name": "${modName}",
+  "description": "Server-side admin tool: finishes populating chunks a pregen generated but never populated (trees, ores, structures), a few per tick while the server is empty, so players don't trigger it as they explore.",
+  "version": "${modVersion}",
+  "mcversion": "${minecraftVersion}",
+  "authorList": ["Valier"],
+  "dependencies": []
+}
+]

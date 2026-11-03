@@ -1,0 +1,14 @@
+# Not published (yet)
+/gtnh-kinetics/
+/_staging/
+
+# Build output and IDE files, in every mod
+build/
+.gradle/
+run/
+out/
+bin/
+.idea/
+.vscode/
+*.iml
+__pycache__/

@@ -1,0 +1,12 @@
+[
+  {
+    "modid": "mmfreepower",
+    "name": "MM Free Power",
+    "description": "Server-side tweak: Matter Manipulators never consume EU, and an MK III crafted on its own becomes the Valier MM Mk IV, which places blocks without machines for free. Clients do not need this mod.",
+    "version": "1.1.2",
+    "mcversion": "1.7.10",
+    "authorList": ["GTNH server setup"],
+    "requiredMods": [],
+    "dependencies": ["matter-manipulator"]
+  }
+]

@@ -1,0 +1,16 @@
+[
+{
+  "modid": "${modId}",
+  "name": "${modName}",
+  "description": "Per-player loot chests, server side only: every player gets their own copy of each worldgen chest's loot. Clients need nothing installed.",
+  "version": "${modVersion}",
+  "mcversion": "${minecraftVersion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["Valier"],
+  "credits": "Idea from Lootr. No Lootr code is used.",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]
