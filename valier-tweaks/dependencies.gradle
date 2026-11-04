@@ -1,0 +1,9 @@
+// Tinkers' Construct, straight from a GTNH 2.9 server's own jar: compile-time only, and only the self-test uses it
+// (to build a real lumber axe). The mod itself finds Tinkers' classes by name, so it loads without them.
+// Point -PgtnhInstance=<folder> (or gtnhInstance in ~/.gradle/gradle.properties) at your server's folder; by default
+// it is ../../GTNH_Instance next to this repository.
+def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Instance"
+
+dependencies {
+    compileOnly(files("${gtnh}/mods/TConstruct-1.14.123-GTNH.jar"))
+}

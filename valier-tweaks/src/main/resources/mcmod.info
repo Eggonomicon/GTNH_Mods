@@ -1,0 +1,10 @@
+[
+{
+  "modid": "${modId}",
+  "name": "${modName}",
+  "description": "Server-side tweaks for the Valier server. A Tinkers' Construct lumber axe fells the whole tree, even when it breaks partway, so no floating trees are left behind.",
+  "version": "${modVersion}",
+  "mcversion": "${minecraftVersion}",
+  "authorList": ["Valier"]
+}
+]
