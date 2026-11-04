@@ -13,7 +13,8 @@ import cpw.mods.fml.common.event.FMLServerStartingEvent;
 
 /**
  * Hostile mobs don't spawn in claimed chunks by default: every ServerUtilities team gets default spawn settings for its
- * claims, once, and can change them in its team settings (see {@link ClaimDefaults}).
+ * claims, once, and can change them in its team settings (see {@link ClaimDefaults}). Hostile mobs that still turn up
+ * in such a claim are logged with where they came from (see {@link SpawnLog}).
  */
 @Mod(
     modid = ValierClaims.MODID,
@@ -31,6 +32,7 @@ public class ValierClaims {
     public void preInit(FMLPreInitializationEvent event) {
         ClaimsConfig.load(new File(event.getModConfigurationDirectory(), MODID + ".cfg"));
         MinecraftForge.EVENT_BUS.register(new ClaimDefaults());
+        MinecraftForge.EVENT_BUS.register(new SpawnLog());
     }
 
     @Mod.EventHandler

@@ -1,10 +1,14 @@
 package com.valier.claims;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 
 import net.minecraft.command.ICommandSender;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.monster.EntityCreeper;
 import net.minecraft.entity.monster.EntitySkeleton;
@@ -15,13 +19,19 @@ import net.minecraft.entity.passive.EntityChicken;
 import net.minecraft.entity.passive.EntityCow;
 import net.minecraft.entity.passive.EntityPig;
 import net.minecraft.entity.passive.EntitySquid;
+import net.minecraft.item.ItemMonsterPlacer;
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTTagByte;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
+import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.DamageSource;
+import net.minecraft.world.EnumDifficulty;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.common.util.FakePlayer;
+import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.event.ForgeEventFactory;
 
 import cpw.mods.fml.common.eventhandler.Event;
@@ -47,17 +57,25 @@ import serverutils.lib.math.ChunkDimPos;
  * vclegacy got the defaults as it loaded, vcown kept its own settings, and {@code reapply} works; then the test teams
  * and claim are removed again.</li>
  * </ol>
+ * The spawn log has a one-boot test: {@code team create_server_team vcspawn}, then {@code valierclaims selftest
+ * spawnlog}. It puts hostile mobs into a claim of vcspawn's in different ways (a command, a spawn egg, real zombie
+ * reinforcements, walking in) and checks what {@link SpawnLog} makes of each, then removes the team and claim.
+ * <p>
  * Each check logs one {@code [ValierClaims SelfTest] PASS/FAIL} line, then a SUMMARY line.
  */
 final class SelfTest {
 
     static final boolean ENABLED = Boolean.getBoolean("valierclaims.selftest");
 
-    private static final String TEAM = "vctest", LEGACY = "vclegacy", OWN = "vcown";
+    private static final String TEAM = "vctest", LEGACY = "vclegacy", OWN = "vcown", SPAWN_TEAM = "vcspawn";
     private static final int CX = 200, CZ = 200; // claimed by vctest
     private static final int FREE_CX = 260, FREE_CZ = 200; // nobody's
+    /** vcspawn claims a square of chunks this far around SCX,SCZ: room for reinforcements, which land 7-40 away. */
+    private static final int SCX = 300, SCZ = 200, SR = 3;
 
     private static int passed, failed;
+    /** How many of SpawnLog's entries the spawn-log checks have looked at. */
+    private static int seen;
     private static final List<String> failures = new ArrayList<>();
 
     private SelfTest() {}
@@ -73,8 +91,11 @@ final class SelfTest {
                 case "check":
                     check(sender);
                     break;
+                case "spawnlog":
+                    spawnLog();
+                    break;
                 default:
-                    ClaimsCommand.say(sender, "Steps: prepare, check");
+                    ClaimsCommand.say(sender, "Steps: prepare, check, spawnlog");
                     return;
             }
         } catch (Throwable t) {
@@ -194,6 +215,141 @@ final class SelfTest {
         check(
             team(universe, TEAM) == null && team(universe, LEGACY) == null && team(universe, OWN) == null,
             "test teams deleted");
+    }
+
+    private static void spawnLog() throws Exception {
+        Universe universe = Universe.get();
+        ForgeTeam team = team(universe, SPAWN_TEAM);
+        check(team != null, "team create_server_team made " + SPAWN_TEAM);
+        if (team == null) return;
+        checkDefaults(team, SPAWN_TEAM);
+        check(ClaimsConfig.logHostileMobs, "logHostileMobs is on");
+
+        WorldServer world = DimensionManager.getWorld(0);
+        ServerUtilitiesTeamData data = ServerUtilitiesTeamData.get(team);
+        List<ChunkDimPos> claims = new ArrayList<>();
+        for (int cx = SCX - SR; cx <= SCX + SR; cx++) for (int cz = SCZ - SR; cz <= SCZ + SR; cz++) {
+            world.theChunkProviderServer.loadChunk(cx, cz);
+            ChunkDimPos pos = new ChunkDimPos(cx, cz, 0);
+            ClaimedChunks.instance.addChunk(new ClaimedChunk(pos, data));
+            claims.add(pos);
+        }
+        int freeCX = SCX + SR + 1; // the chunk east of the claim: nobody's
+        world.theChunkProviderServer.loadChunk(freeCX, SCZ);
+        ClaimedChunks.instance.processQueue();
+        boolean claimed = true;
+        for (ChunkDimPos pos : claims) claimed &= team.equalsTeam(ClaimedChunks.instance.getChunkTeam(pos));
+        check(claimed, SPAWN_TEAM + " claims the " + claims.size() + " chunks around " + SCX + "," + SCZ);
+        check(ClaimedChunks.instance.getChunkTeam(new ChunkDimPos(freeCX, SCZ, 0)) == null, "chunk " + freeCX + "," + SCZ + " is nobody's");
+
+        long time = world.getWorldTime();
+        EnumDifficulty difficulty = world.difficultySetting;
+        List<Entity> made = new ArrayList<>();
+        SpawnLog.reset();
+        seen = 0;
+        try {
+            int x = (SCX << 4) + 8, z = (SCZ << 4) + 8;
+
+            spawn(world, new EntityZombie(world), x, z, made);
+            expectLog("zombie spawned by a command", "Zombie in vcspawn's claim at " + x + " ", "a command");
+
+            made.add(ItemMonsterPlacer.spawnCreature(world, 54, x + 2.5, world.getHeightValue(x + 2, z), z + 0.5));
+            expectLog("zombie from a spawn egg", "Zombie", "a spawn egg");
+
+            spawn(world, new EntityCow(world), x + 4, z, made);
+            expectLog("cow in the claim");
+
+            EntityZombie saved = new EntityZombie(world);
+            saved.setLocationAndAngles(x + 5.5, world.getHeightValue(x + 5, z), z + 0.5, 0, 0);
+            world.addLoadedEntities(Collections.singletonList(saved));
+            made.add(saved);
+            expectLog("zombie loaded with its chunk");
+
+            for (int i = 0; i < 3; i++) spawn(world, new EntityZombie(world), x - 2 - i, z, made);
+            expectLog("3 more zombies from a command in the same chunk, within 10 minutes");
+
+            // Zombie reinforcements: on Hard, a zombie that is hit can call another zombie, 7-40 blocks away, in the dark.
+            world.setWorldTime(18000);
+            world.skylightSubtracted = world.calculateSkylightSubtracted(1.0F);
+            world.difficultySetting = EnumDifficulty.HARD;
+            EntityZombie hit = spawn(world, new EntityZombie(world), x - 6, z - 6, made);
+            hit.getAttributeMap()
+                .getAttributeInstanceByName("zombie.spawnReinforcements")
+                .setBaseValue(1.0);
+            FakePlayer player = FakePlayerFactory.getMinecraft(world);
+            seen = SpawnLog.recent()
+                .size();
+            int hits = 0;
+            while (hits < 40 && SpawnLog.recent()
+                .size() == seen) {
+                hits++;
+                hit.hurtResistantTime = 0;
+                hit.setHealth(hit.getMaxHealth());
+                hit.attackEntityFrom(DamageSource.causePlayerDamage(player), 1.0F);
+            }
+            log("zombie hit " + hits + " time(s)");
+            expectLog("a hit zombie's reinforcements", "Zombie", "zombie reinforcements");
+
+            EntityZombie walker = spawn(world, new EntityZombie(world), (freeCX << 4) + 8, z, made);
+            expectLog("zombie spawned outside the claim");
+            walker.ticksExisted = 40;
+            moveTo(world, walker, ((SCX + SR) << 4) + 8, z);
+            expectLog("zombie walking in", "Zombie", "came in from chunk " + freeCX + "," + SCZ);
+            moveTo(world, walker, (freeCX << 4) + 8, z);
+            moveTo(world, walker, ((SCX + SR) << 4) + 8, z);
+            expectLog("the same zombie walking in again");
+
+            String file = new String(Files.readAllBytes(SpawnLog.FILE.toPath()), StandardCharsets.UTF_8);
+            check(
+                file.contains("zombie reinforcements") && file.contains("called from: "),
+                SpawnLog.FILE + " has the entries and where they were called from");
+        } finally {
+            for (Entity e : made) if (e != null) e.setDead();
+            AxisAlignedBB area = AxisAlignedBB.getBoundingBox(
+                (SCX - SR) << 4,
+                0,
+                (SCZ - SR) << 4,
+                (freeCX + 1) << 4,
+                256,
+                (SCZ + SR + 1) << 4);
+            for (Object e : world.getEntitiesWithinAABB(EntityLiving.class, area)) ((Entity) e).setDead();
+            world.setWorldTime(time);
+            world.skylightSubtracted = world.calculateSkylightSubtracted(1.0F);
+            world.difficultySetting = difficulty;
+            for (ChunkDimPos pos : claims) ClaimedChunks.instance.removeChunk(pos);
+            team.markDirty();
+            team.delete();
+        }
+        check(ClaimedChunks.instance.getChunkTeam(new ChunkDimPos(SCX, SCZ, 0)) == null, "test claims removed");
+        check(team(universe, SPAWN_TEAM) == null, "test team deleted");
+    }
+
+    private static <T extends EntityLiving> T spawn(WorldServer world, T mob, int x, int z, List<Entity> made) {
+        mob.setLocationAndAngles(x + 0.5, world.getHeightValue(x, z), z + 0.5, 0, 0);
+        world.spawnEntityInWorld(mob);
+        made.add(mob);
+        return mob;
+    }
+
+    /** Moves a mob the way a tick does, so it changes chunk. */
+    private static void moveTo(WorldServer world, Entity mob, int x, int z) {
+        mob.setPosition(x + 0.5, world.getHeightValue(x, z), z + 0.5);
+        world.updateEntityWithOptionalForce(mob, true);
+    }
+
+    /** One new SpawnLog entry containing all of {@code parts} since the last call; none if no parts are given. */
+    private static void expectLog(String what, String... parts) {
+        List<String> lines = SpawnLog.recent();
+        List<String> fresh = lines.subList(Math.min(seen, lines.size()), lines.size());
+        seen = lines.size();
+        if (parts.length == 0) {
+            check(fresh.isEmpty(), what + ": not logged" + (fresh.isEmpty() ? "" : " (but got " + fresh + ")"));
+            return;
+        }
+        boolean ok = fresh.size() == 1;
+        if (ok) for (String part : parts) ok &= fresh.get(0)
+            .contains(part);
+        check(ok, what + ": logged " + (fresh.isEmpty() ? "nothing" : fresh));
     }
 
     private static void checkDefaults(ForgeTeam team, String what) {

@@ -16,11 +16,12 @@ import serverutils.lib.data.Universe;
 
 /**
  * {@code /valierclaims status}: what each team's claims block. {@code /valierclaims reapply <team|all>}: give teams the
- * default spawn settings again, replacing what they chose.
+ * default spawn settings again, replacing what they chose. {@code /valierclaims spawns [count]}: the latest hostile
+ * mobs that turned up in such claims anyway, and where they came from.
  */
 public class ClaimsCommand extends CommandBase {
 
-    private static final String USAGE = "/valierclaims <status|reapply <team|all>>";
+    private static final String USAGE = "/valierclaims <status|reapply <team|all>|spawns [count]>";
 
     @Override
     public String getCommandName() {
@@ -87,6 +88,25 @@ public class ClaimsCommand extends CommandBase {
                             : "couldn't change it, see the log"));
                 return;
             }
+            case "spawns": {
+                if (!ClaimsConfig.logHostileMobs) {
+                    say(sender, "Logging is off (logHostileMobs in config/valierclaims.cfg).");
+                    return;
+                }
+                int count = args.length >= 2 ? parseIntBounded(sender, args[1], 1, 50) : 10;
+                List<String> lines = SpawnLog.recent();
+                say(
+                    sender,
+                    lines.isEmpty() ? "No hostile mobs have turned up in blocking claims since the server started."
+                        : "Hostile mobs that turned up in blocking claims (latest " + Math.min(count, lines.size())
+                            + " of "
+                            + lines.size()
+                            + "; all of them are in "
+                            + SpawnLog.FILE.getPath()
+                            + "):");
+                for (String line : lines.subList(Math.max(0, lines.size() - count), lines.size())) say(sender, "  " + line);
+                return;
+            }
             case "selftest":
                 if (SelfTest.ENABLED && args.length >= 2) {
                     SelfTest.run(sender, args[1]);
@@ -100,7 +120,7 @@ public class ClaimsCommand extends CommandBase {
 
     @Override
     public List<String> addTabCompletionOptions(ICommandSender sender, String[] args) {
-        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "status", "reapply");
+        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "status", "reapply", "spawns");
         if (args.length == 2 && "reapply".equals(args[0]) && Universe.loaded()) {
             List<String> ids = new ArrayList<>();
             ids.add("all");

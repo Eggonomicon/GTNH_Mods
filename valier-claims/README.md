@@ -42,6 +42,25 @@ ServerUtilities does the blocking itself, so it covers natural spawning: the reg
 This needs `blockMobSpawningInClaims=DEFAULT` in `serverutilities/serverutilities.cfg` (its default). `TRUE` or `FALSE`
 there overrides every team's settings, and hides them from the settings screen.
 
+## Hostile mobs that still turn up (1.1.0)
+
+Blocking only stops natural spawning, so a hostile mob can still appear in a claim. Each one is logged to
+`logs/valierclaims-spawns.log`, with what put it there:
+
+| Source | Meaning |
+|---|---|
+| a mob spawner block | a dungeon or other spawner nearby (it needs a player within 16 blocks) |
+| zombie reinforcements | on Hard, a zombie that is hit can call another zombie 7–40 blocks away, in the dark |
+| a spawn egg, a command, a portal | what it says |
+| a zombie killed a villager, a slime split, lightning, a village zombie siege | vanilla events |
+| came in from chunk X,Z | it spawned outside and walked (or teleported) in; logged once per mob |
+| mod code: `some.mod.Class.method` | another mod spawned it; the log line after it shows the code that called |
+| natural spawning, which ServerUtilities should have blocked | shouldn't happen; please report it |
+
+The log only covers claims that block hostile mobs. The same mob from the same source in the same chunk is logged at
+most once every 10 minutes, so a spawner farm doesn't fill the file. Mobs saved in a chunk aren't logged when it
+loads. `/valierclaims spawns [count]` shows the latest entries since the server started.
+
 ## Config (`config/valierclaims.cfg`)
 
 | Setting | Default | Meaning |
@@ -49,6 +68,7 @@ there overrides every team's settings, and hides them from the settings screen.
 | `enabled` | `true` | Give teams their default spawn settings. |
 | `applyToExistingTeams` | `true` | Also give them to teams that existed before the mod (once each, at server start). |
 | `defaultBlocked` | `mob` | The creature types blocked by default: `mob`, `animal`, `ambient`, `water_creature`. Empty: nothing. |
+| `logHostileMobs` | `true` | Log hostile mobs that turn up in claims that block them (see above). |
 
 Changes need a server restart and only affect teams that haven't had their defaults yet. Use `reapply` (below) for
 the others.
@@ -58,6 +78,8 @@ the others.
 - `/valierclaims status`: every team, how many chunks it has claimed, and what its claims block.
 - `/valierclaims reapply <team|all>`: give a team (or every team) the default settings again, replacing its own
   choice.
+- `/valierclaims spawns [count]`: the latest hostile mobs that turned up in blocking claims, and where they came from
+  (default 10, up to 50).
 
 ## Build and test
 
@@ -73,3 +95,9 @@ the others.
   a claimed chunk and an unclaimed one. It changes the team's settings the way `/team settings` does, and checks that
   a team's choice survives a restart. It also checks that a pre-mod team gets its defaults when the server starts, and
   that `reapply` works. 59 checks (36 + 23), all passing on 3 Nov 2026.
+- **Spawn-log self-test (1.1.0):** one boot, with `-Dvalierclaims.selftest=true`: run `team create_server_team vcspawn`
+  and `valierclaims selftest spawnlog`. It puts zombies into a claim with a command, a spawn egg and real zombie
+  reinforcements (a zombie hit by a fake player at night on Hard), walks one in from outside, and checks that each is
+  logged with the right source. It also checks that a cow, a zombie outside the claim, a zombie loaded with its chunk
+  and repeats within 10 minutes are not logged. 19 checks, all passing on 3 Nov 2026 (78 in all with the two-boot
+  test).

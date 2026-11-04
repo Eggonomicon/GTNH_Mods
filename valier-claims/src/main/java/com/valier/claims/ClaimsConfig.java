@@ -16,6 +16,7 @@ public final class ClaimsConfig {
     public static boolean applyToExistingTeams = true;
     /** The creature types a team blocks in its claims until it changes them. */
     public static Set<EnumCreature> defaultBlocked = EnumSet.of(EnumCreature.MOB);
+    public static boolean logHostileMobs = true;
 
     private ClaimsConfig() {}
 
@@ -49,6 +50,13 @@ public final class ClaimsConfig {
                 .isEmpty()) ValierClaims.LOG.warn("defaultBlocked: unknown creature type '" + name + "', skipped");
         }
         defaultBlocked = blocked;
+        logHostileMobs = c.getBoolean(
+            "logHostileMobs",
+            cat,
+            true,
+            "Log every hostile mob that turns up inside a claim that blocks hostile spawns, and what put it there (a "
+                + "spawner, zombie reinforcements, a spawn egg, another mod, or walking in from outside), to "
+                + "logs/valierclaims-spawns.log. /valierclaims spawns shows the latest.");
         if (c.hasChanged()) c.save();
     }
 }
