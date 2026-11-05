@@ -42,6 +42,7 @@ import serverutils.lib.math.ChunkDimPos;
  * Logs every hostile mob that turns up inside a claim whose team blocks hostile spawns, and what put it there, to
  * {@code logs/valierclaims-spawns.log}. ServerUtilities only stops natural spawning: spawner blocks, zombie
  * reinforcements, spawn eggs and other mods' own spawning skip its check, and mobs can walk in from unclaimed land.
+ * Sources listed in the config's {@code blockSpawnsFrom} are stopped instead (and logged as stopped).
  * {@code /valierclaims spawns} shows the latest entries.
  */
 public final class SpawnLog {
@@ -52,44 +53,74 @@ public final class SpawnLog {
     private static final int KEEP = 50;
 
     /**
-     * What spawned a mob, recognised from the code that called: {label, class (or class prefix ending in "."), method
-     * names (deobfuscated, then runtime)...}; no method names means any method. The first rule that matches any frame
-     * wins, so a mob that Special Mobs swaps for a variant still shows where the original came from.
+     * What spawned a mob, recognised from the code that called: {key for the config, words, class (or class prefix
+     * ending in "."), method names (deobfuscated, then runtime)...}; no method names means any method. The first rule
+     * that matches any frame wins, so a mob that Special Mobs swaps for a variant still shows where the original came
+     * from.
      */
     private static final String[][] SOURCES = {
-        { "a mob spawner block", "net.minecraft.tileentity.MobSpawnerBaseLogic" },
-        { "zombie reinforcements (a zombie was hit and called for help)", "net.minecraft.entity.monster.EntityZombie",
-            "attackEntityFrom", "func_70097_a" },
-        { "a zombie killed a villager", "net.minecraft.entity.monster.EntityZombie", "onKillEntity", "func_70074_a" },
-        { "a slime split", "net.minecraft.entity.monster.EntitySlime", "setDead", "func_70106_y" },
-        { "lightning", "net.minecraft.entity.", "onStruckByLightning", "func_70077_a" },
-        { "a village zombie siege", "net.minecraft.village.VillageSiege" },
-        { "a spawn egg", "net.minecraft.item.ItemMonsterPlacer" },
-        { "a portal (it came from another dimension)", "net.minecraft.entity.Entity", "travelToDimension",
+        { "spawner", "a mob spawner block", "net.minecraft.tileentity.MobSpawnerBaseLogic" },
+        { "reinforcements", "zombie reinforcements (a zombie was hit and called for help)",
+            "net.minecraft.entity.monster.EntityZombie", "attackEntityFrom", "func_70097_a" },
+        { "villager_converted", "a zombie killed a villager", "net.minecraft.entity.monster.EntityZombie",
+            "onKillEntity", "func_70074_a" },
+        { "slime_split", "a slime split", "net.minecraft.entity.monster.EntitySlime", "setDead", "func_70106_y" },
+        { "lightning", "lightning", "net.minecraft.entity.", "onStruckByLightning", "func_70077_a" },
+        { "siege", "a village zombie siege", "net.minecraft.village.VillageSiege" },
+        { "spawn_egg", "a spawn egg", "net.minecraft.item.ItemMonsterPlacer" },
+        { "portal", "a portal (it came from another dimension)", "net.minecraft.entity.Entity", "travelToDimension",
             "func_71027_c" },
-        { "natural spawning, which ServerUtilities should have blocked", "net.minecraft.world.SpawnerAnimals",
+        { "natural", "natural spawning, which ServerUtilities should have blocked", "net.minecraft.world.SpawnerAnimals",
             "findChunksForSpawning", "func_77192_a" },
-        { "world generation", "net.minecraft.world.SpawnerAnimals", "performWorldGenSpawning", "func_77191_a" },
-        { "a command", "net.minecraft.command." }, };
+        { "worldgen", "world generation", "net.minecraft.world.SpawnerAnimals", "performWorldGenSpawning",
+            "func_77191_a" },
+        { "command", "a command", "net.minecraft.command." }, };
+    /** The keys for what SOURCES doesn't know: another mod's code, Minecraft's own, or no caller found. */
+    private static final String MOD = "mod", MINECRAFT = "minecraft", UNKNOWN = "unknown";
 
     private static final Deque<String> recent = new ArrayDeque<>();
     /** Per mob, source and chunk: when it was last logged, and how many were left out since. */
     private static final Map<String, long[]> lastLogged = new HashMap<>();
     private static final Set<Entity> walkedIn = Collections.newSetFromMap(new WeakHashMap<>());
 
+    /** What spawned a mob: a key, as blockSpawnsFrom names it, and the same in words. */
+    static final class Source {
+
+        final String key, words;
+
+        Source(String key, String words) {
+            this.key = key;
+            this.words = words;
+        }
+    }
+
+    /**
+     * Stops a hostile mob joining a claim that blocks it, if blockSpawnsFrom lists what spawned it. First, so other
+     * mods never see a mob that won't be there.
+     */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void stopSpawn(EntityJoinWorldEvent event) {
+        Entity mob = event.entity;
+        if (!ClaimsConfig.stopsAnything() || event.world.isRemote || !hostile(mob)) return;
+        ForgeTeam team = blockingTeam(mob, chunk(mob, event.world.provider.dimensionId));
+        if (team == null) return;
+        StackTraceElement[] stack = new Throwable().getStackTrace();
+        if (loadedWithChunk(stack)) return; // cancelling these would delete saved mobs
+        Source source = source(stack);
+        if (!stops(source, stack)) return;
+        event.setCanceled(true);
+        if (ClaimsConfig.logHostileMobs) record(team, mob, source.words, stack, true);
+    }
+
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onJoin(EntityJoinWorldEvent event) {
         Entity mob = event.entity;
         if (!ClaimsConfig.logHostileMobs || event.world.isRemote || !hostile(mob)) return;
-        ChunkDimPos pos = new ChunkDimPos(
-            MathHelper.floor_double(mob.posX) >> 4,
-            MathHelper.floor_double(mob.posZ) >> 4,
-            event.world.provider.dimensionId);
-        ForgeTeam team = blockingTeam(mob, pos);
+        ForgeTeam team = blockingTeam(mob, chunk(mob, event.world.provider.dimensionId));
         if (team == null) return;
         StackTraceElement[] stack = new Throwable().getStackTrace();
         if (loadedWithChunk(stack)) return; // it was saved there, not spawned
-        record(team, mob, source(stack), stack);
+        record(team, mob, source(stack).words, stack, false);
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
@@ -110,11 +141,16 @@ public final class SpawnLog {
             team,
             mob,
             "came in from chunk " + event.oldChunkX + "," + event.oldChunkZ + " (walked or teleported)",
-            null);
+            null,
+            false);
     }
 
     private static boolean hostile(Entity entity) {
         return entity instanceof IMob && entity instanceof EntityLiving;
+    }
+
+    private static ChunkDimPos chunk(Entity mob, int dim) {
+        return new ChunkDimPos(MathHelper.floor_double(mob.posX) >> 4, MathHelper.floor_double(mob.posZ) >> 4, dim);
     }
 
     /**
@@ -160,16 +196,37 @@ public final class SpawnLog {
         return false;
     }
 
-    /** What spawned the mob, in words: a known source, else the mod (or Minecraft) code that did. */
-    static String source(StackTraceElement[] stack) {
+    /** What spawned the mob: a known source, else the mod (or Minecraft) code that did. */
+    static Source source(StackTraceElement[] stack) {
         for (String[] rule : SOURCES) {
             for (StackTraceElement frame : stack) {
-                if (matches(frame, rule[1], Arrays.copyOfRange(rule, 2, rule.length))) return rule[0];
+                if (matches(frame, rule[2], Arrays.copyOfRange(rule, 3, rule.length))) return new Source(rule[0], rule[1]);
             }
         }
         List<StackTraceElement> callers = callers(stack);
-        for (StackTraceElement frame : callers) if (!isMinecraftOrForge(frame)) return "mod code: " + name(frame);
-        return callers.isEmpty() ? "unknown" : "Minecraft code: " + name(callers.get(0));
+        for (StackTraceElement frame : callers)
+            if (!isMinecraftOrForge(frame)) return new Source(MOD, "mod code: " + name(frame));
+        return callers.isEmpty() ? new Source(UNKNOWN, "unknown")
+            : new Source(MINECRAFT, "Minecraft code: " + name(callers.get(0)));
+    }
+
+    /** Whether blockSpawnsFrom stops this: it lists the source's key, or a class, method or package that called. */
+    static boolean stops(Source source, StackTraceElement[] stack) {
+        if (ClaimsConfig.blockSources.contains(source.key)) return true;
+        if (ClaimsConfig.blockCode.isEmpty()) return false;
+        for (StackTraceElement frame : callers(stack)) {
+            String name = name(frame);
+            for (String code : ClaimsConfig.blockCode)
+                if (name.equals(code) || name.startsWith(code + ".") || name.startsWith(code + "$")) return true;
+        }
+        return false;
+    }
+
+    /** Whether blockSpawnsFrom can name this source key. */
+    static boolean isSourceKey(String key) {
+        if (MOD.equals(key) || MINECRAFT.equals(key) || UNKNOWN.equals(key)) return true;
+        for (String[] rule : SOURCES) if (rule[0].equals(key)) return true;
+        return false;
     }
 
     private static boolean matches(StackTraceElement frame, String type, String... methods) {
@@ -209,7 +266,8 @@ public final class SpawnLog {
         return frame.getClassName() + "." + frame.getMethodName();
     }
 
-    private static synchronized void record(ForgeTeam team, Entity mob, String how, StackTraceElement[] stack) {
+    private static synchronized void record(ForgeTeam team, Entity mob, String how, StackTraceElement[] stack,
+        boolean stopped) {
         String name = EntityList.getEntityString(mob);
         if (name == null) name = mob.getClass()
             .getSimpleName();
@@ -217,7 +275,7 @@ public final class SpawnLog {
             z = MathHelper.floor_double(mob.posZ);
         int dim = mob.worldObj.provider.dimensionId;
         long now = System.currentTimeMillis();
-        String key = how + "|" + name + "|" + dim + "|" + (x >> 4) + "," + (z >> 4);
+        String key = stopped + "|" + how + "|" + name + "|" + dim + "|" + (x >> 4) + "," + (z >> 4);
         long[] last = lastLogged.get(key);
         if (last != null && now - last[0] < QUIET_MS) {
             last[1]++;
@@ -232,7 +290,7 @@ public final class SpawnLog {
 
         String line = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(now)) + " "
             + name
-            + " in "
+            + (stopped ? " stopped from spawning in " : " in ")
             + team.getId()
             + "'s claim at "
             + x
@@ -246,7 +304,7 @@ public final class SpawnLog {
             + (last != null && last[1] > 0 ? " [" + last[1] + " more like this were left out before]" : "");
         recent.addLast(line);
         while (recent.size() > KEEP) recent.removeFirst();
-        ValierClaims.LOG.info("Hostile mob in a claim: " + line);
+        ValierClaims.LOG.info((stopped ? "Stopped a hostile mob: " : "Hostile mob in a claim: ") + line);
         try {
             File dir = FILE.getParentFile();
             if (dir != null && !dir.isDirectory()) dir.mkdirs();

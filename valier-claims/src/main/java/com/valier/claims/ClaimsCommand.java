@@ -98,7 +98,8 @@ public class ClaimsCommand extends CommandBase {
                 say(
                     sender,
                     lines.isEmpty() ? "No hostile mobs have turned up in blocking claims since the server started."
-                        : "Hostile mobs that turned up in blocking claims (latest " + Math.min(count, lines.size())
+                        : "Hostile mobs that turned up in blocking claims, or were stopped there (latest "
+                            + Math.min(count, lines.size())
                             + " of "
                             + lines.size()
                             + "; all of them are in "

@@ -3,7 +3,8 @@
 Server-side. Clients need nothing.
 
 **Hostile mobs don't spawn in claimed chunks**, by default. Each team can change that for its own claims in its team
-settings, including blocking passive animals, bats and water mobs too.
+settings, including blocking passive animals, bats and water mobs too. The mod also stops some hostile spawns that
+ServerUtilities misses, such as zombie reinforcements and the zombies from Thaumcraft dark aura nodes.
 
 ## How it works
 
@@ -61,6 +62,30 @@ The log only covers claims that block hostile mobs. The same mob from the same s
 most once every 10 minutes, so a spawner farm doesn't fill the file. Mobs saved in a chunk aren't logged when it
 loads. `/valierclaims spawns [count]` shows the latest entries since the server started.
 
+## Stopping spawns that skip ServerUtilities (1.2.0)
+
+`blockSpawnsFrom` in the config lists sources to stop as well, inside claims that block hostile mobs. A stopped mob
+never enters the world, and the log shows it as "stopped from spawning in" the claim. Stopped by default:
+
+| Entry | What it stops |
+|---|---|
+| `natural` | natural spawning that got past ServerUtilities anyway (a safety net) |
+| `reinforcements` | zombies called in by a zombie that was hit (on Hard) |
+| `siege` | village zombie sieges |
+| `thaumcraft.common.tiles.TileNode` | Giant Brainy Zombies from Thaumcraft dark aura nodes |
+| `crazypants.enderzoo.entity.EntityWitherWitch.spawnCat` | the cats an EnderZoo Wither Witch brings with it |
+
+Not stopped by default, so these still work in a claim:
+- mob spawner blocks and EnderIO powered spawners,
+- mobs let out of soul vials,
+- spawn eggs, commands and portals,
+- conversions: a villager killed by a zombie, a slime splitting, lightning.
+
+Any other mod's spawning shows in the log as `mod code: some.mod.Class.method`. Add that name, or its class or
+package, to the list to stop it. The entry `mod` stops every other mod's spawning, mob farms and summoned bosses
+included, so use it with care. Mobs that walk in from outside the claim can't be stopped this way: they are already in
+the world.
+
 ## Config (`config/valierclaims.cfg`)
 
 | Setting | Default | Meaning |
@@ -69,6 +94,7 @@ loads. `/valierclaims spawns [count]` shows the latest entries since the server 
 | `applyToExistingTeams` | `true` | Also give them to teams that existed before the mod (once each, at server start). |
 | `defaultBlocked` | `mob` | The creature types blocked by default: `mob`, `animal`, `ambient`, `water_creature`. Empty: nothing. |
 | `logHostileMobs` | `true` | Log hostile mobs that turn up in claims that block them (see above). |
+| `blockSpawnsFrom` | the five above | Sources to stop in claims that block hostile mobs: `natural`, `reinforcements`, `siege`, `spawner`, `spawn_egg`, `command`, `portal`, `villager_converted`, `slime_split`, `lightning`, `worldgen`, `mod`, or a class, method or package name. Empty: only log them. |
 
 Changes need a server restart and only affect teams that haven't had their defaults yet. Use `reapply` (below) for
 the others.
@@ -94,10 +120,15 @@ the others.
   It uses Forge's own spawn check on real mobs (zombie, skeleton, creeper, spider, cow, pig, chicken, bat, squid) in
   a claimed chunk and an unclaimed one. It changes the team's settings the way `/team settings` does, and checks that
   a team's choice survives a restart. It also checks that a pre-mod team gets its defaults when the server starts, and
-  that `reapply` works. 59 checks (36 + 23), all passing on 3 Nov 2026.
-- **Spawn-log self-test (1.1.0):** one boot, with `-Dvalierclaims.selftest=true`: run `team create_server_team vcspawn`
-  and `valierclaims selftest spawnlog`. It puts zombies into a claim with a command, a spawn egg and real zombie
-  reinforcements (a zombie hit by a fake player at night on Hard), walks one in from outside, and checks that each is
-  logged with the right source. It also checks that a cow, a zombie outside the claim, a zombie loaded with its chunk
-  and repeats within 10 minutes are not logged. 19 checks, all passing on 3 Nov 2026 (78 in all with the two-boot
-  test).
+  that `reapply` works. 59 checks (36 + 23), all passing again with 1.2.0 on 4 Nov 2026.
+- **Spawn-log self-test (1.1.0, extended in 1.2.0):** one boot, with `-Dvalierclaims.selftest=true`: run
+  `team create_server_team vcspawn` and `valierclaims selftest spawnlog`.
+  - It puts zombies into a claim with a command, a spawn egg and real zombie reinforcements (a zombie hit by a fake
+    player at night on Hard), walks one in from outside, and checks that each is logged with the right source.
+  - It checks that the reinforcements are stopped and the others aren't, and that a spawn from code named in
+    `blockSpawnsFrom` is stopped.
+  - It checks the default `blockSpawnsFrom` against the code that spawns Thaumcraft dark node zombies, Wither Witch
+    cats, village siege zombies, EnderIO powered spawner mobs, soul vial mobs and spawner block mobs.
+  - It also checks that a cow, a zombie outside the claim, a zombie loaded with its chunk and repeats within 10 minutes
+    are not logged.
+  - 34 checks, all passing on 4 Nov 2026 (93 in all with the two-boot test).

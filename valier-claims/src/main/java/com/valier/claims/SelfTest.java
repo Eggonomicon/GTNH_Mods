@@ -3,6 +3,7 @@ package com.valier.claims;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -59,7 +60,9 @@ import serverutils.lib.math.ChunkDimPos;
  * </ol>
  * The spawn log has a one-boot test: {@code team create_server_team vcspawn}, then {@code valierclaims selftest
  * spawnlog}. It puts hostile mobs into a claim of vcspawn's in different ways (a command, a spawn egg, real zombie
- * reinforcements, walking in) and checks what {@link SpawnLog} makes of each, then removes the team and claim.
+ * reinforcements, code that blockSpawnsFrom lists, walking in) and checks what {@link SpawnLog} makes of each: logged,
+ * or stopped and logged. It also checks the default blockSpawnsFrom against the code that spawns Thaumcraft dark node
+ * zombies, Wither Witch cats, EnderIO powered spawner mobs and others. Then it removes the team and claim.
  * <p>
  * Each check logs one {@code [ValierClaims SelfTest] PASS/FAIL} line, then a SUMMARY line.
  */
@@ -250,11 +253,46 @@ final class SelfTest {
         try {
             int x = (SCX << 4) + 8, z = (SCZ << 4) + 8;
 
-            spawn(world, new EntityZombie(world), x, z, made);
-            expectLog("zombie spawned by a command", "Zombie in vcspawn's claim at " + x + " ", "a command");
+            check(
+                ClaimsConfig.blockSources.containsAll(Arrays.asList("natural", "reinforcements", "siege"))
+                    && ClaimsConfig.blockCode.containsAll(
+                        Arrays.asList("thaumcraft.common.tiles.TileNode", "crazypants.enderzoo.entity.EntityWitherWitch.spawnCat")),
+                "blockSpawnsFrom has the defaults (" + ClaimsConfig.blockSources + " " + ClaimsConfig.blockCode + ")");
+            // The defaults against the code that spawns these: the mod frames are as the live server logged them.
+            expectStop(
+                true,
+                "a Thaumcraft dark node's zombie",
+                "thaumcraft.common.tiles.TileNode.handleDarkNode",
+                "thaumcraft.common.tiles.TileNode.func_145845_h",
+                "makeo.gadomancy.common.blocks.tiles.TileExtendedNode.func_145845_h");
+            expectStop(
+                true,
+                "an EnderZoo Wither Witch's cat",
+                "crazypants.enderzoo.entity.EntityWitherWitch.spawnCat",
+                "crazypants.enderzoo.entity.EntityWitherWitch.spawnCats",
+                "crazypants.enderzoo.entity.EntityWitherWitch.func_70636_d");
+            expectStop(true, "a naturally spawned mob", "net.minecraft.world.SpawnerAnimals.func_77192_a");
+            expectStop(true, "a village siege zombie", "net.minecraft.village.VillageSiege.spawnZombie");
+            expectStop(false, "an EnderIO powered spawner's mob", "crazypants.enderio.machine.spawner.TilePoweredSpawner.trySpawnEntity");
+            expectStop(
+                false,
+                "a mob let out of an EnderIO soul vial",
+                "crazypants.enderio.item.ItemSoulVessel.func_77648_a",
+                "net.minecraft.item.ItemStack.func_77943_a");
+            expectStop(
+                false,
+                "a spawner block's mob",
+                "net.minecraft.tileentity.MobSpawnerBaseLogic.func_98278_g",
+                "net.minecraft.tileentity.TileEntityMobSpawner.func_145845_h");
 
-            made.add(ItemMonsterPlacer.spawnCreature(world, 54, x + 2.5, world.getHeightValue(x + 2, z), z + 0.5));
+            EntityZombie byCommand = spawn(world, new EntityZombie(world), x, z, made);
+            expectLog("zombie spawned by a command", "Zombie in vcspawn's claim at " + x + " ", "a command");
+            check(world.loadedEntityList.contains(byCommand), "the zombie from a command is there (not stopped)");
+
+            Entity fromEgg = ItemMonsterPlacer.spawnCreature(world, 54, x + 2.5, world.getHeightValue(x + 2, z), z + 0.5);
+            made.add(fromEgg);
             expectLog("zombie from a spawn egg", "Zombie", "a spawn egg");
+            check(world.loadedEntityList.contains(fromEgg), "the zombie from a spawn egg is there (not stopped)");
 
             spawn(world, new EntityCow(world), x + 4, z, made);
             expectLog("cow in the claim");
@@ -277,6 +315,9 @@ final class SelfTest {
                 .getAttributeInstanceByName("zombie.spawnReinforcements")
                 .setBaseValue(1.0);
             FakePlayer player = FakePlayerFactory.getMinecraft(world);
+            AxisAlignedBB claimArea = AxisAlignedBB
+                .getBoundingBox((SCX - SR) << 4, 0, (SCZ - SR) << 4, (SCX + SR + 1) << 4, 256, (SCZ + SR + 1) << 4);
+            List<?> zombiesBefore = world.getEntitiesWithinAABB(EntityZombie.class, claimArea);
             seen = SpawnLog.recent()
                 .size();
             int hits = 0;
@@ -288,7 +329,29 @@ final class SelfTest {
                 hit.attackEntityFrom(DamageSource.causePlayerDamage(player), 1.0F);
             }
             log("zombie hit " + hits + " time(s)");
-            expectLog("a hit zombie's reinforcements", "Zombie", "zombie reinforcements");
+            expectLog(
+                "a hit zombie's reinforcements",
+                "Zombie stopped from spawning in vcspawn's claim",
+                "zombie reinforcements");
+            int extra = 0;
+            for (Object o : world.getEntitiesWithinAABB(EntityZombie.class, claimArea))
+                if (!zombiesBefore.contains(o)) extra++;
+            check(extra == 0, "the reinforcements were stopped: no new zombie in the claim (" + extra + ")");
+
+            // A mod's spawning that blockSpawnsFrom names by its method is stopped; once unlisted, it isn't.
+            List<String> code = ClaimsConfig.blockCode;
+            try {
+                ClaimsConfig.blockCode = new ArrayList<>(code);
+                ClaimsConfig.blockCode.add("com.valier.claims.SelfTest.likeAMod");
+                EntityZombie listed = likeAMod(world, new EntityZombie(world), x - 16, z, made);
+                expectLog("a zombie from code that blockSpawnsFrom lists", "Zombie stopped from spawning in vcspawn's claim");
+                check(!world.loadedEntityList.contains(listed), "the zombie from listed code isn't in the world");
+            } finally {
+                ClaimsConfig.blockCode = code;
+            }
+            EntityZombie unlisted = likeAMod(world, new EntityZombie(world), x - 16, z - 16, made);
+            expectLog("the same code once unlisted", "Zombie in vcspawn's claim");
+            check(world.loadedEntityList.contains(unlisted), "the zombie from unlisted code is there");
 
             EntityZombie walker = spawn(world, new EntityZombie(world), (freeCX << 4) + 8, z, made);
             expectLog("zombie spawned outside the claim");
@@ -329,6 +392,32 @@ final class SelfTest {
         world.spawnEntityInWorld(mob);
         made.add(mob);
         return mob;
+    }
+
+    /** Spawns a mob the way another mod's code would; blockSpawnsFrom can name this method. */
+    private static <T extends EntityLiving> T likeAMod(WorldServer world, T mob, int x, int z, List<Entity> made) {
+        return spawn(world, mob, x, z, made);
+    }
+
+    /** What blockSpawnsFrom does with a spawn by this code (innermost first), called from a world tick. */
+    private static void expectStop(boolean stopped, String what, String... code) {
+        List<StackTraceElement> frames = new ArrayList<>();
+        frames.add(frame("com.valier.claims.SpawnLog.stopSpawn"));
+        frames.add(frame("cpw.mods.fml.common.eventhandler.EventBus.post"));
+        frames.add(frame("net.minecraft.world.World.func_72838_d"));
+        for (String method : code) frames.add(frame(method));
+        frames.add(frame("net.minecraft.world.World.func_72939_s"));
+        frames.add(frame("net.minecraft.server.MinecraftServer.func_71217_p"));
+        StackTraceElement[] stack = frames.toArray(new StackTraceElement[0]);
+        SpawnLog.Source source = SpawnLog.source(stack);
+        check(
+            SpawnLog.stops(source, stack) == stopped,
+            what + (stopped ? " is stopped" : " isn't stopped") + " (" + source.key + ": " + source.words + ")");
+    }
+
+    private static StackTraceElement frame(String method) {
+        int dot = method.lastIndexOf('.');
+        return new StackTraceElement(method.substring(0, dot), method.substring(dot + 1), null, -1);
     }
 
     /** Moves a mob the way a tick does, so it changes chunk. */
