@@ -8,6 +8,7 @@ import java.util.UUID;
 import net.minecraft.block.Block;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.ICommandSender;
+import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
@@ -16,6 +17,7 @@ import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
+import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.util.FakePlayer;
@@ -25,6 +27,7 @@ import net.minecraftforge.oredict.OreDictionary;
 import com.mojang.authlib.GameProfile;
 import com.recursive_pineapple.matter_manipulator.common.building.MMInventory;
 import com.recursive_pineapple.matter_manipulator.common.building.MMItemConsumer;
+import com.recursive_pineapple.matter_manipulator.common.entities.EntityItemLarge;
 import com.recursive_pineapple.matter_manipulator.common.items.manipulator.ItemMatterManipulator;
 import com.recursive_pineapple.matter_manipulator.common.utils.BigItemStack;
 
@@ -217,6 +220,52 @@ public class SelfTest extends CommandBase {
                 && count(player, Item.getItemFromBlock(Blocks.diamond_block)) == 0,
             "a mixed request takes the free glass for free and the diamond block from the inventory");
 
+        // The void list: what the Mk IV hands back (removed blocks' drops) is deleted when the holder's list names it.
+        MkIVVoid.clear(player);
+        MkIVVoid.setOn(player, true);
+        check(
+            MkIVVoid.toggle(player, MkIVVoid.COBBLE) && MkIVVoid.entries(player)
+                .contains(MkIVVoid.COBBLE),
+            "/mmvoid cobble puts cobblestone on the void list");
+        inv.givePlayerItems(
+            Arrays.asList(
+                BigItemStack.create(new ItemStack(Blocks.cobblestone, 40)),
+                BigItemStack.create(new ItemStack(Blocks.dirt, 3))));
+        check(
+            pending(inv, Blocks.cobblestone, 0) == 0 && pending(inv, Blocks.dirt, 0) == 3,
+            "removed cobblestone is deleted and removed dirt is handed back (cobblestone "
+                + pending(inv, Blocks.cobblestone, 0) + ", dirt " + pending(inv, Blocks.dirt, 0) + ")");
+        check(MkIVVoid.add(player, MkIVVoid.parse("minecraft:dirt")), "dirt can be added by name");
+        inv.givePlayerItems(Arrays.asList(BigItemStack.create(new ItemStack(Blocks.dirt, 5))));
+        check(pending(inv, Blocks.dirt, 0) == 3, "then removed dirt is deleted too (dirt " + pending(inv, Blocks.dirt, 0) + ")");
+        String red = MkIVVoid.entryFor(new ItemStack(Blocks.wool, 1, 14));
+        check(
+            "minecraft:wool:14".equals(red) && MkIVVoid.add(player, red),
+            "a held item with kinds is added as modid:name:meta (" + red + ")");
+        inv.givePlayerItems(
+            Arrays.asList(
+                BigItemStack.create(new ItemStack(Blocks.wool, 2, 14)),
+                BigItemStack.create(new ItemStack(Blocks.wool, 2, 3))));
+        check(
+            pending(inv, Blocks.wool, 14) == 0 && pending(inv, Blocks.wool, 3) == 2,
+            "only that kind of wool is deleted");
+        MkIVVoid.setOn(player, false);
+        inv.givePlayerItems(Arrays.asList(BigItemStack.create(new ItemStack(Blocks.cobblestone, 7))));
+        check(pending(inv, Blocks.cobblestone, 0) == 7, "with voiding paused, cobblestone is handed back");
+        MkIVVoid.setOn(player, true);
+        check(
+            MkIVVoid.parse("ore:cobblestone") != null && MkIVVoid.parse("minecraft:dirt:0") != null
+                && MkIVVoid.parse("nosuchmod:thing") == null
+                && MkIVVoid.parse("cobblestone") == null,
+            "typed entries are checked (ore:name, modid:name[:meta], no unknown items)");
+        check(
+            player.getEntityData()
+                .getCompoundTag(EntityPlayer.PERSISTED_NBT_TAG)
+                .getCompoundTag("ValierMMVoid")
+                .getTagList("Items", 8)
+                .tagCount() == 3,
+            "the list is kept in the player's persistent data");
+
         // An ordinary MK III still needs the blocks.
         ItemStack plain = manipulator.copy();
         player.inventory.setInventorySlotContents(0, plain);
@@ -228,7 +277,31 @@ public class SelfTest extends CommandBase {
         check(
             plainStone == null || plainStone.getStackSize() == 0,
             "an ordinary MK III still needs the stone in the inventory");
+        plainInv.givePlayerItems(Arrays.asList(BigItemStack.create(new ItemStack(Blocks.cobblestone, 9))));
+        check(pending(plainInv, Blocks.cobblestone, 0) == 9, "an ordinary MK III voids nothing, whatever the holder's list");
         player.inventory.setInventorySlotContents(0, null);
+        MkIVVoid.clear(player);
+
+        // /mmvoid purge: only matching drops on the ground go, the manipulator's large drops included.
+        ChunkCoordinates spawn = world.getSpawnPoint();
+        double x = spawn.posX + 0.5, y = world.getTopSolidOrLiquidBlock(spawn.posX, spawn.posZ) + 1, z = spawn.posZ + 0.5;
+        EntityItem cobble = new EntityItem(world, x, y, z, new ItemStack(Blocks.cobblestone, 12));
+        EntityItem dirt = new EntityItem(world, x, y, z, new ItemStack(Blocks.dirt, 4));
+        EntityItem large = new EntityItemLarge(world, x, y, z, new ItemStack(Blocks.cobblestone, 500));
+        for (EntityItem drop : new EntityItem[] { cobble, dirt, large }) world.spawnEntityInWorld(drop);
+        long[] removed = MkIVVoid.purge(Arrays.asList(MkIVVoid.COBBLE));
+        check(
+            cobble.isDead && large.isDead && !dirt.isDead,
+            "purge deletes dropped cobblestone, large drops too, and leaves the dirt (" + removed[0] + " stacks, "
+                + removed[1] + " items)");
+        dirt.setDead();
+    }
+
+    /** How many of this item the manipulator is holding back to hand to the player. */
+    private static long pending(MMInventory inv, Block block, int meta) {
+        return inv.pendingItems.getLong(
+            BigItemStack.create(new ItemStack(block, 1, meta))
+                .getId());
     }
 
     /**

@@ -17,12 +17,13 @@ import cpw.mods.fml.common.registry.GameRegistry;
  * Server-side only. Every Matter Manipulator's EU draw succeeds without draining its charge, so the tool never needs
  * charging ({@link gtnhserver.mmfreepower.mixin.MixinItemMatterManipulator}). It also adds the Valier MM Mk IV: an
  * MK III crafted on its own, which places blocks without machines for free ({@link MkIV},
- * {@link gtnhserver.mmfreepower.mixin.MixinMMInventory}).
+ * {@link gtnhserver.mmfreepower.mixin.MixinMMInventory}), and can delete the drops a player's void list names
+ * ({@link MkIVVoid}, {@code /mmvoid}).
  */
 @Mod(
     modid = MMFreePower.MODID,
     name = "MM Free Power",
-    version = "1.1.2",
+    version = "1.2.0",
     acceptableRemoteVersions = "*",
     dependencies = "after:matter-manipulator")
 public class MMFreePower {
@@ -52,6 +53,7 @@ public class MMFreePower {
 
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
+        event.registerServerCommand(new VoidCommand());
         if (SelfTest.ENABLED) event.registerServerCommand(new SelfTest());
     }
 }

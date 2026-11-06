@@ -24,6 +24,23 @@ Server-side tweaks to GTNH's Matter Manipulator. Clients need nothing.
   - A Mk IV still takes costly blocks from your inventory as usual. A mixed build takes only the costly ones.
   - It is a marked MK III, not a new item, so players need no client mod. The name, lore and glint are plain item
     data.
+- **Void list (1.2.0).** Blocks a Mk IV removes normally come back as drops (into your inventory, ME system or
+  uplink, else onto the ground). Items on your void list are deleted instead. Each player has their own list, kept
+  through deaths and restarts. It only applies while you hold a Mk IV; an ordinary manipulator never voids.
+
+  | Command | What it does |
+  |---|---|
+  | `/mmvoid` | Shows your list. |
+  | `/mmvoid cobble` | Turns voiding of cobblestone on or off (`ore:cobblestone`: every kind the ore dictionary calls cobblestone). |
+  | `/mmvoid add` | Voids the item you're holding (that exact kind, e.g. `minecraft:wool:14`). |
+  | `/mmvoid add <item>` | Voids `modid:name` (any kind), `modid:name:meta`, or `ore:<name>`. |
+  | `/mmvoid remove <item\|number>` | Takes an entry off the list (numbers as `/mmvoid` shows them). |
+  | `/mmvoid clear` | Empties the list. |
+  | `/mmvoid off` / `on` | Pauses or resumes voiding without losing the list. |
+  | `/mmvoid purge [item...]` | Ops and console: deletes dropped items lying on the ground that match (your own list if you name none), the manipulator's large drops included. Loaded chunks only, every dimension. |
+
+  Voided items are gone for good. In move mode, a voided block that costs items can't be placed again at the
+  destination; free blocks are placed anyway.
 
 ## Config (`config/mmfreepower.cfg`, section `mk4`)
 
@@ -43,6 +60,10 @@ Changes need a server restart.
 - `MkIV`: the marker (`ValierMk4` tag), the free-block rule and the consumption hook.
 - `mixin/MixinMMInventory`: every item a manipulator places goes through `MMInventory.tryConsumeItems`. For a Mk IV,
   free items count as taken (as the manipulator does for creative players) and only the rest is taken for real.
+  Every item it hands back goes through `MMInventory.givePlayerItems`, where `MkIVVoid` takes out what the holder's
+  void list names.
+- `MkIVVoid` and `VoidCommand`: the void lists (in each player's `PlayerPersisted` data, `ValierMMVoid`), matching,
+  and `/mmvoid`.
 - `mixin/MixinItemMatterManipulator`: `setState` rebuilds the item's NBT from the manipulator's own state; the Mk IV
   marker, name and glint are put back afterwards.
 - `MkIVRecipe`: the shapeless MK III to Mk IV recipe, registered on the server only.
@@ -55,7 +76,9 @@ Changes need a server restart.
   - Point it at your server folder with `-PgtnhInstance=<folder>`; by default it is `../../GTNH_Instance`.
 - **Self-test:** on the test server, start it with `-Dmmfreepower.selftest=true` and run `mmfreepower selftest` in the
   console. It covers the recipe, the marker surviving state saves, which real blocks are free, and taking items
-  through the manipulator's own inventory code. 57 checks, all passing on 2 Nov 2026 (version 1.1.1).
+  through the manipulator's own inventory code. For the void list it hands drops back through that code with a fake
+  player's list set (cobblestone, dirt by name, one wool colour, paused, an ordinary MK III), and purges real drops
+  near spawn. 72 checks, all passing on 6 Nov 2026 (version 1.2.0).
 - **Verdict dump:** `mmfreepower dump` (same flag) writes every block variant's verdict and reason to
   `mmfreepower-verdicts.tsv` in the server folder. That's how to check a mod's blocks before changing the config.
   On 2 Nov: 6 945 free, 8 003 costing (most of those are machines and GregTech).

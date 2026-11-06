@@ -5,6 +5,7 @@ import java.util.List;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.recursive_pineapple.matter_manipulator.common.building.IPseudoInventory;
@@ -12,14 +13,22 @@ import com.recursive_pineapple.matter_manipulator.common.building.MMInventory;
 import com.recursive_pineapple.matter_manipulator.common.utils.BigItemStack;
 
 import gtnhserver.mmfreepower.MkIV;
+import gtnhserver.mmfreepower.MkIVVoid;
 import it.unimi.dsi.fastutil.booleans.BooleanObjectImmutablePair;
 
 /**
  * Every item a manipulator places goes through MMInventory.tryConsumeItems. For a Valier MM Mk IV, free blocks count
- * as taken without touching any inventory; see {@link MkIV#tryConsume}.
+ * as taken without touching any inventory; see {@link MkIV#tryConsume}. Every item it hands back (the drops of the
+ * blocks it removes) goes through givePlayerItems, where the player's void list deletes what it names; see
+ * {@link MkIVVoid#filter}.
  */
 @Mixin(value = MMInventory.class, remap = false)
 public abstract class MixinMMInventory {
+
+    @ModifyVariable(method = "givePlayerItems", at = @At("HEAD"), argsOnly = true, remap = false)
+    private List<BigItemStack> mmfreepower$voidItems(List<BigItemStack> items) {
+        return MkIVVoid.filter(((MMInventory) (Object) this).player, items);
+    }
 
     @Inject(method = "tryConsumeItems", at = @At("HEAD"), cancellable = true, remap = false)
     private void mmfreepower$freeBlocks(List<BigItemStack> items, int flags,
