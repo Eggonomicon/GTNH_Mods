@@ -8,6 +8,7 @@ import net.minecraft.command.CommandBase;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.command.WrongUsageException;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.ChatComponentText;
 
 /**
@@ -16,7 +17,7 @@ import net.minecraft.util.ChatComponentText;
  */
 public class VoidCommand extends CommandBase {
 
-    private static final String USAGE = "/mmvoid [cobble | add [item] | remove <item|number> | clear | on | off | purge [item...]]";
+    private static final String USAGE = "/mmvoid [cobble | toggle | add [item] | remove [item|number] | clear | on | off | purge [item...]]";
 
     @Override
     public String getCommandName() {
@@ -66,8 +67,30 @@ public class VoidCommand extends CommandBase {
                 say(player, MkIVVoid.add(player, entry) ? "Voiding " + MkIVVoid.describe(entry) : entry + " is already on your list.");
                 return;
             }
+            case "toggle": {
+                ItemStack held = player.getHeldItem();
+                String entry = MkIVVoid.entryFor(held);
+                if (entry == null) throw new WrongUsageException("Hold the item to start or stop voiding.");
+                List<String> removed = MkIVVoid.removeMatching(player, held);
+                if (!removed.isEmpty()) say(player, "No longer voiding " + String.join(", ", removed));
+                else {
+                    MkIVVoid.add(player, entry);
+                    say(player, "Voiding " + MkIVVoid.describe(entry));
+                }
+                return;
+            }
             case "remove": {
-                if (args.length < 2) throw new WrongUsageException("/mmvoid remove <item | number from /mmvoid>");
+                if (args.length < 2) {
+                    ItemStack held = player.getHeldItem();
+                    if (MkIVVoid.entryFor(held) == null)
+                        throw new WrongUsageException("Hold the item to stop voiding, or name it: /mmvoid remove <item | number from /mmvoid>");
+                    List<String> removed = MkIVVoid.removeMatching(player, held);
+                    say(
+                        player,
+                        removed.isEmpty() ? held.getDisplayName() + " isn't voided."
+                            : "No longer voiding " + String.join(", ", removed));
+                    return;
+                }
                 String entry = args[1];
                 List<String> entries = MkIVVoid.entries(player);
                 try {
@@ -94,7 +117,7 @@ public class VoidCommand extends CommandBase {
     private static void list(EntityPlayer player) {
         List<String> entries = MkIVVoid.entries(player);
         if (entries.isEmpty()) {
-            say(player, "Your Valier MM Mk IV voids nothing. /mmvoid cobble toggles cobblestone; /mmvoid add voids the item you hold.");
+            say(player, "Your Valier MM Mk IV voids nothing. /mmvoid cobble toggles cobblestone; /mmvoid toggle starts or stops voiding the item you hold.");
             return;
         }
         say(player, "Your Valier MM Mk IV deletes these instead of dropping them" + (MkIVVoid.isOn(player) ? ":" : " (paused, /mmvoid on):"));
@@ -124,7 +147,7 @@ public class VoidCommand extends CommandBase {
 
     @Override
     public List<String> addTabCompletionOptions(ICommandSender sender, String[] args) {
-        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "cobble", "add", "remove", "clear", "on", "off", "purge");
+        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "cobble", "toggle", "add", "remove", "clear", "on", "off", "purge");
         return null;
     }
 }

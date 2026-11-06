@@ -86,6 +86,17 @@ public final class MkIVVoid {
         return removed;
     }
 
+    /** Removes every entry that voids this item (its own, or a wider one such as an ore name); returns them. */
+    public static List<String> removeMatching(EntityPlayer player, ItemStack stack) {
+        List<String> entries = entries(player), removed = new ArrayList<>();
+        for (String entry : entries) if (matches(entry, stack)) removed.add(entry);
+        if (!removed.isEmpty()) {
+            entries.removeAll(removed);
+            save(player, entries);
+        }
+        return removed;
+    }
+
     /** Adds the entry, or removes it if it's there. Returns whether it is on the list now. */
     public static boolean toggle(EntityPlayer player, String entry) {
         if (remove(player, entry)) return false;

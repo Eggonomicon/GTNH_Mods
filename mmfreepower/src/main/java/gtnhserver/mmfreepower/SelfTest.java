@@ -282,6 +282,36 @@ public class SelfTest extends CommandBase {
         player.inventory.setInventorySlotContents(0, null);
         MkIVVoid.clear(player);
 
+        // /mmvoid toggle and /mmvoid remove work on the item in hand, as the player types them.
+        VoidCommand command = new VoidCommand();
+        player.inventory.setInventorySlotContents(0, new ItemStack(Blocks.wool, 1, 14));
+        command.processCommand(player, new String[] { "toggle" });
+        check(
+            MkIVVoid.entries(player)
+                .equals(Arrays.asList("minecraft:wool:14")),
+            "/mmvoid toggle voids the held item (" + MkIVVoid.entries(player) + ")");
+        command.processCommand(player, new String[] { "toggle" });
+        check(
+            MkIVVoid.entries(player)
+                .isEmpty(),
+            "/mmvoid toggle again stops voiding it");
+        command.processCommand(player, new String[] { "cobble" });
+        command.processCommand(player, new String[] { "add", "minecraft:dirt" });
+        player.inventory.setInventorySlotContents(0, new ItemStack(Blocks.cobblestone, 1));
+        command.processCommand(player, new String[] { "remove" });
+        check(
+            MkIVVoid.entries(player)
+                .equals(Arrays.asList("minecraft:dirt")),
+            "/mmvoid remove with cobblestone in hand takes off ore:cobblestone and keeps dirt (" + MkIVVoid.entries(player)
+                + ")");
+        command.processCommand(player, new String[] { "toggle" });
+        check(
+            MkIVVoid.entries(player)
+                .equals(Arrays.asList("minecraft:dirt", "minecraft:cobblestone")),
+            "/mmvoid toggle with cobblestone in hand puts it back (" + MkIVVoid.entries(player) + ")");
+        player.inventory.setInventorySlotContents(0, null);
+        MkIVVoid.clear(player);
+
         // /mmvoid purge: only matching drops on the ground go, the manipulator's large drops included.
         ChunkCoordinates spawn = world.getSpawnPoint();
         double x = spawn.posX + 0.5, y = world.getTopSolidOrLiquidBlock(spawn.posX, spawn.posZ) + 1, z = spawn.posZ + 0.5;

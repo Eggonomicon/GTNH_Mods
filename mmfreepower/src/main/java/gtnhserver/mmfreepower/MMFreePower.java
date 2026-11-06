@@ -23,7 +23,7 @@ import cpw.mods.fml.common.registry.GameRegistry;
 @Mod(
     modid = MMFreePower.MODID,
     name = "MM Free Power",
-    version = "1.2.0",
+    version = "1.2.1",
     acceptableRemoteVersions = "*",
     dependencies = "after:matter-manipulator")
 public class MMFreePower {

@@ -32,8 +32,10 @@ Server-side tweaks to GTNH's Matter Manipulator. Clients need nothing.
   |---|---|
   | `/mmvoid` | Shows your list. |
   | `/mmvoid cobble` | Turns voiding of cobblestone on or off (`ore:cobblestone`: every kind the ore dictionary calls cobblestone). |
+  | `/mmvoid toggle` | Starts voiding the item you're holding, or stops if it's already voided (1.2.1). |
   | `/mmvoid add` | Voids the item you're holding (that exact kind, e.g. `minecraft:wool:14`). |
   | `/mmvoid add <item>` | Voids `modid:name` (any kind), `modid:name:meta`, or `ore:<name>`. |
+  | `/mmvoid remove` | Stops voiding the item you're holding: takes off every entry that matches it, `ore:cobblestone` included (1.2.1). |
   | `/mmvoid remove <item\|number>` | Takes an entry off the list (numbers as `/mmvoid` shows them). |
   | `/mmvoid clear` | Empties the list. |
   | `/mmvoid off` / `on` | Pauses or resumes voiding without losing the list. |
@@ -77,8 +79,9 @@ Changes need a server restart.
 - **Self-test:** on the test server, start it with `-Dmmfreepower.selftest=true` and run `mmfreepower selftest` in the
   console. It covers the recipe, the marker surviving state saves, which real blocks are free, and taking items
   through the manipulator's own inventory code. For the void list it hands drops back through that code with a fake
-  player's list set (cobblestone, dirt by name, one wool colour, paused, an ordinary MK III), and purges real drops
-  near spawn. 72 checks, all passing on 6 Nov 2026 (version 1.2.0).
+  player's list set (cobblestone, dirt by name, one wool colour, paused, an ordinary MK III), runs `/mmvoid toggle`
+  and `/mmvoid remove` with items in the fake player's hand, and purges real drops near spawn. 76 checks, all passing
+  on 6 Nov 2026 (version 1.2.1).
 - **Verdict dump:** `mmfreepower dump` (same flag) writes every block variant's verdict and reason to
   `mmfreepower-verdicts.tsv` in the server folder. That's how to check a mod's blocks before changing the config.
   On 2 Nov: 6 945 free, 8 003 costing (most of those are machines and GregTech).
