@@ -1,5 +1,6 @@
 package gtnhserver.mmfreepower;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -8,8 +9,11 @@ import java.util.UUID;
 import net.minecraft.block.Block;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.ICommandSender;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.EnchantmentData;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
 import net.minecraft.inventory.Container;
@@ -17,7 +21,10 @@ import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.management.ItemInWorldManager;
 import net.minecraft.util.ChunkCoordinates;
+import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.util.FakePlayer;
@@ -25,7 +32,11 @@ import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.oredict.OreDictionary;
 
 import com.mojang.authlib.GameProfile;
+import com.recursive_pineapple.matter_manipulator.common.building.AbstractBuildable;
+import com.recursive_pineapple.matter_manipulator.common.building.BlockSpec;
+import com.recursive_pineapple.matter_manipulator.common.building.ImmutableBlockSpec;
 import com.recursive_pineapple.matter_manipulator.common.building.MMInventory;
+import com.recursive_pineapple.matter_manipulator.common.building.PendingBuild;
 import com.recursive_pineapple.matter_manipulator.common.building.MMItemConsumer;
 import com.recursive_pineapple.matter_manipulator.common.entities.EntityItemLarge;
 import com.recursive_pineapple.matter_manipulator.common.items.manipulator.ItemMatterManipulator;
@@ -87,7 +98,7 @@ public class SelfTest extends CommandBase {
                 + (failures.isEmpty() ? "" : ": " + failures));
     }
 
-    private void run() {
+    private void run() throws Exception {
         WorldServer world = DimensionManager.getWorld(0);
         Item mk3 = GameRegistry.findItem("matter-manipulator", "itemMatterManipulator3");
         check(mk3 != null, "the MK III item exists");
@@ -325,6 +336,225 @@ public class SelfTest extends CommandBase {
             "purge deletes dropped cobblestone, large drops too, and leaves the dirt (" + removed[0] + " stacks, "
                 + removed[1] + " items)");
         dirt.setDead();
+
+        // Ores: on its own the manipulator deletes them; with mining/dropOres their drops come back like any block's.
+        // Removed through the manipulator's own removeBlock, with the block spec it builds from the world.
+        ItemStack mk3InHand = manipulator.copy();
+        player.inventory.setInventorySlotContents(0, mk3InHand);
+        PendingBuild build = new PendingBuild(
+            player,
+            ItemMatterManipulator.getState(mk3InHand),
+            ItemMatterManipulator.ManipulatorTier.Tier3,
+            new ArrayList<>());
+        int ox = spawn.posX + 3, oy = 200, oz = spawn.posZ + 3;
+        MkIVConfig.dropOres = true;
+        check(
+            removeWithManipulator(build, world, ox, oy, oz, Blocks.iron_ore, 0) && pending(build, Blocks.iron_ore, 0) == 1,
+            "removing vanilla iron ore hands back the iron ore (" + pending(build, Blocks.iron_ore, 0) + ")");
+        check(
+            removeWithManipulator(build, world, ox + 1, oy, oz, Blocks.diamond_ore, 0)
+                && pending(build, new ItemStack(Items.diamond)) >= 1,
+            "removing diamond ore hands back a diamond (" + pending(build, new ItemStack(Items.diamond)) + ")");
+        // GregTech 5.09.54 ore blocks: gt.blockores2 holds stone (variant 0), netherrack, end stone, granites, marble,
+        // basalt and moon rock; plain gt.blockores is the old pre-rework block, kept only to convert old worlds.
+        Block gtOres = GameRegistry.findBlock("gregtech", "gt.blockores2");
+        int naturalIron = 8000 + 32; // natural (8000+) ore of iron (GT material 32) in stone (stone type 0)
+        int smallIron = 16000 + naturalIron; // the same as a small ore
+        check(
+            gtOres != null && gtIsOre(gtOres, naturalIron) && gtIsOre(gtOres, smallIron),
+            "GregTech counts natural iron ore and small iron ore as ores (the kind the manipulator deleted)");
+        ItemStack rawIron = firstOre("rawOreIron");
+        world.setBlock(ox + 2, oy, oz, gtOres, naturalIron, 2);
+        log(
+            "The manipulator's block spec of a natural iron ore (world metadata " + world.getBlockMetadata(ox + 2, oy, oz)
+                + ") has metadata " + BlockSpec.fromBlock(new BlockSpec(), world, ox + 2, oy, oz)
+                    .getBlockMeta());
+        long before = total(build);
+        boolean gone = removeWithManipulator(build, world, ox + 2, oy, oz, gtOres, naturalIron);
+        log("GregTech iron ore gave: " + build.pendingItems);
+        check(
+            gone && total(build) > before && (rawIron == null || pending(build, rawIron) >= 1),
+            "removing a natural GregTech iron ore hands back its drops (raw iron ore: "
+                + (rawIron == null ? "no rawOreIron item" : pending(build, rawIron)) + ", " + (total(build) - before)
+                + " items in all)");
+        before = total(build);
+        gone = removeWithManipulator(build, world, ox + 3, oy, oz, gtOres, smallIron);
+        log("After the small iron ore: " + build.pendingItems);
+        check(gone && total(build) > before, "removing a small GregTech iron ore hands back its drops (" + (total(build) - before) + " items)");
+        MkIVConfig.dropOres = false;
+        before = total(build);
+        check(
+            removeWithManipulator(build, world, ox + 4, oy, oz, Blocks.iron_ore, 0) && total(build) == before,
+            "with mining/dropOres off, the manipulator deletes ores as it does on its own");
+        before = total(build);
+        removeWithManipulator(build, world, ox + 5, oy, oz, Blocks.stone, 0);
+        check(total(build) == before + 1, "with mining/dropOres off, other blocks still come back (stone gives cobblestone)");
+        MkIVConfig.dropOres = true;
+
+        // Fortune: crafted on with a book, kept through the manipulator's state saves, and used for drops.
+        ItemStack fortuneBook = Items.enchanted_book.getEnchantedItemStack(new EnchantmentData(Enchantment.fortune, 3));
+        InventoryCrafting fg = grid();
+        fg.setInventorySlotContents(0, manipulator.copy());
+        fg.setInventorySlotContents(4, fortuneBook.copy());
+        ItemStack lucky = CraftingManager.getInstance()
+            .findMatchingRecipe(fg, world);
+        check(
+            MMFortune.isManipulator(lucky) && MMFortune.onItem(lucky) == 3
+                && lucky.getTagCompound()
+                    .getDouble("charge") == 12345.0D
+                && !MkIV.isMkIV(lucky),
+            "an MK III crafted with a Fortune III book gets Fortune III and keeps its charge ("
+                + (lucky == null ? "no result" : "Fortune " + MMFortune.onItem(lucky)) + ")");
+        InventoryCrafting fg4 = grid();
+        fg4.setInventorySlotContents(2, mk4.copy());
+        fg4.setInventorySlotContents(7, fortuneBook.copy());
+        ItemStack luckyMk4 = CraftingManager.getInstance()
+            .findMatchingRecipe(fg4, world);
+        check(
+            MkIV.isMkIV(luckyMk4) && MMFortune.onItem(luckyMk4) == 3,
+            "a Mk IV crafted with the book stays a Mk IV and gets Fortune III");
+        InventoryCrafting weaker = grid();
+        weaker.setInventorySlotContents(0, lucky == null ? manipulator.copy() : lucky.copy());
+        weaker.setInventorySlotContents(1, Items.enchanted_book.getEnchantedItemStack(new EnchantmentData(Enchantment.fortune, 2)));
+        InventoryCrafting noBook = grid();
+        noBook.setInventorySlotContents(0, manipulator.copy());
+        noBook.setInventorySlotContents(1, Items.enchanted_book.getEnchantedItemStack(new EnchantmentData(Enchantment.unbreaking, 3)));
+        FortuneRecipe fortuneRecipe = new FortuneRecipe(mk3);
+        check(
+            !fortuneRecipe.matches(weaker, world) && !fortuneRecipe.matches(noBook, world),
+            "a lower Fortune book or a book without Fortune doesn't match");
+        if (lucky != null) {
+            ItemMatterManipulator.setState(lucky, ItemMatterManipulator.getState(lucky));
+            check(MMFortune.onItem(lucky) == 3, "Fortune survives the manipulator saving its state");
+        }
+        if (luckyMk4 != null) {
+            ItemMatterManipulator.setState(luckyMk4, ItemMatterManipulator.getState(luckyMk4));
+            check(MkIV.isMkIV(luckyMk4) && MMFortune.onItem(luckyMk4) == 3, "so do the Mk IV marker and Fortune together");
+        }
+
+        if (lucky != null) {
+            // GregTech gives no Fortune to fake players (a class name with "Fake"), so this one is a plain
+            // EntityPlayerMP that is never added to the world.
+            EntityPlayerMP miner = new EntityPlayerMP(
+                MinecraftServer.getServer(),
+                world,
+                new GameProfile(UUID.fromString("00000000-0000-4000-8000-0000000000f5"), "MkIVMiner"),
+                new ItemInWorldManager(world));
+            miner.inventory.currentItem = 0;
+            miner.inventory.setInventorySlotContents(0, lucky);
+            check(MMFortune.miningLevel(miner) == 3, "holding it, the manipulator mines with Fortune III");
+            PendingBuild luckyBuild = new PendingBuild(
+                miner,
+                ItemMatterManipulator.getState(lucky),
+                ItemMatterManipulator.ManipulatorTier.Tier3,
+                new ArrayList<>());
+            for (int i = 0; i < 20; i++) removeWithManipulator(luckyBuild, world, ox + 6, oy, oz, Blocks.diamond_ore, 0);
+            long luckyDiamonds = pending(luckyBuild, new ItemStack(Items.diamond));
+            check(
+                luckyDiamonds > 20,
+                "20 diamond ores removed with Fortune III give more than 20 diamonds (" + luckyDiamonds + ")");
+            int withHarvester = 0, without = 0;
+            for (int i = 0; i < 50; i++) {
+                world.setBlock(ox + 8, oy, oz, gtOres, naturalIron, 2);
+                for (ItemStack s : gtOres.getDrops(world, ox + 8, oy, oz, naturalIron, 3)) without += s.stackSize;
+                Object previous = MMFortune.beginHarvest(gtOres, miner);
+                try {
+                    for (ItemStack s : gtOres.getDrops(world, ox + 8, oy, oz, naturalIron, 3)) withHarvester += s.stackSize;
+                } finally {
+                    MMFortune.endHarvest(gtOres, previous);
+                }
+            }
+            world.setBlockToAir(ox + 8, oy, oz);
+            log(
+                "GregTech iron ore getDrops with Fortune 3, 50 times: " + withHarvester + " items with the miner as harvester, "
+                    + without + " without; isRealPlayer(miner) = " + gtIsRealPlayer(miner) + "; drop system = "
+                    + gtDropSystem());
+            long rawBefore = rawIron == null ? 0 : pending(luckyBuild, rawIron);
+            long allBefore = total(luckyBuild);
+            for (int i = 0; i < 20; i++) removeWithManipulator(luckyBuild, world, ox + 7, oy, oz, gtOres, naturalIron);
+            long raw = rawIron == null ? total(luckyBuild) - allBefore : pending(luckyBuild, rawIron) - rawBefore;
+            log("20 GregTech iron ores with Fortune III gave: " + luckyBuild.pendingItems);
+            check(raw > 20, "20 natural GregTech iron ores removed with Fortune III give more than 20 raw ores (" + raw + ")");
+        }
+        player.inventory.setInventorySlotContents(0, manipulator.copy());
+        check(MMFortune.miningLevel(player) == 0, "an unenchanted manipulator mines with Fortune 0");
+        MkIVConfig.baseFortune = 3;
+        check(MMFortune.miningLevel(player) == 3, "mining/baseFortune 3 gives every manipulator Fortune III");
+        MkIVConfig.baseFortune = 0;
+        player.inventory.setInventorySlotContents(0, null);
+    }
+
+    /**
+     * Places the block, then removes it as a manipulator does: {@code AbstractBuildable.removeBlock} with the spec
+     * {@code BlockSpec.fromBlock} reads from the world (what PendingBuild does). True if it was placed and is gone.
+     */
+    private static boolean removeWithManipulator(AbstractBuildable build, WorldServer world, int x, int y, int z, Block block,
+        int meta) throws Exception {
+        world.setBlock(x, y, z, block, meta, 2);
+        if (world.getBlock(x, y, z) != block || world.getBlockMetadata(x, y, z) != meta) return false;
+        BlockSpec spec = BlockSpec.fromBlock(new BlockSpec(), world, x, y, z);
+        Method remove = AbstractBuildable.class.getDeclaredMethod(
+            "removeBlock",
+            World.class,
+            int.class,
+            int.class,
+            int.class,
+            ImmutableBlockSpec.class,
+            boolean.class);
+        remove.setAccessible(true);
+        remove.invoke(build, world, x, y, z, spec, true);
+        return world.isAirBlock(x, y, z);
+    }
+
+    private static boolean gtIsOre(Block block, int meta) throws Exception {
+        return (Boolean) Class.forName("gregtech.api.util.GTUtility")
+            .getMethod("isOre", Block.class, int.class)
+            .invoke(null, block, meta);
+    }
+
+    private static boolean gtIsRealPlayer(EntityPlayer player) throws Exception {
+        return (Boolean) Class.forName("gregtech.api.util.GTUtility")
+            .getMethod("isRealPlayer", net.minecraft.entity.EntityLivingBase.class)
+            .invoke(null, player);
+    }
+
+    /** GregTech's ore drop setting as loaded (GTMod.proxy's OreDropSystem field). */
+    private static String gtDropSystem() {
+        try {
+            Object proxy = Class.forName("gregtech.GTMod")
+                .getField("proxy")
+                .get(null);
+            for (Class<?> c = proxy.getClass(); c != null; c = c.getSuperclass()) {
+                for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                    if (f.getType()
+                        .getName()
+                        .endsWith("OreDropSystem")) {
+                        f.setAccessible(true);
+                        return f.getName() + "=" + f.get(proxy);
+                    }
+                }
+            }
+            return "not found";
+        } catch (Exception e) {
+            return e.toString();
+        }
+    }
+
+    private static ItemStack firstOre(String name) {
+        List<ItemStack> ores = OreDictionary.getOres(name);
+        return ores.isEmpty() ? null : ores.get(0);
+    }
+
+    private static long pending(MMInventory inv, ItemStack stack) {
+        return inv.pendingItems.getLong(
+            BigItemStack.create(stack)
+                .getId());
+    }
+
+    private static long total(MMInventory inv) {
+        long sum = 0;
+        for (long n : inv.pendingItems.values()) sum += n;
+        return sum;
     }
 
     /** How many of this item the manipulator is holding back to hand to the player. */

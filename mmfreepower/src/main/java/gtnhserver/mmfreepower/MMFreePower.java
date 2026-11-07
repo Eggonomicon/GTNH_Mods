@@ -18,12 +18,13 @@ import cpw.mods.fml.common.registry.GameRegistry;
  * charging ({@link gtnhserver.mmfreepower.mixin.MixinItemMatterManipulator}). It also adds the Valier MM Mk IV: an
  * MK III crafted on its own, which places blocks without machines for free ({@link MkIV},
  * {@link gtnhserver.mmfreepower.mixin.MixinMMInventory}), and can delete the drops a player's void list names
- * ({@link MkIVVoid}, {@code /mmvoid}).
+ * ({@link MkIVVoid}, {@code /mmvoid}). Every manipulator also keeps the drops of the ores it removes, which it would
+ * otherwise delete ({@link gtnhserver.mmfreepower.mixin.MixinAbstractBuildable}).
  */
 @Mod(
     modid = MMFreePower.MODID,
     name = "MM Free Power",
-    version = "1.2.1",
+    version = "1.3.0",
     acceptableRemoteVersions = "*",
     dependencies = "after:matter-manipulator")
 public class MMFreePower {
@@ -38,15 +39,25 @@ public class MMFreePower {
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
-        if (!MkIVConfig.enabled) return;
         Item mk3 = GameRegistry.findItem("matter-manipulator", "itemMatterManipulator3");
         if (mk3 == null) {
-            LOG.warn("Matter Manipulator MK III not found; the Valier MM Mk IV recipe is not added.");
+            LOG.warn("Matter Manipulator MK III not found; the Mk IV and Fortune recipes are not added.");
             return;
         }
-        RecipeSorter.register(MODID + ":mk4", MkIVRecipe.class, RecipeSorter.Category.SHAPELESS, "after:minecraft:shapeless");
-        GameRegistry.addRecipe(new MkIVRecipe(mk3));
-        FMLCommonHandler.instance()
+        if (MkIVConfig.enabled) {
+            RecipeSorter
+                .register(MODID + ":mk4", MkIVRecipe.class, RecipeSorter.Category.SHAPELESS, "after:minecraft:shapeless");
+            GameRegistry.addRecipe(new MkIVRecipe(mk3));
+        }
+        if (MkIVConfig.fortuneBooks) {
+            RecipeSorter.register(
+                MODID + ":fortune",
+                FortuneRecipe.class,
+                RecipeSorter.Category.SHAPELESS,
+                "after:minecraft:shapeless");
+            GameRegistry.addRecipe(new FortuneRecipe(mk3));
+        }
+        if (MkIVConfig.enabled || MkIVConfig.fortuneBooks) FMLCommonHandler.instance()
             .bus()
             .register(new MkIVCraftSync());
     }

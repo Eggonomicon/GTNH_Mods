@@ -43,6 +43,23 @@ Server-side tweaks to GTNH's Matter Manipulator. Clients need nothing.
 
   Voided items are gone for good. In move mode, a voided block that costs items can't be placed again at the
   destination; free blocks are placed anyway.
+- **Ores drop (1.3.0).** On its own a Matter Manipulator deletes every ore it removes, with no drops. That covers
+  every naturally generated GregTech, GT++ and BartWorks ore (big and small) and any block with an ore dictionary
+  name starting with "ore" (vanilla and other mods' ores). With this mod, ores drop like any other block:
+  - Big GregTech ores give raw ore (GregTech's `oredropbehavior` setting decides).
+  - Small ores give their dusts, crushed ores and gems.
+  - Diamond, coal and redstone ores give diamonds, coal and redstone.
+  
+  This applies to every manipulator tier, the Mk IV included (its void list still applies). The manipulator's only
+  other "never drop" blocks are invisible helpers with no item (GregTech render blocks, light-source air).
+- **Fortune (1.3.0).** Manipulators mine with the Fortune level enchanted on them.
+  - **Adding Fortune:** put any Matter Manipulator in a crafting table together with an enchanted book that has
+    Fortune. You get the same manipulator (charge, settings, links and Mk IV marker kept) with that Fortune level, and
+    the book is used up. Only an upgrade works.
+  - **Anvils:** they work for creative players only. A survival anvil won't accept it without a client mod.
+  - **Tooltip:** clients show "Fortune III" as for any enchanted item, and it survives the manipulator saving its
+    settings.
+  - **Everyone at once:** `mining/baseFortune` gives every manipulator a Fortune level without enchanting.
 
 ## Config (`config/mmfreepower.cfg`, section `mk4`)
 
@@ -54,6 +71,14 @@ Server-side tweaks to GTNH's Matter Manipulator. Clients need nothing.
 | `excludedOrePrefixes` | Ore dictionary words (`block`, `ore`, …) that mark storage and ore blocks as costly. |
 | `allowedOreNames` | Ore dictionary names (`*` wildcards) that are building blocks anyway (`blockGlass*`, `blockWool*`, …). |
 | `alwaysFree` | `modid:name` patterns that are always free (tile entities still cost). |
+
+Section `mining`:
+
+| Setting | Meaning |
+|---|---|
+| `dropOres` | Ores a manipulator removes drop as usual (default `true`); `false` keeps the manipulator's own deleting. |
+| `fortuneBooks` | The manipulator plus Fortune book crafting recipe (default `true`). |
+| `baseFortune` | Fortune level every manipulator mines with at least, enchanted or not (default `0`, up to 10). |
 
 Changes need a server restart.
 
@@ -69,6 +94,17 @@ Changes need a server restart.
 - `mixin/MixinItemMatterManipulator`: `setState` rebuilds the item's NBT from the manipulator's own state; the Mk IV
   marker, name and glint are put back afterwards.
 - `MkIVRecipe`: the shapeless MK III to Mk IV recipe, registered on the server only.
+- `mixin/MixinAbstractBuildable` (in `AbstractBuildable.removeBlock`):
+  - **Ore check:** the manipulator asks `GTUtility.isOre` and checks ore dictionary names for "ore" to decide whether
+    to delete a block. Both answers are wrapped to say "not an ore".
+  - **Drops:** the `Block.getDrops` call is wrapped too. It uses the block's real world metadata instead of the
+    manipulator's spec, where a natural GregTech ore's 8032 becomes 32, a "placed" ore that gets no Fortune. It sets
+    the player as Forge's `Block.harvesters`, as `harvestBlock` does, since GregTech reads that. It passes the held
+    manipulator's Fortune level.
+  - **Harvest event:** it gets the same Fortune level.
+- `MMFortune` and `FortuneRecipe`: the Fortune level on a manipulator or book, and the manipulator plus book recipe.
+  `MkIVCraftSync` sends any manipulator in a crafting output slot to the client, since clients don't know these
+  server-side recipes.
 
 ## Build and test
 
@@ -80,8 +116,12 @@ Changes need a server restart.
   console. It covers the recipe, the marker surviving state saves, which real blocks are free, and taking items
   through the manipulator's own inventory code. For the void list it hands drops back through that code with a fake
   player's list set (cobblestone, dirt by name, one wool colour, paused, an ordinary MK III), runs `/mmvoid toggle`
-  and `/mmvoid remove` with items in the fake player's hand, and purges real drops near spawn. 76 checks, all passing
-  on 6 Nov 2026 (version 1.2.1).
+  and `/mmvoid remove` with items in the fake player's hand, and purges real drops near spawn.
+  - **Ores and Fortune (1.3.0):** it places vanilla, natural GregTech and small GregTech ores and removes them through
+    the manipulator's own `removeBlock`, then crafts Fortune onto an MK III and a Mk IV. It checks that Fortune
+    survives state saves, and mines 20 diamond ores and 20 GregTech iron ores at Fortune III. That part uses a plain
+    EntityPlayerMP, because GregTech gives fake players no Fortune.
+  - **Result:** 93 checks, all passing on 7 Nov 2026.
 - **Verdict dump:** `mmfreepower dump` (same flag) writes every block variant's verdict and reason to
   `mmfreepower-verdicts.tsv` in the server folder. That's how to check a mod's blocks before changing the config.
   On 2 Nov: 6 945 free, 8 003 costing (most of those are machines and GregTech).

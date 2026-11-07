@@ -16,9 +16,9 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 
 /**
- * Shows the Mk IV in a crafting output slot. Minecraft 1.7.10 never sends crafting output slots to the client (the
- * client works the output out itself), and clients don't have this server-side recipe, so without this the output
- * looks empty even though the server has the Mk IV ready there.
+ * Shows the Mk IV, or a manipulator just given Fortune, in a crafting output slot. Minecraft 1.7.10 never sends
+ * crafting output slots to the client (the client works the output out itself), and clients don't have these
+ * server-side recipes, so without this the output looks empty even though the server has the result ready there.
  */
 public class MkIVCraftSync {
 
@@ -46,11 +46,11 @@ public class MkIVCraftSync {
         sent.put(player, new Object[] { container.windowId, result.slotNumber, stack.copy() });
     }
 
-    /** The container's crafting output slot if it holds a Mk IV, otherwise null. */
+    /** The container's crafting output slot if it holds a Matter Manipulator (Mk IV or not), otherwise null. */
     static Slot mkIVResult(Container container) {
         if (container == null) return null;
         for (Object o : container.inventorySlots) {
-            if (o instanceof SlotCrafting && MkIV.isMkIV(((Slot) o).getStack())) return (Slot) o;
+            if (o instanceof SlotCrafting && MMFortune.isManipulator(((Slot) o).getStack())) return (Slot) o;
         }
         return null;
     }

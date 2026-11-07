@@ -5,10 +5,16 @@ import java.util.Locale;
 
 import net.minecraftforge.common.config.Configuration;
 
-/** Settings from config/mmfreepower.cfg: which blocks the Valier MM Mk IV places for free. */
+/**
+ * Settings from config/mmfreepower.cfg: which blocks the Valier MM Mk IV places for free, and whether every
+ * manipulator keeps the drops of the ores it removes.
+ */
 public final class MkIVConfig {
 
     public static boolean enabled = true;
+    public static boolean dropOres = true;
+    public static boolean fortuneBooks = true;
+    public static int baseFortune = 0;
     public static String[] excludedMods = {};
     public static String[] excludedBlocks = {};
     public static String[] excludedOrePrefixes = {};
@@ -95,6 +101,29 @@ public final class MkIVConfig {
             cat,
             DEFAULT_ALWAYS_FREE,
             "Blocks that are always free (modid:name patterns), even if excluded above. Tile entities still cost.");
+        dropOres = c.getBoolean(
+            "dropOres",
+            "mining",
+            true,
+            "Every Matter Manipulator (MK0 to MK III and the Mk IV) hands back what the ores it removes drop, as a "
+                + "pickaxe without Fortune would: raw ores (GregTech's oredropbehavior setting decides), small ores' "
+                + "dusts and gems, diamonds, coal and so on. The manipulator on its own deletes ores with no drops; "
+                + "false keeps that.");
+        fortuneBooks = c.getBoolean(
+            "fortuneBooks",
+            "mining",
+            true,
+            "A Matter Manipulator crafted together with a Fortune enchanted book gets that Fortune level (it is "
+                + "otherwise kept: charge, settings, links, the Mk IV marker). Every manipulator mines with the Fortune "
+                + "level on it.");
+        baseFortune = c.getInt(
+            "baseFortune",
+            "mining",
+            0,
+            0,
+            10,
+            "Every Matter Manipulator mines with at least this Fortune level, enchanted or not. 0 = only what's "
+                + "enchanted on it; 3 = Fortune III for everyone.");
         if (c.hasChanged()) c.save();
     }
 

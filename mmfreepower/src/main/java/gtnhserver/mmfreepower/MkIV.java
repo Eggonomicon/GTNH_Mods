@@ -33,8 +33,11 @@ public final class MkIV {
     public static final String NAME = "§r§5Valier MM Mk IV";
     private static final String[] LORE = { "§7Places blocks for free", "§8Machines, chests and resource "
         + "blocks still cost items" };
-    /** Root tags of a Mk IV that the manipulator itself doesn't keep when it saves its state, so they're put back. */
-    private static final String[] KEPT_TAGS = { TAG, "display", "ench" };
+    /**
+     * Root tags the manipulator itself doesn't keep when it saves its state, so they're put back: the Mk IV marker,
+     * a name and lore, enchantments (Fortune, the Mk IV's glint) and the anvil's repair cost. Kept on every manipulator.
+     */
+    private static final String[] KEPT_TAGS = { TAG, "display", "ench", "RepairCost" };
 
     private static final ThreadLocal<List<NBTTagCompound>> SAVED = ThreadLocal.withInitial(ArrayList::new);
 
@@ -65,10 +68,10 @@ public final class MkIV {
 
     // ---- Keeping the marker when the manipulator rewrites its NBT ----
 
-    /** Before ItemMatterManipulator.setState replaces the item's NBT: remember the Mk IV tags. */
+    /** Before ItemMatterManipulator.setState replaces the item's NBT: remember the tags it would drop. */
     public static void beforeSetState(ItemStack stack) {
         NBTTagCompound kept = null;
-        if (isMkIV(stack)) {
+        if (stack != null && stack.hasTagCompound()) {
             kept = new NBTTagCompound();
             for (String key : KEPT_TAGS) {
                 NBTBase value = stack.getTagCompound()

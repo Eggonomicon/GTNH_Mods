@@ -1,6 +1,6 @@
 // The Matter Manipulator, UniMixins (Mixin + GTNHMixins' @LateMixin) and fastutil, straight from a GTNH 2.9 server's
 // own jars: compile-time only, the server already has them at run time. IC2 and AE2 only because the manipulator
-// classes the self-test uses implement their interfaces.
+// classes the self-test uses implement their interfaces; GTNHLib for the manipulator's block specs.
 // Point -PgtnhInstance=<folder> (or gtnhInstance in ~/.gradle/gradle.properties) at your server's folder; by default
 // it is ../../GTNH_Instance next to this repository.
 def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Instance"
@@ -11,5 +11,6 @@ dependencies {
         "${gtnh}/mods/+unimixins-all-1.7.10-0.3.1.jar",
         "${gtnh}/falsepattern/it.unimi.dsi-fastutil-8.5.18.jar",
         "${gtnh}/mods/industrialcraft-2-2.2.828-experimental.jar",
-        "${gtnh}/mods/appliedenergistics2-rv3-beta-1095-GTNH.jar"))
+        "${gtnh}/mods/appliedenergistics2-rv3-beta-1095-GTNH.jar",
+        "${gtnh}/mods/gtnhlib-0.11.54.jar"))
 }
