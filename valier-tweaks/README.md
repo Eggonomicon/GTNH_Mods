@@ -26,6 +26,29 @@ axe broke`.
 Tinkers' Construct is optional: without it, the mod does nothing. It finds Tinkers' classes by name and has no hard
 dependency.
 
+## Peaceful personal dimensions (1.1.0)
+
+Minecraft 1.7.10 has one difficulty for the whole server. This lets a player make just their own Personal Space
+dimension peaceful:
+
+| Command | What it does |
+|---|---|
+| `/pdim peaceful` | Shows whether the personal dimension you're in is peaceful. |
+| `/pdim peaceful on` / `off` | Switches it for the personal dimension you're in. |
+| `/pdim peaceful on\|off <dimension>` | Ops and the console: switch any loaded personal dimension. |
+| `/pdim list` | Lists the peaceful dimensions. |
+
+- **While on:** no hostile mob (anything Minecraft counts as a monster) can spawn there, whatever spawns it: natural
+  spawning, spawners, eggs, commands or other mods. Hostile mobs already there, such as ones saved in chunks, are
+  removed within a quarter of a second and drop nothing. Animals are left alone. As with peaceful difficulty, that
+  includes bosses such as the Wither, so switch it off for a boss fight.
+- **Who may switch it:** anyone who could break blocks where they stand, the same rule Personal Space uses for its
+  portal settings. Claim your dimension's chunks to keep visitors from changing it. Ops always may.
+- **Only personal dimensions:** it refuses everywhere else (the overworld, the Nether, planets).
+- **Saved** with the world (`data/valiertweaks_peaceful.dat`).
+
+Personal Space is optional: without it, `/pdim peaceful` simply finds no personal dimensions.
+
 ## Config (`config/valiertweaks.cfg`)
 
 | Setting | Default | Meaning |
@@ -33,6 +56,7 @@ dependency.
 | `finishLumberAxeTrees` | `true` | Fell the rest of a tree when a lumber axe chop stops early. |
 | `maxExtraLogs` | `1024` | At most this many extra logs per tree. |
 | `logsPerTick` | `128` | Extra logs broken per tick (Tinkers' own rate). |
+| `pdim` / `peacefulDimensions` | `true` | The `/pdim peaceful` switch. Off: no dimension is kept peaceful. |
 
 ## Build and test
 
@@ -48,3 +72,10 @@ dependency.
   - E, with one log protected by a cancelled break event: everything but that log falls.
 
   The results are checked 3 seconds later, and the area is cleared afterwards.
+- **Peaceful self-test:** `valiertweaks selftest peaceful` (same flag). The test world's overworld stands in for a
+  personal dimension.
+  - **Command:** it refuses outside a personal dimension and refuses a non-op naming a dimension. A player may switch
+    it only where a break would be allowed.
+  - **Spawning:** with peaceful on, a new zombie can't spawn, natural spawning is denied and a cow is unaffected. A
+    zombie that was already there is gone 10 ticks later.
+  - **Saving:** the list saves and loads.

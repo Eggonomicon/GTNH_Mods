@@ -7,6 +7,8 @@ import java.util.UUID;
 import net.minecraft.block.Block;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.monster.EntityZombie;
+import net.minecraft.entity.passive.EntityCow;
 import net.minecraft.init.Blocks;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -22,6 +24,7 @@ import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.common.util.FakePlayerFactory;
+import net.minecraftforge.event.entity.living.LivingSpawnEvent;
 import net.minecraftforge.event.world.BlockEvent;
 
 import com.mojang.authlib.GameProfile;
@@ -59,19 +62,115 @@ final class SelfTest {
 
     private SelfTest() {}
 
+    private static String stepName = "trees";
+
     static void run(ICommandSender sender, String step) {
-        if (!"trees".equals(step)) {
-            sender.addChatMessage(new ChatComponentText("Steps: trees"));
+        if (!"trees".equals(step) && !"peaceful".equals(step)) {
+            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful"));
             return;
         }
         passed = failed = 0;
         failures.clear();
+        stepName = step;
         try {
-            new Trees().start();
+            if ("trees".equals(step)) new Trees().start();
+            else new Peaceful().start();
         } catch (Throwable t) {
-            ValierTweaks.LOG.error("[ValierTweaks SelfTest] trees threw", t);
-            check(false, "trees ran without an exception (" + t + ")");
+            ValierTweaks.LOG.error("[ValierTweaks SelfTest] " + step + " threw", t);
+            check(false, step + " ran without an exception (" + t + ")");
             summary();
+        }
+    }
+
+    /**
+     * {@code valiertweaks selftest peaceful}: the flat test world's overworld stands in for a personal dimension (the
+     * command itself refuses it, which is checked first). A zombie can't be spawned while it is peaceful, natural
+     * spawning is denied, a cow is unaffected, and a zombie that was already there is gone 10 ticks later.
+     */
+    public static final class Peaceful {
+
+        final WorldServer world = DimensionManager.getWorld(0);
+        final int x = (CX << 4) + 52, z = (CZ << 4) + 8; // x .. x + 5 stay inside one chunk
+        int y, ticks;
+        EntityZombie earlier;
+        EntityCow cow;
+        final boolean wasPeaceful = PeacefulDims.isPeaceful(0);
+
+        void start() {
+            world.theChunkProviderServer.loadChunk((x >> 4), CZ);
+            y = world.getHeightValue(x, z);
+
+            // The command, as a player in the overworld (not a personal dimension) and as a non-op naming a dimension.
+            final String[] said = new String[1];
+            FakePlayer player = new FakePlayer(world, new GameProfile(UUID.fromString("00000000-0000-4000-8000-000000000d01"), "PdimTester")) {
+
+                @Override
+                public void addChatMessage(net.minecraft.util.IChatComponent message) {
+                    said[0] = message.getUnformattedText();
+                }
+            };
+            player.setPosition(x + 0.5, y, z + 0.5);
+            check(!PeacefulDims.isPersonal(world), "the overworld isn't a personal dimension");
+            new PdimCommand().processCommand(player, new String[] { "peaceful", "on" });
+            check(said[0] != null && said[0].contains("only be set in a personal dimension") && !PeacefulDims.isPeaceful(0),
+                "/pdim peaceful on is refused outside a personal dimension (" + said[0] + ")");
+            new PdimCommand().processCommand(player, new String[] { "peaceful", "on", "0" });
+            check(said[0] != null && said[0].startsWith("Only ops") && !PeacefulDims.isPeaceful(0),
+                "a non-op can't name a dimension (" + said[0] + ")");
+
+            // Who may switch it: anyone who could break blocks where they stand.
+            check(PdimCommand.mayChange(player), "with nothing protecting the spot, the player may switch it");
+            DenyBreaks guard = new DenyBreaks();
+            MinecraftForge.EVENT_BUS.register(guard);
+            boolean refused = !PdimCommand.mayChange(player);
+            MinecraftForge.EVENT_BUS.unregister(guard);
+            check(refused, "where a claim would stop them breaking blocks, the player may not switch it");
+
+            // A hostile mob that is there before peaceful goes on.
+            PeacefulDims.setPeaceful(0, false);
+            earlier = new EntityZombie(world);
+            earlier.setLocationAndAngles(x + 0.5, y, z + 0.5, 0, 0);
+            check(world.spawnEntityInWorld(earlier), "a zombie spawns while peaceful is off");
+
+            check(PeacefulDims.setPeaceful(0, true) && PeacefulDims.isPeaceful(world), "peaceful goes on (and is reported on)");
+            EntityZombie later = new EntityZombie(world);
+            later.setLocationAndAngles(x + 2.5, y, z + 0.5, 0, 0);
+            check(!world.spawnEntityInWorld(later) && !world.loadedEntityList.contains(later),
+                "while peaceful, a new zombie can't be spawned (egg, command, spawner)");
+            LivingSpawnEvent.CheckSpawn ask = new LivingSpawnEvent.CheckSpawn(later, world, x + 2.5F, y, z + 0.5F);
+            MinecraftForge.EVENT_BUS.post(ask);
+            check(ask.getResult() == cpw.mods.fml.common.eventhandler.Event.Result.DENY, "natural spawning of a zombie is denied");
+            cow = new EntityCow(world);
+            cow.setLocationAndAngles(x + 4.5, y, z + 0.5, 0, 0);
+            check(world.spawnEntityInWorld(cow), "a cow still spawns");
+            LivingSpawnEvent.CheckSpawn askCow = new LivingSpawnEvent.CheckSpawn(cow, world, x + 4.5F, y, z + 0.5F);
+            MinecraftForge.EVENT_BUS.post(askCow);
+            check(askCow.getResult() != cpw.mods.fml.common.eventhandler.Event.Result.DENY, "natural spawning of a cow isn't denied");
+
+            // Saved with the world.
+            NBTTagCompound tag = new NBTTagCompound();
+            PeacefulDims.Data.get().writeToNBT(tag);
+            PeacefulDims.Data copy = new PeacefulDims.Data("copy");
+            copy.readFromNBT(tag);
+            check(copy.dims.contains(0) && PeacefulDims.Data.get().isDirty(), "the peaceful list saves and loads (and is marked to save)");
+
+            FMLCommonHandler.instance().bus().register(this);
+            log("waiting 10 ticks for the sweep");
+        }
+
+        @SubscribeEvent
+        public void onTick(TickEvent.ServerTickEvent event) {
+            if (event.phase != TickEvent.Phase.END || ++ticks < 10) return;
+            FMLCommonHandler.instance().bus().unregister(this);
+            try {
+                check(earlier.isDead, "the zombie that was already there is removed within 10 ticks");
+                check(!cow.isDead, "the cow is left alone");
+            } finally {
+                cow.setDead();
+                PeacefulDims.setPeaceful(0, wasPeaceful);
+                check(PeacefulDims.isPeaceful(0) == wasPeaceful, "peaceful goes back off");
+                summary();
+            }
         }
     }
 
@@ -239,6 +338,15 @@ final class SelfTest {
         }
     }
 
+    /** Stands in for a claim: refuses every block break while registered. Public for Forge's event bus. */
+    public static final class DenyBreaks {
+
+        @SubscribeEvent
+        public void protect(BlockEvent.BreakEvent event) {
+            event.setCanceled(true);
+        }
+    }
+
     /** A mutable block position. */
     private static final class ChunkPos {
 
@@ -260,7 +368,7 @@ final class SelfTest {
     }
 
     private static void summary() {
-        String s = "SUMMARY trees: " + passed + " passed, " + failed + " failed" + (failures.isEmpty() ? "" : " " + failures);
+        String s = "SUMMARY " + stepName + ": " + passed + " passed, " + failed + " failed" + (failures.isEmpty() ? "" : " " + failures);
         log(s);
     }
 

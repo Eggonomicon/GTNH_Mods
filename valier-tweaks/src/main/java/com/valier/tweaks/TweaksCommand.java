@@ -7,7 +7,7 @@ import net.minecraft.command.WrongUsageException;
 /** {@code /valiertweaks selftest <step>}: only registered on a test server started with the self-test flag. */
 public class TweaksCommand extends CommandBase {
 
-    private static final String USAGE = "/valiertweaks selftest trees";
+    private static final String USAGE = "/valiertweaks selftest trees|peaceful";
 
     @Override
     public String getCommandName() {

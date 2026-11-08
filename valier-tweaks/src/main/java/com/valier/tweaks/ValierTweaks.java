@@ -13,8 +13,9 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
 
 /**
- * Small server-side gameplay fixes for Valier. So far: a Tinkers' Construct lumber axe fells the whole tree even when
- * it breaks partway (see {@link TreeFinisher}).
+ * Small server-side gameplay fixes for Valier: a Tinkers' Construct lumber axe fells the whole tree even when it breaks
+ * partway ({@link TreeFinisher}), and players can make their Personal Space dimension peaceful ({@link PeacefulDims},
+ * {@code /pdim}).
  */
 @Mod(
     modid = ValierTweaks.MODID,
@@ -35,10 +36,16 @@ public class ValierTweaks {
         FMLCommonHandler.instance()
             .bus()
             .register(finisher); // server ticks
+        PeacefulDims peaceful = new PeacefulDims();
+        MinecraftForge.EVENT_BUS.register(peaceful); // spawns
+        FMLCommonHandler.instance()
+            .bus()
+            .register(peaceful); // the sweep, on server ticks
     }
 
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
+        event.registerServerCommand(new PdimCommand());
         if (SelfTest.ENABLED) event.registerServerCommand(new TweaksCommand());
     }
 }
