@@ -26,10 +26,11 @@ Lootr; none of Lootr's code is used.
   it is moved away.
 - **Breaking one on purpose** (to build a base in a village, say), as in Lootr:
   - **Sneak while mining it.** Mining it without sneaking is refused with a message explaining how.
-  - **Or remove it with a Matter Manipulator.**
+  - **A Matter Manipulator skips loot chests (1.3.0)**, sneaking or not, and tells the player why at most every 10
+    seconds. Before 1.3.0 it removed them like a sneaking break; `matterManipulatorBreaks = true` brings that back.
 
-  Either way, the breaker's own share drops where the chest was: what's left in their copy, or the full loot if they
-  never opened it. Everyone else loses their copy of that chest. Creative mode breaks it with no drop.
+  The breaker's own share drops where the chest was: what's left in their copy, or the full loot if they never opened
+  it. Everyone else loses their copy of that chest. Creative mode breaks it with no drop.
 - **Protection.**
   - Machines (fake players) can't open or break loot chests, and vanilla explosions skip them.
   - No one can place a chest next to one.
@@ -130,7 +131,7 @@ original loot back as loot chests:
 | `maxInhabitedTicks` | 0 | How many ticks players may have spent near a chunk for its chests to still count as loot. Keep 0. Chunks saved while a player is near are always marked as visited. |
 | `protectFromBreaking` | true | Only creative can break loot chests outright; explosions skip them. |
 | `breakWhileSneaking` | true | Players can still break one by sneaking while mining it; their share drops. |
-| `matterManipulatorBreaks` | true | A player's Matter Manipulator can remove loot chests; their share drops. |
+| `matterManipulatorBreaks` | false | A player's Matter Manipulator can remove loot chests (their share drops). Off: it skips them, even while sneaking. |
 | `blockAdjacentChests` | true | No chests next to loot chests (they would form a vanilla double chest). |
 | `registerNewChunks` | true | Also catch chests that structures generate in brand-new chunks. |
 | `title` | Loot Chest | Window title. |

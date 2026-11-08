@@ -325,10 +325,21 @@ public final class SelfTest {
         Item manipulator = GameRegistry.findItem("matter-manipulator", "itemMatterManipulator3");
         check(manipulator != null, "the Matter Manipulator item is there to test with");
         if (manipulator != null) {
+            boolean configured = LootConfig.matterManipulatorBreaks;
             walker.inventory.currentItem = 0;
             walker.inventory.setInventorySlotContents(0, new ItemStack(manipulator));
+            LootConfig.matterManipulatorBreaks = false;
+            check(breakAttempt(world, T, walker).isCanceled(),
+                "with matterManipulatorBreaks off (the default), a Matter Manipulator can't remove loot chest T");
+            walker.setSneaking(true);
+            check(breakAttempt(world, T, walker).isCanceled(),
+                "nor while the player sneaks, which would let them break it by hand");
+            walker.setSneaking(false);
+            check(data.isLoot(pos(T)), "T is still a loot chest after the refused attempts");
+            LootConfig.matterManipulatorBreaks = true;
             check(!breakAttempt(world, T, walker).isCanceled(),
-                "a player's Matter Manipulator may remove loot chest T (removed for real in run2)");
+                "with it on, a player's Matter Manipulator may remove loot chest T (removed for real in run2)");
+            LootConfig.matterManipulatorBreaks = configured;
             walker.inventory.setInventorySlotContents(0, null);
         }
         check(!breakAttempt(world, C, machine).isCanceled() && data.isIgnored(pos(C)),

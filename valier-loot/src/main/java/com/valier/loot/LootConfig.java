@@ -20,7 +20,7 @@ public final class LootConfig {
     public static int maxInhabitedTicks = 0;
     public static boolean protectFromBreaking = true;
     public static boolean breakWhileSneaking = true;
-    public static boolean matterManipulatorBreaks = true;
+    public static boolean matterManipulatorBreaks = false;
     public static boolean blockAdjacentChests = true;
     public static boolean registerNewChunks = true;
     public static String title = "Loot Chest";
@@ -97,9 +97,9 @@ public final class LootConfig {
         matterManipulatorBreaks = c.getBoolean(
             "matterManipulatorBreaks",
             cat,
-            true,
+            false,
             "Let a player's Matter Manipulator remove loot chests, like breaking one by sneaking: the player's share "
-                + "drops where the chest was.");
+                + "drops where the chest was. Off: a Manipulator skips loot chests, even while sneaking.");
         blockAdjacentChests = c.getBoolean(
             "blockAdjacentChests",
             cat,

@@ -381,12 +381,23 @@ public class LootEvents {
         if (!data.isLoot(LootData.pack(event.x, event.y, event.z))) return;
         EntityPlayer player = event.getPlayer();
         if (!LootConfig.protectFromBreaking || player != null && player.capabilities.isCreativeMode) return;
-        // As in Lootr, a player can still break one on purpose by sneaking (to build a base in a village, say), or
-        // with a Matter Manipulator (a player's own tool; it asks with this event before removing a block).
+        // A Matter Manipulator (it asks with this event before removing a block) only removes loot chests if the
+        // config allows it, sneaking or not; by default it skips them. It asks again on every attempt, so the
+        // explanation is sent at most every 10 seconds.
+        if (player != null && !(player instanceof FakePlayer) && isMatterManipulator(player.getHeldItem())) {
+            if (LootConfig.matterManipulatorBreaks) return;
+            event.setCanceled(true);
+            tellAtMostEvery(
+                player,
+                10_000L,
+                "Matter Manipulators skip loot chests: everyone gets their own copy of what's inside. Open it to take "
+                    + "your share"
+                    + (LootConfig.breakWhileSneaking ? ", or break it by hand while sneaking." : "."));
+            return;
+        }
+        // As in Lootr, a player can still break one on purpose by sneaking (to build a base in a village, say).
         // Machines never can.
-        if (player != null && !(player instanceof FakePlayer)
-            && (LootConfig.breakWhileSneaking && player.isSneaking()
-                || LootConfig.matterManipulatorBreaks && isMatterManipulator(player.getHeldItem())))
+        if (player != null && !(player instanceof FakePlayer) && LootConfig.breakWhileSneaking && player.isSneaking())
             return;
         event.setCanceled(true);
         tell(
@@ -510,6 +521,20 @@ public class LootEvents {
     static void tell(EntityPlayer player, String text) {
         if (player instanceof EntityPlayerMP && !(player instanceof FakePlayer)
             && ((EntityPlayerMP) player).playerNetServerHandler != null) player.addChatMessage(message(text));
+    }
+
+    private static final Map<UUID, Long> lastTold = new HashMap<>();
+
+    /** Like {@link #tell}, but at most once per interval for each player. */
+    static void tellAtMostEvery(EntityPlayer player, long millis, String text) {
+        if (player == null) return;
+        long now = System.currentTimeMillis();
+        UUID id = player.getGameProfile()
+            .getId();
+        Long last = lastTold.get(id);
+        if (last != null && now - last < millis) return;
+        lastTold.put(id, now);
+        tell(player, text);
     }
 
     /** Drops the stacks at the chest's position, the way a broken chest spills its contents. */
