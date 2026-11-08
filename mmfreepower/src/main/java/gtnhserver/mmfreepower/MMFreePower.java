@@ -7,6 +7,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
@@ -19,22 +20,26 @@ import cpw.mods.fml.common.registry.GameRegistry;
  * MK III crafted on its own, which places blocks without machines for free ({@link MkIV},
  * {@link gtnhserver.mmfreepower.mixin.MixinMMInventory}), and can delete the drops a player's void list names
  * ({@link MkIVVoid}, {@code /mmvoid}). Every manipulator also keeps the drops of the ores it removes, which it would
- * otherwise delete ({@link gtnhserver.mmfreepower.mixin.MixinAbstractBuildable}).
+ * otherwise delete, with Fortune, and its ores' veins show on the VisualProspecting map as a pickaxe's would
+ * ({@link gtnhserver.mmfreepower.mixin.MixinAbstractBuildable}, {@link VeinReveal}).
  */
 @Mod(
     modid = MMFreePower.MODID,
     name = "MM Free Power",
-    version = "1.3.0",
+    version = "1.4.0",
     acceptableRemoteVersions = "*",
     dependencies = "after:matter-manipulator")
 public class MMFreePower {
 
     public static final String MODID = "mmfreepower";
     public static final Logger LOG = LogManager.getLogger("MMFreePower");
+    /** GregTech is loaded: its ores' veins can be reported to VisualProspecting. */
+    public static boolean gregTech;
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         MkIVConfig.load(event.getSuggestedConfigurationFile());
+        gregTech = Loader.isModLoaded("gregtech");
     }
 
     @Mod.EventHandler

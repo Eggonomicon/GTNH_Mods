@@ -27,10 +27,12 @@ import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.oredict.OreDictionary;
 
+import com.gtnewhorizon.gtnhlib.util.data.ImmutableBlockMeta;
 import com.mojang.authlib.GameProfile;
 import com.recursive_pineapple.matter_manipulator.common.building.AbstractBuildable;
 import com.recursive_pineapple.matter_manipulator.common.building.BlockSpec;
@@ -42,7 +44,26 @@ import com.recursive_pineapple.matter_manipulator.common.entities.EntityItemLarg
 import com.recursive_pineapple.matter_manipulator.common.items.manipulator.ItemMatterManipulator;
 import com.recursive_pineapple.matter_manipulator.common.utils.BigItemStack;
 
+import com.sinthoras.visualprospecting.Config;
+import com.sinthoras.visualprospecting.Utils;
+import com.sinthoras.visualprospecting.VisualProspecting_API;
+import com.sinthoras.visualprospecting.database.OreVeinPosition;
+import com.sinthoras.visualprospecting.database.veintypes.VeinType;
+import com.sinthoras.visualprospecting.database.veintypes.VeinTypeCaching;
+import com.sinthoras.visualprospecting.network.ProspectingNotification;
+import com.sinthoras.visualprospecting.network.ProspectingRequest;
+
+import cpw.mods.fml.common.Loader;
+import cpw.mods.fml.common.eventhandler.EventPriority;
+import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.registry.GameRegistry;
+import gregtech.api.enums.Materials;
+import gregtech.api.enums.StoneType;
+import gregtech.api.events.OreInteractEvent;
+import gregtech.api.interfaces.IOreMaterial;
+import gregtech.common.ores.IOreAdapter;
+import gregtech.common.ores.OreInfo;
+import gregtech.common.ores.OreManager;
 import it.unimi.dsi.fastutil.booleans.BooleanObjectImmutablePair;
 
 /**
@@ -364,6 +385,9 @@ public class SelfTest extends CommandBase {
             gtOres != null && gtIsOre(gtOres, naturalIron) && gtIsOre(gtOres, smallIron),
             "GregTech counts natural iron ore and small iron ore as ores (the kind the manipulator deleted)");
         ItemStack rawIron = firstOre("rawOreIron");
+        IOreMaterial ironOre = Materials.Iron;
+        check(ironOre != null && placeOre(world, ox + 11, oy, oz, ironOre, false), "the test's ore placer places a natural iron ore");
+        world.setBlockToAir(ox + 11, oy, oz);
         world.setBlock(ox + 2, oy, oz, gtOres, naturalIron, 2);
         log(
             "The manipulator's block spec of a natural iron ore (world metadata " + world.getBlockMetadata(ox + 2, oy, oz)
@@ -390,6 +414,52 @@ public class SelfTest extends CommandBase {
         removeWithManipulator(build, world, ox + 5, oy, oz, Blocks.stone, 0);
         check(total(build) == before + 1, "with mining/dropOres off, other blocks still come back (stone gives cobblestone)");
         MkIVConfig.dropOres = true;
+
+        // Thaumcraft's infused stone (blockCustomOre 1 to 6) drops 1 + random(2 + Fortune) shards of its aspect, as with
+        // a pickaxe; 7 is amber bearing stone, 0 cinnabar ore (which drops itself).
+        Block tcOre = GameRegistry.findBlock("Thaumcraft", "blockCustomOre");
+        Item shard = GameRegistry.findItem("Thaumcraft", "ItemShard");
+        check(tcOre != null && shard != null, "Thaumcraft's infused stone and shard item exist");
+        String[] aspects = { "air", "fire", "water", "earth", "order", "entropy" };
+        for (int m = 1; tcOre != null && shard != null && m <= 6; m++) {
+            long had = pending(build, new ItemStack(shard, 1, m - 1));
+            boolean taken = removeWithManipulator(build, world, ox + 9, oy, oz, tcOre, m);
+            long got = pending(build, new ItemStack(shard, 1, m - 1)) - had;
+            check(
+                taken && got >= 1 && got <= 2,
+                "removing " + aspects[m - 1] + " infused stone hands back 1 or 2 " + aspects[m - 1] + " shards (" + got + ")");
+        }
+        if (tcOre != null) {
+            Item resource = GameRegistry.findItem("Thaumcraft", "ItemResource");
+            long amber = resource == null ? 0 : pending(build, new ItemStack(resource, 1, 6));
+            check(
+                removeWithManipulator(build, world, ox + 9, oy, oz, tcOre, 7) && resource != null
+                    && pending(build, new ItemStack(resource, 1, 6)) > amber,
+                "removing amber bearing stone hands back amber");
+            check(
+                removeWithManipulator(build, world, ox + 9, oy, oz, tcOre, 0) && pending(build, tcOre, 0) >= 1,
+                "removing cinnabar ore hands back the cinnabar ore block");
+        }
+        // GregTech's own shard veins (Terra/Aer, Aqua/Ignis, Perditio/Ordo) are GregTech ores: with the server's
+        // FortuneItem drop setting they drop raw ore, the same as with a pickaxe, which processing turns into shards.
+        IOreMaterial infusedAir = Materials.InfusedAir;
+        check(infusedAir != null, "GregTech has an InfusedAir ore material");
+        if (infusedAir != null) {
+            ItemStack rawAir = firstOre("rawOreInfusedAir");
+            check(placeOre(world, ox + 10, oy, oz, infusedAir, false), "GregTech places a natural infused air ore");
+            Block airOre = world.getBlock(ox + 10, oy, oz);
+            List<ItemStack> pick = airOre.getDrops(world, ox + 10, oy, oz, world.getBlockMetadata(ox + 10, oy, oz), 0);
+            placeOre(world, ox + 10, oy, oz, infusedAir, false);
+            before = total(build);
+            long rawBefore = rawAir == null ? 0 : pending(build, rawAir);
+            boolean taken = removeInPlace(build, world, ox + 10, oy, oz);
+            log("A natural GregTech infused air ore: a pickaxe gets " + pick + "; the manipulator handed back "
+                + (total(build) - before) + " items (raw infused air ore: "
+                + (rawAir == null ? "no rawOreInfusedAir item" : pending(build, rawAir) - rawBefore) + ")");
+            check(
+                taken && rawAir != null && pending(build, rawAir) - rawBefore >= 1,
+                "removing a natural GregTech infused air ore hands back raw infused air ore, as a pickaxe gets");
+        }
 
         // Fortune: crafted on with a book, kept through the manipulator's state saves, and used for drops.
         ItemStack fortuneBook = Items.enchanted_book.getEnchantedItemStack(new EnchantmentData(Enchantment.fortune, 3));
@@ -475,13 +545,188 @@ public class SelfTest extends CommandBase {
             long raw = rawIron == null ? total(luckyBuild) - allBefore : pending(luckyBuild, rawIron) - rawBefore;
             log("20 GregTech iron ores with Fortune III gave: " + luckyBuild.pendingItems);
             check(raw > 20, "20 natural GregTech iron ores removed with Fortune III give more than 20 raw ores (" + raw + ")");
+            if (tcOre != null && shard != null) {
+                long plainBefore = pending(build, new ItemStack(shard, 1, 0));
+                long luckyBefore = pending(luckyBuild, new ItemStack(shard, 1, 0));
+                for (int i = 0; i < 20; i++) {
+                    removeWithManipulator(build, world, ox + 9, oy, oz, tcOre, 1);
+                    removeWithManipulator(luckyBuild, world, ox + 9, oy, oz, tcOre, 1);
+                }
+                long plainShards = pending(build, new ItemStack(shard, 1, 0)) - plainBefore;
+                long luckyShards = pending(luckyBuild, new ItemStack(shard, 1, 0)) - luckyBefore;
+                check(
+                    plainShards >= 20 && plainShards <= 40 && luckyShards > 40,
+                    "20 air infused stones: " + plainShards + " shards without Fortune (20 to 40), " + luckyShards
+                        + " with Fortune III (more than 40)");
+            }
         }
         player.inventory.setInventorySlotContents(0, manipulator.copy());
         check(MMFortune.miningLevel(player) == 0, "an unenchanted manipulator mines with Fortune 0");
         MkIVConfig.baseFortune = 3;
         check(MMFortune.miningLevel(player) == 3, "mining/baseFortune 3 gives every manipulator Fortune III");
         MkIVConfig.baseFortune = 0;
+
+        if (Loader.isModLoaded("visualprospecting")) veins(world, manipulator, build, spawn);
+        else check(false, "VisualProspecting is loaded (for the ore vein checks)");
         player.inventory.setInventorySlotContents(0, null);
+    }
+
+    /** Records GregTech's ore events, as VisualProspecting receives them. Public: FML's event bus calls it directly. */
+    public static class OreEvents {
+
+        public final List<OreInteractEvent> events = new ArrayList<>();
+
+        @SubscribeEvent(priority = EventPriority.HIGHEST)
+        public void onOre(OreInteractEvent event) {
+            events.add(event);
+        }
+    }
+
+    /**
+     * Ore veins on the map: a manipulator removing a natural GregTech ore posts GregTech's OreInteractEvent (what a
+     * pickaxe's harvest posts) once per chunk and ore, and VisualProspecting answers that ore with its vein.
+     */
+    private void veins(WorldServer world, ItemStack manipulator, PendingBuild fakeBuild, ChunkCoordinates spawn)
+        throws Exception {
+        EntityPlayerMP miner = new EntityPlayerMP(
+            MinecraftServer.getServer(),
+            world,
+            new GameProfile(UUID.fromString("00000000-0000-4000-8000-0000000000f6"), "VeinMiner"),
+            new ItemInWorldManager(world));
+        miner.inventory.currentItem = 0;
+        miner.inventory.setInventorySlotContents(0, manipulator.copy());
+        PendingBuild build = new PendingBuild(
+            miner,
+            ItemMatterManipulator.getState(manipulator),
+            ItemMatterManipulator.ManipulatorTier.Tier3,
+            new ArrayList<>());
+
+        List<OreVeinPosition> known = VisualProspecting_API.LogicalServer
+            .prospectOreVeinsWithinRadius(0, spawn.posX, spawn.posZ, 2048);
+        OreVeinPosition vein = null;
+        for (OreVeinPosition v : known) {
+            if (v.veinType != VeinType.NO_VEIN && v.veinType.primaryOre != null) {
+                vein = v;
+                break;
+            }
+        }
+        if (vein == null) {
+            // A world VisualProspecting hasn't watched being generated: tell it about a vein, as GregTech's ore
+            // generator does (VisualProspecting_API.LogicalServer.notifyOreGeneration).
+            VeinType type = null;
+            for (VeinType t : VeinTypeCaching.getVeinTypes()) {
+                if (t != VeinType.NO_VEIN && t.primaryOre != null && t.getAllowedDimensions()
+                    .contains("Overworld")) {
+                    type = t;
+                    break;
+                }
+            }
+            if (type == null) for (VeinType t : VeinTypeCaching.getVeinTypes()) {
+                if (t != VeinType.NO_VEIN && t.primaryOre != null) {
+                    type = t;
+                    break;
+                }
+            }
+            // Next to spawn, in chunks that are generated and loaded.
+            int cx = Utils.mapToCenterOreChunkCoord((spawn.posX >> 4) + 3);
+            int cz = Utils.mapToCenterOreChunkCoord((spawn.posZ >> 4) + 3);
+            if (type != null) {
+                VisualProspecting_API.LogicalServer.notifyOreGeneration(0, cx, cz, type.name);
+                OreVeinPosition v = VisualProspecting_API.LogicalServer.getOreVein(0, cx, cz);
+                if (v != null && v.veinType == type) vein = v;
+            }
+            log("VisualProspecting knew no vein near spawn (" + known.size() + "); registered "
+                + (type == null ? "nothing (no vein type)" : "a " + type.name + " vein at chunk " + cx + " " + cz)
+                + (vein == null ? ", which it didn't keep" : ""));
+        }
+        check(vein != null, "an ore vein VisualProspecting knows, for the vein checks");
+        if (vein == null) return;
+        IOreMaterial ore = vein.veinType.primaryOre;
+        int vx = vein.getBlockX(), vy = 250, vz = vein.getBlockZ();
+        log("Vein checks use the " + vein.veinType.name + " vein at chunk " + vein.chunkX + " " + vein.chunkZ + " (primary ore "
+            + ore.getInternalName() + ", block " + vx + " " + vz + ")");
+
+        OreEvents seen = new OreEvents();
+        boolean prospecting = Config.enableProspecting;
+        // VisualProspecting's own answer is sent over the player's connection, which this miner doesn't have; it is
+        // checked directly below.
+        Config.enableProspecting = false;
+        MinecraftForge.EVENT_BUS.register(seen);
+        try {
+            check(placeOre(world, vx, vy, vz, ore, false), "a natural " + ore.getInternalName() + " ore is placed in the vein's chunk");
+            Block block = world.getBlock(vx, vy, vz);
+            int meta = world.getBlockMetadata(vx, vy, vz);
+            removeInPlace(build, world, vx, vy, vz);
+            OreInteractEvent e = seen.events.isEmpty() ? null : seen.events.get(0);
+            check(
+                world.isAirBlock(vx, vy, vz) && seen.events.size() == 1 && e.world == world && e.x == vx && e.y == vy
+                    && e.z == vz && e.block == block && e.meta == meta && e.player == miner,
+                "removing it posts GregTech's ore event for that block and the holder, as a pickaxe's harvest does ("
+                    + seen.events.size() + " events)");
+            placeOre(world, vx + 1, vy, vz, ore, false);
+            removeInPlace(build, world, vx + 1, vy, vz);
+            check(seen.events.size() == 1, "a second " + ore.getInternalName() + " ore in the same chunk doesn't post it again");
+            placeOre(world, vx + 2, vy, vz, ore, true);
+            removeInPlace(build, world, vx + 2, vy, vz);
+            check(seen.events.size() == 1, "a small ore posts nothing (VisualProspecting ignores small ores)");
+            world.setBlock(vx + 3, vy, vz, Blocks.stone, 0, 2);
+            removeInPlace(build, world, vx + 3, vy, vz);
+            check(seen.events.size() == 1, "stone posts nothing");
+            placeOre(world, vx + 16, vy, vz, ore, false);
+            removeInPlace(fakeBuild, world, vx + 16, vy, vz);
+            check(seen.events.size() == 1, "a fake player's manipulator posts nothing");
+            MkIVConfig.markVeins = false;
+            placeOre(world, vx + 16, vy, vz, ore, false);
+            removeInPlace(build, world, vx + 16, vy, vz);
+            check(seen.events.size() == 1, "with mining/markVeins off, nothing is posted");
+            MkIVConfig.markVeins = true;
+            placeOre(world, vx + 16, vy, vz, ore, false);
+            removeInPlace(build, world, vx + 16, vy, vz);
+            check(seen.events.size() == 2, "the same ore in the next chunk posts it again (" + seen.events.size() + " events)");
+        } finally {
+            MkIVConfig.markVeins = true;
+            MinecraftForge.EVENT_BUS.unregister(seen);
+            Config.enableProspecting = prospecting;
+            VeinReveal.forget(miner);
+        }
+
+        // What VisualProspecting does with that event on the server (ServerCache.onOreClicked): the vein for the map.
+        placeOre(world, vx, vy, vz, ore, false);
+        ProspectingNotification answer = ProspectingRequest.prospect(new ProspectingRequest(0, vx, vy, vz, ore), world);
+        world.setBlockToAir(vx, vy, vz);
+        boolean found = false;
+        if (answer != null) for (OreVeinPosition v : answer.getOreVeins()) {
+            found |= v.chunkX == vein.chunkX && v.chunkZ == vein.chunkZ && v.veinType == vein.veinType;
+        }
+        check(found, "VisualProspecting answers that ore with the " + vein.veinType.name + " vein, the one a pickaxe shows");
+    }
+
+    /** A world-generated (natural) GregTech ore in stone: the block and metadata GregTech's own ore adapter gives. */
+    private static boolean placeOre(WorldServer world, int x, int y, int z, IOreMaterial ore, boolean small) {
+        try (OreInfo<IOreMaterial> want = OreInfo.getNewInfo()) {
+            want.material = ore;
+            want.stoneType = StoneType.Stone;
+            want.isNatural = true;
+            want.isSmall = small;
+            IOreAdapter<?> adapter = OreManager.getAdapter(want);
+            ImmutableBlockMeta block = adapter == null ? null : adapter.getBlock(want);
+            if (block == null) {
+                log("placeOre: no ore block for " + ore.getInternalName() + " (adapter " + adapter + ")");
+                return false;
+            }
+            // An unloaded chunk would take the block into the server's empty placeholder chunk.
+            world.theChunkProviderServer.loadChunk(x >> 4, z >> 4);
+            boolean set = world.setBlock(x, y, z, block.getBlock(), block.getBlockMeta(), 2);
+            try (OreInfo<IOreMaterial> info = OreManager.getOreInfo(world, x, y, z)) {
+                boolean ok = info != null && info.material == ore && info.isNatural && info.isSmall == small;
+                if (!ok) log("placeOre: " + ore.getInternalName() + (small ? " (small)" : "") + " -> " + block.getBlock()
+                    .getUnlocalizedName() + ":" + block.getBlockMeta() + ", setBlock " + set + ", world has "
+                    + world.getBlock(x, y, z)
+                        .getUnlocalizedName()
+                    + ":" + world.getBlockMetadata(x, y, z) + ", ore info " + info);
+                return ok;
+            }
+        }
     }
 
     /**
@@ -492,6 +737,11 @@ public class SelfTest extends CommandBase {
         int meta) throws Exception {
         world.setBlock(x, y, z, block, meta, 2);
         if (world.getBlock(x, y, z) != block || world.getBlockMetadata(x, y, z) != meta) return false;
+        return removeInPlace(build, world, x, y, z);
+    }
+
+    /** Removes the block already there as a manipulator does. True if it is gone. */
+    private static boolean removeInPlace(AbstractBuildable build, WorldServer world, int x, int y, int z) throws Exception {
         BlockSpec spec = BlockSpec.fromBlock(new BlockSpec(), world, x, y, z);
         Method remove = AbstractBuildable.class.getDeclaredMethod(
             "removeBlock",

@@ -60,6 +60,13 @@ Server-side tweaks to GTNH's Matter Manipulator. Clients need nothing.
   - **Tooltip:** clients show "Fortune III" as for any enchanted item, and it survives the manipulator saving its
     settings.
   - **Everyone at once:** `mining/baseFortune` gives every manipulator a Fortune level without enchanting.
+- **Ore veins on the map (1.4.0).** Mining a GregTech ore with a pickaxe tells VisualProspecting about it, and the
+  ore's vein shows on your map (and your VisualProspecting team's). Ores a manipulator removes now count the same way.
+  - Natural, non-small GregTech ores only, as with a pickaxe.
+  - It is reported once per chunk and ore type per player, not for every block.
+- **Thaumcraft shards.** Thaumcraft's infused stone drops its shards to a manipulator as it does to a pickaxe: 1 or 2
+  per block, up to 5 with Fortune III. GregTech's own shard veins (Terra/Aer, Aqua/Ignis, Perditio/Ordo) are GregTech
+  ores, so they drop raw infused ore (with a pickaxe too); processing that gives the shards.
 
 ## Config (`config/mmfreepower.cfg`, section `mk4`)
 
@@ -79,6 +86,7 @@ Section `mining`:
 | `dropOres` | Ores a manipulator removes drop as usual (default `true`); `false` keeps the manipulator's own deleting. |
 | `fortuneBooks` | The manipulator plus Fortune book crafting recipe (default `true`). |
 | `baseFortune` | Fortune level every manipulator mines with at least, enchanted or not (default `0`, up to 10). |
+| `markVeins` | Ores a manipulator removes put their vein on the VisualProspecting map, as a pickaxe does (default `true`). |
 
 Changes need a server restart.
 
@@ -102,6 +110,10 @@ Changes need a server restart.
     the player as Forge's `Block.harvesters`, as `harvestBlock` does, since GregTech reads that. It passes the held
     manipulator's Fortune level.
   - **Harvest event:** it gets the same Fortune level.
+  - **Ore veins:** at the start of `removeBlock` (the block is still there), `VeinReveal` posts GregTech's
+    `OreInteractEvent` for a natural, non-small ore. GregTech posts that from the ore's `onBlockHarvested` when a
+    pickaxe breaks it, and VisualProspecting answers it on the server with the vein. The manipulator never calls
+    `onBlockHarvested`. Repeats in the same chunk with the same ore are skipped (per player, until they log out).
 - `MMFortune` and `FortuneRecipe`: the Fortune level on a manipulator or book, and the manipulator plus book recipe.
   `MkIVCraftSync` sends any manipulator in a crafting output slot to the client, since clients don't know these
   server-side recipes.
@@ -109,8 +121,8 @@ Changes need a server restart.
 ## Build and test
 
 - **Build:** `gradlew --offline assemble` (JDK 25) builds `build/libs/mmfreepower-*.jar`.
-  - It compiles against the Matter Manipulator, UniMixins, fastutil, IC2 and AE2 jars of a GTNH 2.9 server (see
-    `dependencies.gradle`).
+  - It compiles against the Matter Manipulator, UniMixins, fastutil, IC2, AE2, GTNHLib, GregTech and
+    VisualProspecting jars of a GTNH 2.9 server (see `dependencies.gradle`).
   - Point it at your server folder with `-PgtnhInstance=<folder>`; by default it is `../../GTNH_Instance`.
 - **Self-test:** on the test server, start it with `-Dmmfreepower.selftest=true` and run `mmfreepower selftest` in the
   console. It covers the recipe, the marker surviving state saves, which real blocks are free, and taking items
@@ -121,7 +133,13 @@ Changes need a server restart.
     the manipulator's own `removeBlock`, then crafts Fortune onto an MK III and a Mk IV. It checks that Fortune
     survives state saves, and mines 20 diamond ores and 20 GregTech iron ores at Fortune III. That part uses a plain
     EntityPlayerMP, because GregTech gives fake players no Fortune.
-  - **Result:** 93 checks, all passing on 7 Nov 2026.
+  - **Shards (1.4.0):** it removes all six Thaumcraft infused stones, amber bearing stone and cinnabar ore, compares 20
+    air infused stones with and without Fortune III, and removes a natural GregTech infused air ore.
+  - **Ore veins (1.4.0):** it takes a vein VisualProspecting knows near spawn and places natural ores of its primary
+    ore in that chunk. It checks that removing one posts the ore event with the right block and player, once per
+    chunk and ore, and never for small ores, stone, fake players or with `markVeins` off. Then VisualProspecting's own
+    server code must answer that ore with that vein.
+  - **Result:** 117 checks, all passing on 8 Nov 2026.
 - **Verdict dump:** `mmfreepower dump` (same flag) writes every block variant's verdict and reason to
   `mmfreepower-verdicts.tsv` in the server folder. That's how to check a mod's blocks before changing the config.
   On 2 Nov: 6 945 free, 8 003 costing (most of those are machines and GregTech).

@@ -6,8 +6,8 @@ import java.util.Locale;
 import net.minecraftforge.common.config.Configuration;
 
 /**
- * Settings from config/mmfreepower.cfg: which blocks the Valier MM Mk IV places for free, and whether every
- * manipulator keeps the drops of the ores it removes.
+ * Settings from config/mmfreepower.cfg: which blocks the Valier MM Mk IV places for free, and how every manipulator
+ * mines (ore drops, Fortune, ore veins on the map).
  */
 public final class MkIVConfig {
 
@@ -15,6 +15,7 @@ public final class MkIVConfig {
     public static boolean dropOres = true;
     public static boolean fortuneBooks = true;
     public static int baseFortune = 0;
+    public static boolean markVeins = true;
     public static String[] excludedMods = {};
     public static String[] excludedBlocks = {};
     public static String[] excludedOrePrefixes = {};
@@ -124,6 +125,13 @@ public final class MkIVConfig {
             10,
             "Every Matter Manipulator mines with at least this Fortune level, enchanted or not. 0 = only what's "
                 + "enchanted on it; 3 = Fortune III for everyone.");
+        markVeins = c.getBoolean(
+            "markVeins",
+            "mining",
+            true,
+            "Ores a Matter Manipulator removes count as mined with a pickaxe for VisualProspecting: the ore vein they "
+                + "belong to shows on the player's map (and their VisualProspecting team's). Natural, non-small "
+                + "GregTech ores only, as with a pickaxe.");
         if (c.hasChanged()) c.save();
     }
 

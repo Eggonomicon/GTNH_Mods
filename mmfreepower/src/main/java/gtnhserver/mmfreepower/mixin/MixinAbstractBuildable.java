@@ -9,15 +9,20 @@ import net.minecraft.world.World;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.recursive_pineapple.matter_manipulator.common.building.AbstractBuildable;
+import com.recursive_pineapple.matter_manipulator.common.building.ImmutableBlockSpec;
 import com.recursive_pineapple.matter_manipulator.common.building.MMInventory;
 
 import gtnhserver.mmfreepower.MMFortune;
+import gtnhserver.mmfreepower.MMFreePower;
 import gtnhserver.mmfreepower.MkIVConfig;
+import gtnhserver.mmfreepower.VeinReveal;
 
 /**
  * Upstream, a Matter Manipulator deletes every ore it removes: in {@code AbstractBuildable.removeBlock}, a block that
@@ -28,12 +33,21 @@ import gtnhserver.mmfreepower.MkIVConfig;
  * like any other removed block.
  * <p>
  * Drops are also worked out with the Fortune level of the manipulator in hand ({@link MMFortune#miningLevel}) instead
- * of none.
+ * of none, and the ores it removes reach VisualProspecting's map as a pickaxe's would ({@link VeinReveal}).
  */
 @Mixin(value = AbstractBuildable.class, remap = false)
 public abstract class MixinAbstractBuildable {
 
     private static final String REMOVE_BLOCK = "removeBlock(Lnet/minecraft/world/World;IIILcom/recursive_pineapple/matter_manipulator/common/building/ImmutableBlockSpec;Z)V";
+
+    /** Before the block goes (it is still in the world here): its ore vein for the player's map. */
+    @Inject(method = REMOVE_BLOCK, at = @At("HEAD"), remap = false)
+    private void mmfreepower$revealVein(World world, int x, int y, int z, ImmutableBlockSpec spec, boolean b,
+        CallbackInfo ci) {
+        if (MkIVConfig.markVeins && MMFreePower.gregTech) {
+            VeinReveal.beforeRemove(world, x, y, z, ((MMInventory) (Object) this).player);
+        }
+    }
 
     @WrapOperation(
         method = REMOVE_BLOCK,
