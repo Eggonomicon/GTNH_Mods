@@ -14,8 +14,9 @@ import cpw.mods.fml.common.event.FMLServerStartingEvent;
 
 /**
  * Small server-side gameplay fixes for Valier: a Tinkers' Construct lumber axe fells the whole tree even when it breaks
- * partway ({@link TreeFinisher}), and players can make their Personal Space dimension peaceful ({@link PeacefulDims},
- * {@code /pdim}).
+ * partway ({@link TreeFinisher}), players can make their Personal Space dimension peaceful ({@link PeacefulDims},
+ * {@code /pdim}), and GregTech's solid fuel boilers make no ash ({@code mixin} package, loaded by
+ * {@link LateMixinLoader}).
  */
 @Mod(
     modid = ValierTweaks.MODID,

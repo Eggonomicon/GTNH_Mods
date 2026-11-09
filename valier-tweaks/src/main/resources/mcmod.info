@@ -2,7 +2,7 @@
 {
   "modid": "${modId}",
   "name": "${modName}",
-  "description": "Server-side tweaks for the Valier server. A Tinkers' Construct lumber axe fells the whole tree, even when it breaks partway, so no floating trees are left behind.",
+  "description": "Server-side tweaks for the Valier server. A Tinkers' Construct lumber axe fells the whole tree, even when it breaks partway, so no floating trees are left behind. /pdim peaceful makes a Personal Space dimension peaceful. GregTech's solid fuel boilers make no ash.",
   "version": "${modVersion}",
   "mcversion": "${minecraftVersion}",
   "authorList": ["Valier"]

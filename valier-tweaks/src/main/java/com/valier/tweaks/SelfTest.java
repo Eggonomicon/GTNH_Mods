@@ -1,5 +1,6 @@
 package com.valier.tweaks;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -10,12 +11,16 @@ import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.monster.EntityZombie;
 import net.minecraft.entity.passive.EntityCow;
 import net.minecraft.init.Blocks;
+import net.minecraft.init.Items;
+import net.minecraft.inventory.IInventory;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.NetHandlerPlayServer;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.world.WorldServer;
@@ -33,6 +38,16 @@ import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
+import gregtech.api.enums.ItemList;
+import gregtech.api.enums.Materials;
+import gregtech.api.enums.OrePrefixes;
+import gregtech.api.interfaces.tileentity.IGregTechTileEntity;
+import gregtech.api.util.GTOreDictUnificator;
+import gregtech.common.tileentities.boilers.MTEBoiler;
+import gregtech.common.tileentities.boilers.MTEBoilerBronze;
+import gregtech.common.tileentities.boilers.MTEBoilerSteel;
+import gtPlusPlus.xmod.gregtech.api.enums.GregtechItemList;
+import gtPlusPlus.xmod.gregtech.common.tileentities.generators.MTEAdvancedBoilerBase;
 import tconstruct.library.crafting.ToolBuilder;
 import tconstruct.tools.TinkerTools;
 
@@ -65,8 +80,8 @@ final class SelfTest {
     private static String stepName = "trees";
 
     static void run(ICommandSender sender, String step) {
-        if (!"trees".equals(step) && !"peaceful".equals(step)) {
-            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful"));
+        if (!"trees".equals(step) && !"peaceful".equals(step) && !"boilers".equals(step)) {
+            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers"));
             return;
         }
         passed = failed = 0;
@@ -74,6 +89,7 @@ final class SelfTest {
         stepName = step;
         try {
             if ("trees".equals(step)) new Trees().start();
+            else if ("boilers".equals(step)) new Boilers().start();
             else new Peaceful().start();
         } catch (Throwable t) {
             ValierTweaks.LOG.error("[ValierTweaks SelfTest] " + step + " threw", t);
@@ -335,6 +351,123 @@ final class SelfTest {
             }
             for (Object o : world.getEntitiesWithinAABB(EntityItem.class, AxisAlignedBB.getBoundingBox(x0 - 4, y - 3, z - 5, x0 + 48, y + HEIGHT + 6, z + 5)))
                 ((EntityItem) o).setDead();
+        }
+    }
+
+    /**
+     * {@code valiertweaks selftest boilers}: places a small coal boiler, a high pressure coal boiler and an LV advanced
+     * boiler as a player would, then burns coal in each through the boiler's own fuel step ({@code updateFuel}), 60
+     * pieces each (a third of them would leave ash). With {@code noBoilerAsh} on, all 60 burn and heat the boiler and
+     * the ash slot stays empty; coal blocks (always a full dust of ash otherwise) leave none either. Then with it off,
+     * to show the test reaches the ash code: the same coal leaves ash, and a coal block a full dust of dark ash. It all
+     * runs at once (no ticks); the boilers are removed after.
+     */
+    static final class Boilers {
+
+        final WorldServer world = DimensionManager.getWorld(0);
+        final int x0 = (CX << 4) + 2, z = (CZ << 4) + 14; // beside the tree test's row, in the same chunk
+        final boolean setting = TweaksConfig.noBoilerAsh;
+        final List<int[]> placed = new ArrayList<>();
+        Method updateFuel;
+
+        void start() {
+            world.theChunkProviderServer.loadChunk(x0 >> 4, z >> 4);
+            try {
+                updateFuel = MTEBoiler.class.getDeclaredMethod("updateFuel", IGregTechTileEntity.class, long.class);
+                updateFuel.setAccessible(true);
+                IGregTechTileEntity small = place(ItemList.Machine_Bronze_Boiler.get(1), x0, "small coal boiler", MTEBoilerBronze.class);
+                IGregTechTileEntity steel = place(ItemList.Machine_Steel_Boiler.get(1), x0 + 2, "high pressure coal boiler", MTEBoilerSteel.class);
+                IGregTechTileEntity advanced = place(GregtechItemList.Boiler_Advanced_LV.get(1), x0 + 4, "LV advanced boiler", MTEAdvancedBoilerBase.class);
+                boiler(small, "small coal boiler", true);
+                boiler(steel, "high pressure coal boiler", true);
+                boiler(advanced, "LV advanced boiler", false);
+            } catch (Throwable t) {
+                ValierTweaks.LOG.error("[ValierTweaks SelfTest] boilers threw", t);
+                check(false, "the boiler checks ran without an exception (" + t + ")");
+            } finally {
+                TweaksConfig.noBoilerAsh = setting;
+                check(TweaksConfig.noBoilerAsh == setting, "noBoilerAsh is back to its setting (" + setting + ")");
+                boolean gone = true;
+                for (int[] p : placed) {
+                    TileEntity te = world.getTileEntity(p[0], p[1], p[2]);
+                    if (te instanceof IInventory) for (int i = 0; i < ((IInventory) te).getSizeInventory(); i++)
+                        ((IInventory) te).setInventorySlotContents(i, null);
+                    world.setBlockToAir(p[0], p[1], p[2]);
+                    gone &= world.isAirBlock(p[0], p[1], p[2]);
+                }
+                for (Object o : world.getEntitiesWithinAABB(EntityItem.class, AxisAlignedBB.getBoundingBox(x0 - 3, 0, z - 3, x0 + 8, 256, z + 4)))
+                    ((EntityItem) o).setDead();
+                check(gone, "the test boilers are removed (" + placed.size() + ")");
+                summary();
+            }
+        }
+
+        /** Places the machine on the ground as a player would (GregTech's own item placing); null if that failed. */
+        IGregTechTileEntity place(ItemStack stack, int x, String name, Class<?> type) {
+            int y = world.getHeightValue(x, z);
+            FakePlayer player = FakePlayerFactory
+                .get(world, new GameProfile(UUID.nameUUIDFromBytes("vtweaks-boilers".getBytes()), "[BoilerTest]"));
+            boolean ok = stack != null && stack.getItem() instanceof ItemBlock
+                && ((ItemBlock) stack.getItem()).placeBlockAt(stack, player, world, x, y, z, 1, 0.5F, 1F, 0.5F, 0);
+            if (ok) placed.add(new int[] { x, y, z });
+            TileEntity te = world.getTileEntity(x, y, z);
+            IGregTechTileEntity gt = te instanceof IGregTechTileEntity ? (IGregTechTileEntity) te : null;
+            boolean right = ok && gt != null && type.isInstance(gt.getMetaTileEntity());
+            check(right, "placed a " + name + " (" + (gt == null ? te : gt.getMetaTileEntity()) + ")");
+            return right ? gt : null;
+        }
+
+        void boiler(IGregTechTileEntity te, String name, boolean coalBlocks) throws Exception {
+            if (te == null) return;
+            TweaksConfig.noBoilerAsh = true;
+            Burn r = burn(te, new ItemStack(Items.coal, 64), 60);
+            check(r.burned == 60 && r.heated == 60, name + ": burns 60 coal, each one heating it (" + r.burned + " burned, " + r.heated + " heated)");
+            check(r.ash == null, name + ": no ash from 60 coal with noBoilerAsh on (" + r + ")");
+            if (coalBlocks) {
+                r = burn(te, new ItemStack(Blocks.coal_block, 4), 4);
+                check(r.burned == 4 && r.heated == 4 && r.ash == null, name + ": 4 coal blocks burn and leave no ash (" + r + ")");
+            }
+            TweaksConfig.noBoilerAsh = false;
+            r = burn(te, new ItemStack(Items.coal, 64), 60);
+            check(r.burned == 60 && r.ash != null, name + ": with noBoilerAsh off, 60 coal leave ash, as GregTech has it (" + r + ")");
+            if (coalBlocks) {
+                r = burn(te, new ItemStack(Blocks.coal_block, 1), 1);
+                ItemStack dust = GTOreDictUnificator.get(OrePrefixes.dust, Materials.AshDark, 1L);
+                check(r.ash != null && dust != null && r.ash.isItemEqual(dust) && r.ash.stackSize == 1,
+                    name + ": with noBoilerAsh off, a coal block leaves a dust of dark ash (" + r + ")");
+            }
+        }
+
+        /** Burns {@code times} pieces of {@code fuel} through the boiler's own fuel step, from an empty ash slot. */
+        Burn burn(IGregTechTileEntity te, ItemStack fuel, int times) throws Exception {
+            MTEBoiler b = (MTEBoiler) te.getMetaTileEntity();
+            te.setInventorySlotContents(2, fuel.copy());
+            te.setInventorySlotContents(3, null);
+            Burn r = new Burn();
+            for (int i = 0; i < times; i++) {
+                b.mTemperature = 20; // an advanced boiler only takes fuel while cool
+                b.mProcessingEnergy = 0;
+                updateFuel.invoke(b, te, (long) i);
+                if (b.mProcessingEnergy > 0) r.heated++;
+            }
+            ItemStack left = te.getStackInSlot(2);
+            r.burned = fuel.stackSize - (left == null ? 0 : left.stackSize);
+            r.ash = te.getStackInSlot(3);
+            te.setInventorySlotContents(2, null);
+            te.setInventorySlotContents(3, null);
+            b.mProcessingEnergy = 0;
+            return r;
+        }
+
+        static final class Burn {
+
+            int burned, heated;
+            ItemStack ash;
+
+            @Override
+            public String toString() {
+                return burned + " burned, ash " + (ash == null ? "none" : ash.stackSize + " x " + ash.getDisplayName());
+            }
         }
     }
 

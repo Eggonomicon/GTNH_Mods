@@ -11,6 +11,7 @@ public final class TweaksConfig {
     public static int maxExtraLogs = 1024;
     public static int logsPerTick = 128;
     public static boolean peacefulDimensions = true;
+    public static boolean noBoilerAsh = true;
 
     private TweaksConfig() {}
 
@@ -40,6 +41,13 @@ public final class TweaksConfig {
             "Let players make their own Personal Space dimension peaceful with /pdim peaceful on|off: no hostile mobs "
                 + "spawn there, and ones already there are removed (no drops). Anyone who could break blocks where they "
                 + "stand may switch it, so a claim keeps visitors from changing it; ops always may.");
+        noBoilerAsh = c.getBoolean(
+            "noBoilerAsh",
+            "boilers",
+            true,
+            "GregTech's small coal and high pressure coal boilers, and GT++'s advanced solid fuel boilers, make no ash or "
+                + "dark ash from the fuel they burn. The fuel burns and makes steam as before. Ash already in a boiler "
+                + "stays there until taken out.");
         if (c.hasChanged()) c.save();
     }
 }

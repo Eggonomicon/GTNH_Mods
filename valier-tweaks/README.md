@@ -49,6 +49,26 @@ dimension peaceful:
 
 Personal Space is optional: without it, `/pdim peaceful` simply finds no personal dimensions.
 
+## No ash from boilers (1.2.0)
+
+GregTech's solid fuel boilers put ash or dark ash into their output slot as they burn coal, charcoal, coke and so on.
+With this mod they don't:
+
+- **Which boilers:** the small coal boiler and the high pressure coal boiler, and GT++'s LV, MV and HV advanced
+  boilers. GregTech's other boilers (large boilers, lava, solar) never made ash.
+- **Fuel works as before:** the same items count as fuel, last as long and make as much steam. Only the ash is gone.
+- **Ash already in a boiler** stays until someone takes it out.
+- **Not changed:** coke ovens make no ash anyway. Machines whose recipes list ash, such as the Bricked Blast Furnace,
+  the Pyrolyse Oven and the Industrial Coke Oven, still make it.
+
+It patches two GregTech methods at load time (mixins, loaded through UniMixins' late mixin loader, only when GregTech
+is installed):
+
+- **Small and high pressure coal boilers:** `MTEBoilerBronze.combustFuel`, which picks how much ash a burned item
+  leaves, returns none.
+- **Advanced boilers:** in `MTEAdvancedBoilerBase.consumeFuel`, the two calls that add tiny ash to the output slot add
+  nothing.
+
 ## Config (`config/valiertweaks.cfg`)
 
 | Setting | Default | Meaning |
@@ -57,12 +77,13 @@ Personal Space is optional: without it, `/pdim peaceful` simply finds no persona
 | `maxExtraLogs` | `1024` | At most this many extra logs per tree. |
 | `logsPerTick` | `128` | Extra logs broken per tick (Tinkers' own rate). |
 | `pdim` / `peacefulDimensions` | `true` | The `/pdim peaceful` switch. Off: no dimension is kept peaceful. |
+| `boilers` / `noBoilerAsh` | `true` | Solid fuel boilers make no ash. Off: GregTech's normal ash. |
 
 ## Build and test
 
-- **Build:** `gradlew --offline assemble` (JDK 25). The self-test compiles against a GTNH 2.9 server's Tinkers'
-  Construct jar (see `dependencies.gradle`). Point it at your server folder with `-PgtnhInstance=<folder>`; by default
-  it is `../../GTNH_Instance`.
+- **Build:** `gradlew --offline assemble` (JDK 25). It compiles against a GTNH 2.9 server's Tinkers' Construct,
+  UniMixins, GregTech, GTNHLib and ModularUI 2 jars (see `dependencies.gradle`). Point it at your server folder with
+  `-PgtnhInstance=<folder>`; by default it is `../../GTNH_Instance`.
 - **Self-test:** on a test server started with `-Dvaliertweaks.selftest=true`, run `valiertweaks selftest trees`. It
   builds four trees and a log wall, and fake players chop them with real Tinkers lumber axes:
   - A, with an axe that has 3 uses left: the whole tree falls, every log drops, and the axe broke.
@@ -79,3 +100,10 @@ Personal Space is optional: without it, `/pdim peaceful` simply finds no persona
   - **Spawning:** with peaceful on, a new zombie can't spawn, natural spawning is denied and a cow is unaffected. A
     zombie that was already there is gone 10 ticks later.
   - **Saving:** the list saves and loads.
+- **Boiler self-test:** `valiertweaks selftest boilers` (same flag). It places a small coal boiler, a high pressure coal
+  boiler and an LV advanced boiler as a player would, then runs coal through each boiler's own fuel step.
+  - **Ash off (the setting):** 60 coal burn and each heats the boiler, and the ash slot stays empty. 4 coal blocks
+    (normally a full dust of dark ash each) leave none either.
+  - **Ash back on**, to show the test reaches GregTech's ash code: the same 60 coal leave ash, and a coal block leaves
+    one dust of dark ash.
+  - The setting is put back and the boilers are removed.

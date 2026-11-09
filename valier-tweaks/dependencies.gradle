@@ -1,9 +1,17 @@
-// Tinkers' Construct, straight from a GTNH 2.9 server's own jar: compile-time only, and only the self-test uses it
-// (to build a real lumber axe). The mod itself finds Tinkers' classes by name, so it loads without them.
+// Jars straight from a GTNH 2.9 server's own mods folder, compile-time only (the server already has them at run time):
+// - Tinkers' Construct: only the self-test uses it (to build a real lumber axe). The mod itself finds Tinkers' classes
+//   by name, so it loads without them.
+// - UniMixins (Mixin + GTNHMixins' @LateMixin) and GregTech: the boiler ash mixins, which only load with GregTech.
+//   GTNHLib and ModularUI 2 only because GregTech's machine interfaces extend theirs.
 // Point -PgtnhInstance=<folder> (or gtnhInstance in ~/.gradle/gradle.properties) at your server's folder; by default
 // it is ../../GTNH_Instance next to this repository.
 def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Instance"
 
 dependencies {
-    compileOnly(files("${gtnh}/mods/TConstruct-1.14.123-GTNH.jar"))
+    compileOnly(files(
+        "${gtnh}/mods/TConstruct-1.14.123-GTNH.jar",
+        "${gtnh}/mods/+unimixins-all-1.7.10-0.3.1.jar",
+        "${gtnh}/mods/gregtech-5.09.54.265.jar",
+        "${gtnh}/mods/gtnhlib-0.11.54.jar",
+        "${gtnh}/mods/modularui2-2.3.94-1.7.10.jar"))
 }
