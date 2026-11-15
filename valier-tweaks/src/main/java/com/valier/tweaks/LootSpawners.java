@@ -10,6 +10,7 @@ import net.minecraft.entity.EntityList;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
+import net.minecraft.init.Items;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -96,7 +97,9 @@ public final class LootSpawners {
      */
     @SubscribeEvent(priority = EventPriority.LOW)
     public void onClick(PlayerInteractEvent event) {
-        if (!TweaksConfig.lootSpawners || event.action != PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK) return;
+        if (!TweaksConfig.lootSpawners) return;
+        boolean hit = event.action == PlayerInteractEvent.Action.LEFT_CLICK_BLOCK;
+        if (!hit && event.action != PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK) return;
         EntityPlayer player = event.entityPlayer;
         World world = event.world;
         if (world.isRemote || !player.isSneaking()) return;
@@ -104,10 +107,26 @@ public final class LootSpawners {
         if (world.getBlock(x, y, z) != Blocks.mob_spawner) return;
         TileEntity te = world.getTileEntity(x, y, z);
         ItemStack held = player.getHeldItem();
+        if (hit) { // sneak-hit with an empty hand: its upgrade blocks come back out
+            if (te instanceof LootSpawnerTile && held == null) {
+                event.setCanceled(true);
+                takeBack(player, (LootSpawnerTile) te);
+            }
+            return;
+        }
         if (te instanceof LootSpawnerTile) {
             if (TweaksConfig.lootSpawnerWrench && isWrench(held, player, x, y, z)) {
                 event.setCanceled(true);
                 pickUp(player, (LootSpawnerTile) te, held);
+            } else if (TweaksConfig.lootSpawnerSpawnEggs && held != null && held.getItem() == Items.spawn_egg) {
+                event.setCanceled(true);
+                changeMob(player, (LootSpawnerTile) te, held);
+            } else if (isLootingItem(held)) {
+                event.setCanceled(true);
+                addLooting(player, (LootSpawnerTile) te, held);
+            } else if (isXpItem(held)) {
+                event.setCanceled(true);
+                toggleXp(player, (LootSpawnerTile) te, held);
             } else if (isFilterItem(held)) {
                 event.setCanceled(true);
                 toggleFilter(player, (LootSpawnerTile) te, held);
@@ -122,6 +141,22 @@ public final class LootSpawners {
         if (LootSpawnerTile.isMarked(spawner)) { // a loot spawner the scan hasn't picked up yet
             event.setCanceled(true);
             tell(player, status(swap(world, spawner)));
+            return;
+        }
+        if (isLootingItem(held) && !isConvertItem(held)) {
+            event.setCanceled(true); // don't place the lapis block
+            tell(player, text(EnumChatFormatting.GRAY, "Make it a loot spawner first (sneak-right-click with ")
+                .appendSibling(costText(TweaksConfig.lootSpawnerItem, TweaksConfig.lootSpawnerItemCount))
+                .appendSibling(new ChatComponentText("); then ").appendSibling(lootingTiersText(false))));
+            return;
+        }
+        if (isXpItem(held) && !isConvertItem(held)) {
+            event.setCanceled(true); // don't place the gold block
+            tell(player, text(EnumChatFormatting.GRAY, "Make it a loot spawner first (sneak-right-click with ")
+                .appendSibling(costText(TweaksConfig.lootSpawnerItem, TweaksConfig.lootSpawnerItemCount))
+                .appendSibling(new ChatComponentText("); then ")
+                    .appendSibling(costText(TweaksConfig.lootSpawnerXpItem, TweaksConfig.lootSpawnerXpItemCount))
+                    .appendSibling(new ChatComponentText(" turns its XP into bottles o' enchanting."))));
             return;
         }
         if (isFilterItem(held) && !isConvertItem(held)) {
@@ -277,6 +312,8 @@ public final class LootSpawners {
             .getEntityNameToSpawn();
         boolean filtered = t.noDamaged;
         ItemStack item = toItem(t);
+        t.xpPaid = null; // it goes with the item too
+        t.lootingPaid = 0; // and its Looting items
         int stacks = 0;
         for (int i = 0; i < LootSpawnerTile.SLOTS; i++) {
             if (t.items[i] != null) {
@@ -318,6 +355,9 @@ public final class LootSpawners {
         NBTTagList lore = new NBTTagList();
         lore.appendTag(new NBTTagString(grey + "Makes the loot of each " + mob + ", no mobs."));
         if (t.noDamaged) lore.appendTag(new NBTTagString(grey + "Throws damaged items away."));
+        if (t.xpBottles) lore.appendTag(new NBTTagString(grey + "Turns its XP into bottles o' enchanting."));
+        int looting = lootingLevel(t.lootingBlocks);
+        if (looting > 0) lore.appendTag(new NBTTagString(grey + "Looting " + roman(looting) + "."));
         lore.appendTag(new NBTTagString(grey + "Place it and it is a loot spawner again."));
         display.setTag("Lore", lore);
         tag.setTag("display", display);
@@ -385,6 +425,275 @@ public final class LootSpawners {
         if (StatCollector.canTranslate(key)) return StatCollector.translateToLocal(key);
         int dot = type.lastIndexOf('.');
         return dot >= 0 ? type.substring(dot + 1) : type;
+    }
+
+    /**
+     * Sneak-right-click on a loot spawner with a spawn egg ({@link TweaksConfig#lootSpawnerSpawnEggs}, off by default):
+     * it makes that mob's loot from now on, dressed as a vanilla spawner dresses its mobs (no spawn data of its own).
+     * The egg is used up (not in creative). What it was keeping, its timer and its emerald block stay.
+     */
+    static void changeMob(EntityPlayer player, LootSpawnerTile t, ItemStack egg) {
+        int id = egg.getItemDamage();
+        String type = EntityList.entityEggs.containsKey(id) ? EntityList.getStringFromID(id) : null;
+        if (type == null) {
+            tell(player, text(EnumChatFormatting.RED, "That spawn egg has no mob."));
+            return;
+        }
+        if (t.candidates.size() == 1 && type.equals(t.candidates.get(0).type)) {
+            tell(player, text(EnumChatFormatting.GRAY, "It already makes the loot of ").appendSibling(mobName(type))
+                .appendSibling(new ChatComponentText(".")));
+            return;
+        }
+        if (MobLoot.blocked(type)) {
+            tell(player, text(EnumChatFormatting.RED, "A ").appendSibling(mobName(type))
+                .appendSibling(new ChatComponentText(" loot spawner isn't allowed on this server.")));
+            return;
+        }
+        World world = t.getWorldObj();
+        if (!mayChange(player, world, t.xCoord, t.yCoord, t.zCoord)) {
+            tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
+            return;
+        }
+        String was = t.logic()
+            .getEntityNameToSpawn();
+        NBTTagCompound nbt = new NBTTagCompound();
+        t.writeAll(nbt);
+        NBTTagCompound mark = (NBTTagCompound) nbt.getCompoundTag("SpawnData")
+            .getCompoundTag(LootSpawnerTile.MARK)
+            .copy();
+        mark.setBoolean("Egg", true); // no spawn data of its own: dressed as a vanilla spawner would dress it
+        NBTTagCompound data = new NBTTagCompound();
+        data.setTag(LootSpawnerTile.MARK, mark);
+        nbt.setTag("SpawnData", data);
+        nbt.removeTag("SpawnPotentials");
+        nbt.setString("EntityId", type);
+        t.readFromNBT(nbt);
+        if (!player.capabilities.isCreativeMode) {
+            egg.stackSize--;
+            if (egg.stackSize <= 0) player.inventory.setInventorySlotContents(player.inventory.currentItem, null);
+            player.inventoryContainer.detectAndSendChanges();
+        }
+        t.markDirty();
+        world.markBlockForUpdate(t.xCoord, t.yCoord, t.zCoord); // clients: the hover and the cage
+        ValierTweaks.LOG.info("{} changed the loot spawner at {} from {} to {} with a spawn egg", player.getCommandSenderName(),
+            t.where(), was, type);
+        tell(player, text(EnumChatFormatting.GREEN, "This loot spawner makes the loot of ").appendSibling(mobName(type))
+            .appendSibling(new ChatComponentText(" now.")));
+    }
+
+    /**
+     * Sneak-right-click on a loot spawner with the XP item (a gold block by default): the XP its mobs would have
+     * dropped comes out as bottles o' enchanting from now on, and the item is kept in the spawner. Again: switched off,
+     * and the item is given back.
+     */
+    static void toggleXp(EntityPlayer player, LootSpawnerTile t, ItemStack held) {
+        if (!mayChange(player, t.getWorldObj(), t.xCoord, t.yCoord, t.zCoord)) {
+            tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
+            return;
+        }
+        if (t.xpBottles) {
+            t.xpBottles = false;
+            ItemStack back = t.xpPaid;
+            t.xpPaid = null;
+            t.markDirty();
+            IChatComponent msg = text(EnumChatFormatting.GREEN, "This loot spawner makes no more bottles o' enchanting.");
+            if (back != null) {
+                msg.appendSibling(new ChatComponentText(" Here is your "))
+                    .appendSibling(new ChatComponentTranslation(back.getUnlocalizedName() + ".name"))
+                    .appendSibling(new ChatComponentText(back.stackSize > 1 ? " × " + back.stackSize + " back." : " back."));
+                give(player, back);
+            }
+            ValierTweaks.LOG.info("{} stopped the loot spawner at {} making bottles o' enchanting", player.getCommandSenderName(),
+                t.where());
+            tell(player, msg);
+            return;
+        }
+        int cost = TweaksConfig.lootSpawnerXpItemCount;
+        boolean creative = player.capabilities.isCreativeMode;
+        if (!creative && held.stackSize < cost) {
+            tell(player, text(EnumChatFormatting.RED, "That takes " + cost + " of them."));
+            return;
+        }
+        if (!creative) {
+            t.xpPaid = held.splitStack(cost);
+            if (held.stackSize <= 0) player.inventory.setInventorySlotContents(player.inventory.currentItem, null);
+            player.inventoryContainer.detectAndSendChanges();
+        }
+        t.xpBottles = true;
+        t.markDirty();
+        ValierTweaks.LOG.info("{} made the loot spawner at {} turn its XP into bottles o' enchanting", player.getCommandSenderName(),
+            t.where());
+        tell(player, text(EnumChatFormatting.GREEN, "The XP this loot spawner's mobs would have dropped comes out as bottles "
+            + "o' enchanting now, one per " + TweaksConfig.lootSpawnerXpPerBottle + " XP. Do it again to switch that off and "
+            + "get the item back."));
+    }
+
+    /**
+     * Sneak-right-click on a loot spawner with the Looting item (a lapis block by default): one goes in, and how many
+     * it holds sets the Looting its mobs' loot is rolled with ({@link TweaksConfig#lootSpawnerLootingBlocks}).
+     */
+    static void addLooting(EntityPlayer player, LootSpawnerTile t, ItemStack held) {
+        int[] tiers = TweaksConfig.lootSpawnerLootingBlocks;
+        int level = lootingLevel(t.lootingBlocks);
+        if (level >= tiers.length) {
+            tell(player, text(EnumChatFormatting.GRAY, "It already has Looting " + roman(level) + ", the most it can have."));
+            return;
+        }
+        if (t.lootingPaid > 0 && t.lootingItem != null && !MobLoot.sameItem(t.lootingItem, copyOne(held))) {
+            tell(player, text(EnumChatFormatting.RED, "It holds ").appendSibling(itemName(t.lootingItem))
+                .appendSibling(new ChatComponentText(" for its Looting; only more of those go in.")));
+            return;
+        }
+        if (!mayChange(player, t.getWorldObj(), t.xCoord, t.yCoord, t.zCoord)) {
+            tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
+            return;
+        }
+        t.lootingBlocks++;
+        if (!player.capabilities.isCreativeMode) {
+            t.lootingPaid++;
+            if (t.lootingItem == null) t.lootingItem = copyOne(held);
+            held.stackSize--;
+            if (held.stackSize <= 0) player.inventory.setInventorySlotContents(player.inventory.currentItem, null);
+            player.inventoryContainer.detectAndSendChanges();
+        }
+        int now = lootingLevel(t.lootingBlocks);
+        t.markDirty();
+        t.getWorldObj()
+            .markBlockForUpdate(t.xCoord, t.yCoord, t.zCoord); // the hover names its Looting
+        ValierTweaks.LOG.info("{} put a looting item into the loot spawner at {}: {} now, Looting {}",
+            player.getCommandSenderName(), t.where(), t.lootingBlocks, now);
+        IChatComponent msg = text(EnumChatFormatting.GREEN, now > level ? "Looting " + roman(now) + " now" : now > 0
+            ? "Still Looting " + roman(now) : "No Looting yet");
+        msg.appendSibling(new ChatComponentText(" (" + t.lootingBlocks + " in it)."));
+        if (now < tiers.length) msg.appendSibling(new ChatComponentText(" " + (tiers[now] - t.lootingBlocks) + " more for Looting "
+            + roman(now + 1) + "."));
+        else msg.appendSibling(new ChatComponentText(" That's the most it can have."));
+        tell(player, msg);
+    }
+
+    /**
+     * Sneak-hit (left-click) a loot spawner with an empty hand: every block put into it comes back (its Looting blocks,
+     * the gold block for bottles, the emerald block for the damaged-items filter), and those switch off.
+     */
+    static void takeBack(EntityPlayer player, LootSpawnerTile t) {
+        if (t.lootingBlocks == 0 && !t.xpBottles && !t.noDamaged) {
+            tell(player, text(EnumChatFormatting.GRAY, "It has no blocks in it to take back."));
+            return;
+        }
+        if (!mayChange(player, t.getWorldObj(), t.xCoord, t.yCoord, t.zCoord)) {
+            tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
+            return;
+        }
+        List<ItemStack> back = lootingRefund(t.lootingItem, t.lootingPaid);
+        if (t.xpPaid != null) back.add(t.xpPaid);
+        if (t.filterPaid != null) back.add(t.filterPaid);
+        IChatComponent msg = text(EnumChatFormatting.GREEN, "");
+        List<String> off = new ArrayList<>();
+        if (t.lootingBlocks > 0) off.add("Looting");
+        if (t.xpBottles) off.add("bottles o' enchanting");
+        if (t.noDamaged) off.add("throwing damaged items away");
+        t.lootingBlocks = 0;
+        t.lootingPaid = 0;
+        t.lootingItem = null;
+        t.xpBottles = false;
+        t.xpPaid = null;
+        t.xp = 0;
+        t.noDamaged = false;
+        t.filterPaid = null;
+        t.markDirty();
+        t.getWorldObj()
+            .markBlockForUpdate(t.xCoord, t.yCoord, t.zCoord); // the hover drops its Looting
+        msg.appendSibling(new ChatComponentText(joinWords(off) + " switched off."));
+        if (!back.isEmpty()) {
+            msg.appendSibling(new ChatComponentText(" Back to you: "));
+            for (int i = 0; i < back.size(); i++) {
+                ItemStack s = back.get(i);
+                if (i > 0) msg.appendSibling(new ChatComponentText(", "));
+                if (s.stackSize > 1) msg.appendSibling(new ChatComponentText(s.stackSize + " × "));
+                msg.appendSibling(itemName(s));
+            }
+            msg.appendSibling(new ChatComponentText("."));
+        }
+        for (ItemStack s : back) give(player, s);
+        ValierTweaks.LOG.info("{} took the upgrade blocks out of the loot spawner at {}", player.getCommandSenderName(), t.where());
+        tell(player, msg);
+    }
+
+    private static String joinWords(List<String> words) {
+        StringBuilder s = new StringBuilder();
+        for (int i = 0; i < words.size(); i++) {
+            if (i > 0) s.append(i == words.size() - 1 ? " and " : ", ");
+            s.append(words.get(i));
+        }
+        String out = s.toString();
+        return out.isEmpty() ? out : Character.toUpperCase(out.charAt(0)) + out.substring(1);
+    }
+
+    /** The Looting level so many Looting items give ({@link TweaksConfig#lootSpawnerLootingBlocks}). */
+    static int lootingLevel(int blocks) {
+        int level = 0;
+        for (int need : TweaksConfig.lootSpawnerLootingBlocks) {
+            if (blocks < need) break;
+            level++;
+        }
+        return level;
+    }
+
+    static String roman(int n) {
+        String[] r = { "", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X" };
+        return n >= 0 && n < r.length ? r[n] : Integer.toString(n);
+    }
+
+    /** "Sneak-right-click it with a Lapis Lazuli Block, one per click, for Looting: 1 for Looting I, 3 for II and 6 for III." */
+    static IChatComponent lootingTiersText(boolean capital) {
+        Item item = itemOf(TweaksConfig.lootSpawnerLootingItem);
+        IChatComponent msg = new ChatComponentText(capital ? "Sneak-right-click it with a " : "sneak-right-click with a ");
+        if (item != null) msg.appendSibling(new ChatComponentTranslation(
+            new ItemStack(item, 1, Math.max(0, metaOf(TweaksConfig.lootSpawnerLootingItem))).getUnlocalizedName() + ".name"));
+        StringBuilder s = new StringBuilder(", one per click, for Looting: ");
+        int[] tiers = TweaksConfig.lootSpawnerLootingBlocks;
+        for (int i = 0; i < tiers.length; i++) {
+            if (i > 0) s.append(i == tiers.length - 1 ? " and " : ", ");
+            s.append(tiers[i])
+                .append(" for ")
+                .append(i == 0 ? "Looting " : "")
+                .append(roman(i + 1));
+        }
+        return msg.appendSibling(new ChatComponentText(s.append('.')
+            .toString()));
+    }
+
+    /** The Looting items paid into it, as stacks (what drops when it breaks). */
+    static List<ItemStack> lootingRefund(ItemStack item, int count) {
+        List<ItemStack> out = new ArrayList<>();
+        if (item == null || count <= 0) return out;
+        int max = Math.max(1, item.getMaxStackSize());
+        while (count > 0) {
+            ItemStack s = item.copy();
+            s.stackSize = Math.min(count, max);
+            count -= s.stackSize;
+            out.add(s);
+        }
+        return out;
+    }
+
+    static ItemStack copyOne(ItemStack stack) {
+        ItemStack one = stack.copy();
+        one.stackSize = 1;
+        return one;
+    }
+
+    static IChatComponent itemName(ItemStack stack) {
+        return new ChatComponentTranslation(stack.getUnlocalizedName() + ".name");
+    }
+
+    static boolean isLootingItem(ItemStack stack) {
+        return matches(TweaksConfig.lootSpawnerLootingItem, stack);
+    }
+
+    /** The item that makes a loot spawner turn its XP into bottles (empty or not an item: none does). */
+    static boolean isXpItem(ItemStack stack) {
+        return matches(TweaksConfig.lootSpawnerXpItem, stack);
     }
 
     /** Worn: a tool, weapon or piece of armour that has lost durability (mobs' gear drops worn). */
@@ -470,6 +779,10 @@ public final class LootSpawners {
         }
         if (t.filterPaid != null) event.drops.add(t.filterPaid);
         t.filterPaid = null;
+        if (t.xpPaid != null) event.drops.add(t.xpPaid);
+        t.xpPaid = null;
+        event.drops.addAll(lootingRefund(t.lootingItem, t.lootingPaid));
+        t.lootingPaid = 0;
         t.markDirty();
     }
 
@@ -488,6 +801,10 @@ public final class LootSpawners {
             }
             if (t.filterPaid != null) drop(w, t.xCoord, t.yCoord, t.zCoord, t.filterPaid);
             t.filterPaid = null;
+            if (t.xpPaid != null) drop(w, t.xCoord, t.yCoord, t.zCoord, t.xpPaid);
+            t.xpPaid = null;
+            for (ItemStack s : lootingRefund(t.lootingItem, t.lootingPaid)) drop(w, t.xCoord, t.yCoord, t.zCoord, s);
+            t.lootingPaid = 0;
         }
         spills.clear();
     }
@@ -650,6 +967,12 @@ public final class LootSpawners {
         }
         ItemStack paid = mark.hasKey("Paid", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("Paid")) : null;
         if (paid != null) drop(world, spawner.xCoord, spawner.yCoord + 1, spawner.zCoord, paid);
+        ItemStack xpPaid = mark.hasKey("XpPaid", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("XpPaid")) : null;
+        if (xpPaid != null) drop(world, spawner.xCoord, spawner.yCoord + 1, spawner.zCoord, xpPaid);
+        ItemStack lootingItem = mark.hasKey("LootingItem", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("LootingItem"))
+            : null;
+        for (ItemStack s : lootingRefund(lootingItem, mark.getInteger("LootingPaid")))
+            drop(world, spawner.xCoord, spawner.yCoord + 1, spawner.zCoord, s);
         data.removeTag(LootSpawnerTile.MARK);
         if (mark.getBoolean("Egg")) {
             tag.removeTag("SpawnData");
@@ -699,15 +1022,31 @@ public final class LootSpawners {
         }
         // One mob at a time: its loot goes out (what doesn't fit is kept). Stop early if what it keeps gets near full.
         boolean any = false;
+        int[] xp = t.xpBottles ? new int[1] : null;
+        int looting = lootingLevel(t.lootingBlocks);
         for (int i = 0; i < Math.max(1, t.spawnCount) && t.freeSlots() >= 9; i++) {
             List<ItemStack> loot = MobLoot.roll((WorldServer) world, t.xCoord + 0.5, t.yCoord + 1.0, t.zCoord + 0.5,
-                MobLoot.pick(t.candidates, world.rand));
+                MobLoot.pick(t.candidates, world.rand), xp, looting);
             any |= !loot.isEmpty();
             for (ItemStack stack : MobLoot.merge(loot)) {
                 if (t.noDamaged && damaged(stack)) continue; // thrown away
                 ItemStack left = insertAround(world, t.xCoord, t.yCoord, t.zCoord, stack);
                 if (left != null) left = t.addToBuffer(left);
                 if (left != null) drop(world, t.xCoord, t.yCoord + 1, t.zCoord, left); // more than 27 stacks: never lose it
+            }
+        }
+        if (xp != null) { // the XP as bottles o' enchanting, the rest kept for the next batch
+            int per = Math.max(1, TweaksConfig.lootSpawnerXpPerBottle);
+            t.xp += xp[0];
+            int bottles = t.xp / per;
+            t.xp -= bottles * per;
+            any |= bottles > 0;
+            while (bottles > 0) {
+                ItemStack stack = new ItemStack(Items.experience_bottle, Math.min(bottles, 64));
+                bottles -= stack.stackSize;
+                ItemStack left = insertAround(world, t.xCoord, t.yCoord, t.zCoord, stack);
+                if (left != null) left = t.addToBuffer(left);
+                if (left != null) drop(world, t.xCoord, t.yCoord + 1, t.zCoord, left);
             }
         }
         t.rolls++;
@@ -837,7 +1176,22 @@ public final class LootSpawners {
         else if (itemOf(TweaksConfig.lootSpawnerFilterItem) != null) msg.appendSibling(new ChatComponentText(" Sneak-right-click it with ")
             .appendSibling(costText(TweaksConfig.lootSpawnerFilterItem, TweaksConfig.lootSpawnerFilterItemCount))
             .appendSibling(new ChatComponentText(" to throw damaged items away.")));
+        if (t.xpBottles) msg.appendSibling(new ChatComponentText(" Its XP comes out as bottles o' enchanting (" + t.xp + " of "
+            + Math.max(1, TweaksConfig.lootSpawnerXpPerBottle) + " XP towards the next)."));
+        else if (itemOf(TweaksConfig.lootSpawnerXpItem) != null) msg.appendSibling(new ChatComponentText(" Sneak-right-click it with ")
+            .appendSibling(costText(TweaksConfig.lootSpawnerXpItem, TweaksConfig.lootSpawnerXpItemCount))
+            .appendSibling(new ChatComponentText(" to turn its XP into bottles o' enchanting.")));
+        int looting = lootingLevel(t.lootingBlocks);
+        int[] tiers = TweaksConfig.lootSpawnerLootingBlocks;
+        if (looting > 0) msg.appendSibling(new ChatComponentText(" Looting " + roman(looting) + " (" + t.lootingBlocks + " in it"
+            + (looting < tiers.length ? "; " + (tiers[looting] - t.lootingBlocks) + " more for Looting " + roman(looting + 1) : "; the most")
+            + ")."));
+        else if (itemOf(TweaksConfig.lootSpawnerLootingItem) != null) msg.appendSibling(new ChatComponentText(" "))
+            .appendSibling(lootingTiersText(true));
+        if (t.lootingBlocks > 0 || t.xpBottles || t.noDamaged)
+            msg.appendSibling(new ChatComponentText(" Sneak and hit it with an empty hand to take its blocks back."));
         if (TweaksConfig.lootSpawnerWrench) msg.appendSibling(new ChatComponentText(" A wrench picks it up."));
+        if (TweaksConfig.lootSpawnerSpawnEggs) msg.appendSibling(new ChatComponentText(" A spawn egg changes its mob."));
         return msg;
     }
 

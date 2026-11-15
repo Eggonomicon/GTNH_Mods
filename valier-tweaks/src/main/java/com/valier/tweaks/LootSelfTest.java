@@ -12,6 +12,7 @@ import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -68,6 +69,23 @@ import gregtech.common.items.IDMetaTool01;
  * carries no spawn data (the setting off: the mob and its spawn data); with a player beside it a loot spawner's own
  * logic is never active (EnderIO runs a spawner when a player breaks it), nor is a plain spawner while it is asked for
  * permission to convert it;</li>
+ * <li>eggs: with lootSpawnerSpawnEggs off (the default) a spawn egg changes nothing; on, a skeleton egg makes a zombie
+ * loot spawner a skeleton one (one egg used, its loot and emerald block kept, saved, the hover renamed); the same mob,
+ * an egg without a mob, a blocked mob and a protected spawner use nothing; plain spawners are left alone;</li>
+ * <li>overflow: with the chest below full, the loot goes into the chest beside it;</li>
+ * <li>gold block: XP counted as a player kill (blazes 10, cows 1-3); a gold block switches a loot spawner to making
+ * bottles o' enchanting (4 blazes: 5 bottles, 5 XP kept; then 6 more, 3 kept), kept in it, saved, refused where
+ * protected, given back when switched off, only a hint on a plain spawner;</li>
+ * <li>lapis blocks: 1, 3 and 6 give Looting I, II and III (the setting changes that), zombies rolled with Looting III
+ * drop far more flesh; one block per click, refused where protected and past the most; status, hover and the wrench's
+ * item name the level, and the blocks drop when it is broken;</li>
+ * <li>Infernal Mobs (its rarity set to 1 for the test): witches become elites and their armour comes out undamaged,
+ * with the elites' extra XP, and none stay in its list; switched off, no elites;</li>
+ * <li>Special Mobs: every blaze (none plain; some variants release small blazes, killed too) and some zombies come
+ * as its variants (killed for loot, never in the world or its
+ * queue); switched off, none;</li>
+ * <li>taking back: a sneaking hit with an empty hand gives back the lapis, gold and emerald blocks and switches those
+ * off; not without sneaking, not where protected, and an empty one says so;</li>
  * <li>saving: saves as a plain spawner with its loot inside, loads as a plain spawner without the mod, comes back after
  * a dolly-style move (the scan) and as its chunk loads; clients get a plain spawner packet;</li>
  * <li>settings: a misspelled conversion item makes none (not free ones); blown up, its loot drops; switched off, it is
@@ -89,7 +107,13 @@ public final class LootSelfTest {
     LootSpawnerTile s4;
     int[] s4p, s6p, s7p, s10p;
 
+    boolean infernalWas, specialWas;
+
     void start() {
+        infernalWas = TweaksConfig.lootSpawnerInfernalMobs;
+        specialWas = TweaksConfig.lootSpawnerSpecialMobs;
+        TweaksConfig.lootSpawnerInfernalMobs = false; // elites' extra loot would make the counts below random
+        TweaksConfig.lootSpawnerSpecialMobs = false; // and so would Special Mobs' variants
         world.theChunkProviderServer.loadChunk(bx >> 4, bz >> 4);
         world.theChunkProviderServer.loadChunk(rx >> 4, bz >> 4);
         world.theChunkProviderServer.loadChunk(wx >> 4, bz >> 4);
@@ -110,6 +134,11 @@ public final class LootSelfTest {
         cycles();
         damagedItems();
         wrench();
+        eggs();
+        upgrades();
+        infernal();
+        special();
+        takeBack();
         saving();
         settings();
         later();
@@ -617,6 +646,402 @@ public final class LootSelfTest {
             "it saves and sends its own player range (16), only its live logic has 0");
     }
 
+    // ---- spawn eggs, and loot going to other sides ----------------------------------------------------------------
+
+    void eggs() {
+        int[] g1 = { wx + 2, y, bz + 14 }, g2 = { wx + 6, y, bz + 14 }, o1 = { wx + 10, y, bz + 14 };
+        LootSpawnerTile l1 = lootSpawner(g1, "Zombie");
+        l1.addToBuffer(new ItemStack(Items.rotten_flesh, 3));
+        l1.noDamaged = true;
+        l1.filterPaid = new ItemStack(Blocks.emerald_block);
+        TileEntityMobSpawner v2 = spawner(g2, "Spider");
+        player.setSneaking(true);
+        player.inventory.setInventorySlotContents(0, new ItemStack(Items.spawn_egg, 3, 51)); // skeleton
+        PlayerInteractEvent ev = click(g1);
+        SelfTest.check(!ev.isCanceled() && "Zombie".equals(l1.logic()
+            .getEntityNameToSpawn()) && held() == 3, "with lootSpawnerSpawnEggs off (the default), a spawn egg changes nothing");
+        String[] blocked = TweaksConfig.lootSpawnerBlockedMobs;
+        TweaksConfig.lootSpawnerSpawnEggs = true;
+        try {
+            said[0] = null;
+            ev = click(g1);
+            SelfTest.check(ev.isCanceled() && te(g1) == l1 && "Skeleton".equals(l1.logic()
+                .getEntityNameToSpawn()) && l1.candidates.size() == 1 && "Skeleton".equals(l1.candidates.get(0).type)
+                && l1.candidates.get(0).egg && held() == 2 && said[0] != null && said[0].contains("Skeleton"),
+                "switched on, a skeleton egg makes a zombie loot spawner a skeleton one, one egg used (" + said[0] + ")");
+            NBTTagCompound tag = new NBTTagCompound();
+            l1.writeToNBT(tag);
+            LootSpawnerTile copy = new LootSpawnerTile();
+            copy.readFromNBT(tag);
+            NBTTagCompound sent = packetNbt((S35PacketUpdateTileEntity) l1.getDescriptionPacket());
+            SelfTest.check(countHeld(l1, Items.rotten_flesh) == 3 && l1.noDamaged && l1.filterPaid != null
+                && "Skeleton".equals(copy.candidates.get(0).type) && copy.noDamaged && "Skeleton".equals(tag.getString("EntityId"))
+                && sent != null && sent.getString("EntityId")
+                    .contains("Skeleton"),
+                "what it was keeping and its emerald block stay, it saves as a skeleton spawner, and the hover says so");
+            said[0] = null;
+            click(g1);
+            SelfTest.check(held() == 2 && said[0] != null && said[0].contains("already"),
+                "the same mob again uses nothing (" + said[0] + ")");
+            player.inventory.setInventorySlotContents(0, new ItemStack(Items.spawn_egg, 1, 9999));
+            said[0] = null;
+            click(g1);
+            SelfTest.check(held() == 1 && said[0] != null && said[0].contains("no mob") && "Skeleton".equals(l1.logic()
+                .getEntityNameToSpawn()), "an egg without a mob uses nothing (" + said[0] + ")");
+            TweaksConfig.lootSpawnerBlockedMobs = new String[] { "WitherBoss", "EnderDragon", "Creeper" };
+            player.inventory.setInventorySlotContents(0, new ItemStack(Items.spawn_egg, 1, 50)); // creeper
+            said[0] = null;
+            click(g1);
+            SelfTest.check(held() == 1 && said[0] != null && said[0].contains("isn't allowed") && "Skeleton".equals(l1.logic()
+                .getEntityNameToSpawn()), "a blocked mob's egg is refused, nothing used (" + said[0] + ")");
+            TweaksConfig.lootSpawnerBlockedMobs = blocked;
+            player.inventory.setInventorySlotContents(0, new ItemStack(Items.spawn_egg, 1, 52)); // spider
+            SelfTest.DenyBreaks guard = new SelfTest.DenyBreaks();
+            MinecraftForge.EVENT_BUS.register(guard);
+            said[0] = null;
+            try {
+                click(g1);
+            } finally {
+                MinecraftForge.EVENT_BUS.unregister(guard);
+            }
+            SelfTest.check(held() == 1 && said[0] != null && said[0].contains("protected") && "Skeleton".equals(l1.logic()
+                .getEntityNameToSpawn()), "where a claim protects it, an egg changes nothing (" + said[0] + ")");
+            ev = click(g2);
+            SelfTest.check(!ev.isCanceled() && te(g2) == v2 && "Spider".equals(v2.func_145881_a()
+                .getEntityNameToSpawn()) && held() == 1, "a plain spawner is left alone (vanilla's egg use goes ahead)");
+        } finally {
+            TweaksConfig.lootSpawnerSpawnEggs = false;
+            TweaksConfig.lootSpawnerBlockedMobs = blocked;
+            player.inventory.setInventorySlotContents(0, null);
+        }
+
+        // Every side: the chest below is full, so the loot goes into the chest beside it.
+        LootSpawnerTile lo = lootSpawner(o1, "Cow");
+        world.setBlock(o1[0], y - 1, o1[2], Blocks.chest);
+        world.setBlock(o1[0] + 1, y, o1[2], Blocks.chest);
+        IInventory below = (IInventory) world.getTileEntity(o1[0], y - 1, o1[2]);
+        IInventory beside = (IInventory) world.getTileEntity(o1[0] + 1, y, o1[2]);
+        fill(below, Blocks.cobblestone);
+        lo.timer = 0;
+        LootSpawners.cycle(lo);
+        SelfTest.check(lo.rolls == 1 && count(beside, Items.beef) >= 4 && count(below, Items.beef) == 0 && lo.isEmpty(),
+            "with the chest below full, the loot goes into the chest beside it (" + count(beside, Items.beef) + " raw beef)");
+        clearInv(below);
+        clearInv(beside);
+    }
+
+    // ---- gold block (XP bottles), lapis blocks (Looting), Infernal Mobs -------------------------------------------
+
+    void upgrades() {
+        int[] x1 = { wx + 14, y, bz + 10 }, x2 = { wx + 14, y, bz + 14 }, x3 = { wx + 6, y, bz }, x4 = { wx + 10, y, bz };
+        Item gold = Item.getItemFromBlock(Blocks.gold_block), lapis = Item.getItemFromBlock(Blocks.lapis_block);
+        int blazeXp = xpOf("Blaze", 10), cowXp = xpOf("Cow", 50);
+        SelfTest.check(blazeXp == 100 && cowXp >= 50 && cowXp <= 150,
+            "XP is counted as for a player kill: 10 blazes give 100, 50 cows 50 to 150 (" + blazeXp + ", " + cowXp + ")");
+        LootSpawnerTile lx = lootSpawner(x1, "Blaze");
+        world.setBlock(x1[0], y - 1, x1[2], Blocks.chest);
+        IInventory cx = (IInventory) world.getTileEntity(x1[0], y - 1, x1[2]);
+        lx.timer = 0;
+        LootSpawners.cycle(lx);
+        SelfTest.check(lx.rolls == 1 && count(cx, Items.experience_bottle) == 0 && lx.xp == 0,
+            "without a gold block it makes no bottles o' enchanting");
+        player.setSneaking(true);
+        player.inventory.setInventorySlotContents(0, new ItemStack(Blocks.gold_block, 3));
+        said[0] = null;
+        PlayerInteractEvent ev = click(x1);
+        SelfTest.check(ev.isCanceled() && lx.xpBottles && held() == 2 && lx.xpPaid != null && lx.xpPaid.getItem() == gold
+            && said[0] != null && said[0].contains("bottles"),
+            "sneak-right-click with a gold block makes it turn XP into bottles, keeping the block (" + said[0] + ")");
+        clearInv(cx);
+        lx.timer = 0;
+        LootSpawners.cycle(lx);
+        int first = count(cx, Items.experience_bottle), keptFirst = lx.xp;
+        lx.timer = 0;
+        LootSpawners.cycle(lx);
+        SelfTest.check(first == 5 && keptFirst == 5 && count(cx, Items.experience_bottle) == 11 && lx.xp == 3,
+            "4 blazes (40 XP) give 5 bottles with 5 XP kept, the next 4 (45 XP) 6 more with 3 kept (" + first + "/" + keptFirst
+                + ", " + count(cx, Items.experience_bottle) + "/" + lx.xp + ")");
+        player.inventory.setInventorySlotContents(0, null);
+        said[0] = null;
+        click(x1);
+        SelfTest.check(said[0] != null && said[0].contains("bottles o' enchanting (3 of 7"), "its status says so (" + said[0] + ")");
+        NBTTagCompound tag = new NBTTagCompound();
+        lx.writeToNBT(tag);
+        LootSpawnerTile copy = new LootSpawnerTile();
+        copy.readFromNBT(tag);
+        SelfTest.check(copy.xpBottles && copy.xpPaid != null && copy.xpPaid.getItem() == gold && copy.xp == 3,
+            "saved and loaded, it still makes bottles, with its gold block and the 3 XP towards the next");
+        player.inventory.setInventorySlotContents(0, new ItemStack(Blocks.gold_block, 2));
+        SelfTest.DenyBreaks guard = new SelfTest.DenyBreaks();
+        MinecraftForge.EVENT_BUS.register(guard);
+        said[0] = null;
+        try {
+            click(x1);
+        } finally {
+            MinecraftForge.EVENT_BUS.unregister(guard);
+        }
+        SelfTest.check(lx.xpBottles && held() == 2 && said[0] != null && said[0].contains("protected"),
+            "where a claim protects it, it can't be switched (" + said[0] + ")");
+        said[0] = null;
+        click(x1);
+        SelfTest.check(!lx.xpBottles && lx.xpPaid == null && held() == 3,
+            "doing it again switches that off and gives the gold block back (" + said[0] + ")");
+        TileEntityMobSpawner v4 = spawner(x4, "Spider");
+        said[0] = null;
+        ev = click(x4);
+        SelfTest.check(ev.isCanceled() && te(x4) == v4 && held() == 3 && said[0] != null && said[0].contains("loot spawner first"),
+            "on a plain spawner a gold block only says how (" + said[0] + ")");
+
+        // Looting from lapis blocks.
+        int[] tiers = TweaksConfig.lootSpawnerLootingBlocks;
+        boolean levels = LootSpawners.lootingLevel(0) == 0 && LootSpawners.lootingLevel(1) == 1 && LootSpawners.lootingLevel(2) == 1
+            && LootSpawners.lootingLevel(3) == 2 && LootSpawners.lootingLevel(5) == 2 && LootSpawners.lootingLevel(6) == 3
+            && LootSpawners.lootingLevel(60) == 3;
+        TweaksConfig.lootSpawnerLootingBlocks = new int[] { 2, 5 };
+        boolean changed = LootSpawners.lootingLevel(1) == 0 && LootSpawners.lootingLevel(6) == 2;
+        TweaksConfig.lootSpawnerLootingBlocks = tiers;
+        SelfTest.check(levels && changed, "1, 3 and 6 lapis blocks give Looting I, II and III; the setting changes that");
+        int plainFlesh = fleshOf(0, 300), lootingFlesh = fleshOf(3, 300);
+        SelfTest.check(plainFlesh > 0 && lootingFlesh > plainFlesh * 3 / 2,
+            "rolled with Looting III, zombies drop far more rotten flesh (" + plainFlesh + " -> " + lootingFlesh + " from 300)");
+        LootSpawnerTile ll = lootSpawner(x2, "Zombie");
+        player.inventory.setInventorySlotContents(0, new ItemStack(Blocks.lapis_block, 10));
+        said[0] = null;
+        ev = click(x2);
+        SelfTest.check(ev.isCanceled() && ll.lootingBlocks == 1 && LootSpawners.lootingLevel(ll.lootingBlocks) == 1 && held() == 9
+            && said[0] != null && said[0].startsWith("Looting I now"), "one lapis block gives Looting I (" + said[0] + ")");
+        MinecraftForge.EVENT_BUS.register(guard);
+        said[0] = null;
+        try {
+            click(x2);
+        } finally {
+            MinecraftForge.EVENT_BUS.unregister(guard);
+        }
+        SelfTest.check(ll.lootingBlocks == 1 && held() == 9 && said[0] != null && said[0].contains("protected"),
+            "where a claim protects it, none goes in (" + said[0] + ")");
+        click(x2);
+        said[0] = null;
+        click(x2);
+        SelfTest.check(ll.lootingBlocks == 3 && held() == 7 && said[0] != null && said[0].startsWith("Looting II now")
+            && said[0].contains("3 more for Looting III"), "3 give Looting II, and it says what Looting III takes (" + said[0] + ")");
+        click(x2);
+        click(x2);
+        said[0] = null;
+        click(x2);
+        String third = said[0];
+        said[0] = null;
+        click(x2);
+        SelfTest.check(ll.lootingBlocks == 6 && ll.lootingPaid == 6 && held() == 4 && third != null && third.startsWith("Looting III now")
+            && said[0] != null && said[0].contains("the most"), "6 give Looting III, and no more go in (" + third + " / " + said[0] + ")");
+        player.inventory.setInventorySlotContents(0, null);
+        said[0] = null;
+        click(x2);
+        NBTTagCompound sent = packetNbt((S35PacketUpdateTileEntity) ll.getDescriptionPacket());
+        tag = new NBTTagCompound();
+        ll.writeToNBT(tag);
+        copy = new LootSpawnerTile();
+        copy.readFromNBT(tag);
+        SelfTest.check(said[0] != null && said[0].contains("Looting III (6 in it; the most)") && sent != null && sent.getString("EntityId")
+            .contains("Looting III") && copy.lootingBlocks == 6 && copy.lootingPaid == 6 && copy.lootingItem != null,
+            "its status and players' hover say Looting III, and it is saved (" + said[0] + " / " + (sent == null ? null : sent.getString("EntityId")) + ")");
+        ItemStack wrench = gtTool(IDMetaTool01.WRENCH);
+        player.inventory.setInventorySlotContents(0, wrench);
+        click(x2);
+        ItemStack item = takeSpawnerItem();
+        boolean named = false;
+        if (item != null) {
+            NBTTagList lore = item.getTagCompound()
+                .getCompoundTag("display")
+                .getTagList("Lore", 8);
+            for (int i = 0; i < lore.tagCount(); i++) named |= lore.getStringTagAt(i)
+                .contains("Looting III");
+        }
+        TileEntity placed = item == null ? null : placeItem(item, x3);
+        SelfTest.check(named && placed instanceof LootSpawnerTile && ((LootSpawnerTile) placed).lootingBlocks == 6
+            && ((LootSpawnerTile) placed).lootingPaid == 6, "picked up with a wrench its item says Looting III, and placed it still has it");
+        ArrayList<ItemStack> drops = new ArrayList<>();
+        MinecraftForge.EVENT_BUS.post(new BlockEvent.HarvestDropsEvent(x3[0], y, x3[2], world, Blocks.mob_spawner, 0, 0, 1.0F,
+            drops, null, false));
+        int lapisDropped = 0;
+        for (ItemStack d : drops) if (d.getItem() == lapis) lapisDropped += d.stackSize;
+        SelfTest.check(lapisDropped == 6, "broken, its 6 lapis blocks drop (" + lapisDropped + ")");
+        player.inventory.setInventorySlotContents(0, null);
+    }
+
+    /** With Infernal Mobs: elites as real spawned mobs get them, their armour undamaged, their XP counted. */
+    void infernal() {
+        Object core = MobLoot.Infernal.core();
+        if (core == null) {
+            SelfTest.check(false, "Infernal Mobs is installed on the test server");
+            return;
+        }
+        java.lang.reflect.Field rarity;
+        java.util.Map<?, ?> rare;
+        try {
+            rarity = core.getClass()
+                .getField("eliteRarity");
+            Object proxy = core.getClass()
+                .getField("proxy")
+                .get(null);
+            rare = (java.util.Map<?, ?>) Class.forName("atomicstryker.infernalmobs.common.ISidedProxy")
+                .getMethod("getRareMobs")
+                .invoke(proxy);
+        } catch (Throwable t) {
+            SelfTest.check(false, "reached Infernal Mobs' settings (" + t + ")");
+            return;
+        }
+        int was;
+        try {
+            was = rarity.getInt(core);
+        } catch (IllegalAccessException e) {
+            return;
+        }
+        int before = rare.size();
+        MobLoot.Candidate witch = new MobLoot.Candidate("Witch", null, true, 1);
+        try {
+            rarity.setInt(core, 1);
+            TweaksConfig.lootSpawnerInfernalMobs = true;
+            int[] xp = new int[1];
+            List<ItemStack> loot = new ArrayList<>();
+            for (int i = 0; i < 20; i++) loot.addAll(MobLoot.roll(world, bx + 8.5, y + 1, bz + 8.5, witch, xp, 0));
+            int armour = 0, worn = 0;
+            for (ItemStack st : loot) {
+                if (st.getItem() instanceof ItemArmor) {
+                    armour++;
+                    if (st.isItemDamaged()) worn++;
+                }
+            }
+            SelfTest.check(armour > 0 && worn == 0 && xp[0] > 100 && rare.size() == before,
+                "with Infernal Mobs (rarity 1 for the test) witches are elites: " + armour + " pieces of armour, " + worn
+                    + " damaged, " + xp[0] + " XP from 20 (100 without elites), none left in its list");
+            TweaksConfig.lootSpawnerInfernalMobs = false;
+            loot.clear();
+            xp[0] = 0;
+            for (int i = 0; i < 20; i++) loot.addAll(MobLoot.roll(world, bx + 8.5, y + 1, bz + 8.5, witch, xp, 0));
+            armour = 0;
+            for (ItemStack st : loot) if (st.getItem() instanceof ItemArmor) armour++;
+            SelfTest.check(armour == 0 && xp[0] == 100, "with lootSpawnerInfernalMobs off, no elites (" + armour + " armour, " + xp[0] + " XP)");
+        } catch (IllegalAccessException e) {
+            SelfTest.check(false, "set Infernal Mobs' rarity (" + e + ")");
+        } finally {
+            try {
+                rarity.setInt(core, was);
+            } catch (IllegalAccessException ignored) {}
+            TweaksConfig.lootSpawnerInfernalMobs = false;
+        }
+    }
+
+    /** With Special Mobs: mobs come as its variants, as real spawned mobs do (on a GTNH server every blaze). */
+    void special() {
+        if (!MobLoot.Special.present()) {
+            SelfTest.check(false, "Special Mobs is installed on the test server");
+            return;
+        }
+        java.util.Collection<?> queue = null;
+        try {
+            queue = (java.util.Collection<?>) Class.forName("toast.specialMobs.TickHandler")
+                .getField("entityStack")
+                .get(null);
+        } catch (Throwable ignored) {}
+        int queued = queue == null ? -1 : queue.size(), entities = world.loadedEntityList.size();
+        MobLoot.killedLog = new ArrayList<>();
+        try {
+            TweaksConfig.lootSpawnerSpecialMobs = true;
+            rollMany("Blaze", true, null, 20);
+            int blazes = specialKills(), plainBlazes = MobLoot.killedLog.size() - blazes;
+            MobLoot.killedLog.clear();
+            rollMany("Zombie", true, null, 60);
+            int zombies = specialKills(), zombieKills = MobLoot.killedLog.size();
+            SelfTest.check(blazes >= 20 && plainBlazes == 0 && zombies > 0 && zombies < zombieKills
+                && world.loadedEntityList.size() == entities
+                && (queue == null ? -1 : queue.size()) == queued,
+                "with Special Mobs every blaze comes as a variant (" + blazes + " variant kills from 20, some release small "
+                    + "blazes, " + plainBlazes + " plain) and some zombies do (" + zombies + " of " + zombieKills
+                    + "), none in the world or its queue");
+            TweaksConfig.lootSpawnerSpecialMobs = false;
+            MobLoot.killedLog.clear();
+            rollMany("Blaze", true, null, 20);
+            SelfTest.check(specialKills() == 0, "with lootSpawnerSpecialMobs off, plain blazes (" + specialKills() + " variants)");
+        } finally {
+            MobLoot.killedLog = null;
+            TweaksConfig.lootSpawnerSpecialMobs = false;
+        }
+    }
+
+    int specialKills() {
+        int n = 0;
+        for (String c : MobLoot.killedLog) if (c.startsWith("toast.specialMobs.")) n++;
+        return n;
+    }
+
+    /** A sneaking hit with an empty hand gives back what was put in. */
+    void takeBack() {
+        int[] t1 = { wx + 14, y, bz };
+        LootSpawnerTile lt = lootSpawner(t1, "Zombie");
+        lt.lootingBlocks = 3;
+        lt.lootingPaid = 3;
+        lt.lootingItem = new ItemStack(Blocks.lapis_block);
+        lt.xpBottles = true;
+        lt.xpPaid = new ItemStack(Blocks.gold_block);
+        lt.noDamaged = true;
+        lt.filterPaid = new ItemStack(Blocks.emerald_block);
+        for (int i = 0; i < player.inventory.mainInventory.length; i++) player.inventory.mainInventory[i] = null;
+        player.setSneaking(false);
+        PlayerInteractEvent ev = hit(t1);
+        SelfTest.check(!ev.isCanceled() && lt.lootingBlocks == 3, "without sneaking, a hit takes nothing out");
+        player.setSneaking(true);
+        SelfTest.DenyBreaks guard = new SelfTest.DenyBreaks();
+        MinecraftForge.EVENT_BUS.register(guard);
+        said[0] = null;
+        try {
+            hit(t1);
+        } finally {
+            MinecraftForge.EVENT_BUS.unregister(guard);
+        }
+        SelfTest.check(lt.lootingBlocks == 3 && lt.xpBottles && lt.noDamaged && said[0] != null && said[0].contains("protected"),
+            "where a claim protects it, nothing comes out (" + said[0] + ")");
+        said[0] = null;
+        ev = hit(t1);
+        SelfTest.check(ev.isCanceled() && lt.lootingBlocks == 0 && lt.lootingPaid == 0 && !lt.xpBottles && lt.xpPaid == null && !lt.noDamaged
+            && lt.filterPaid == null && invCount(Item.getItemFromBlock(Blocks.lapis_block)) == 3
+            && invCount(Item.getItemFromBlock(Blocks.gold_block)) == 1 && invCount(emerald()) == 1,
+            "a sneaking hit with an empty hand gives back 3 lapis, the gold and the emerald block and switches those off ("
+                + said[0] + ")");
+        for (int i = 0; i < player.inventory.mainInventory.length; i++) player.inventory.mainInventory[i] = null; // empty hand again
+        said[0] = null;
+        hit(t1);
+        SelfTest.check(said[0] != null && said[0].contains("no blocks"), "an empty one says so (" + said[0] + ")");
+        for (int i = 0; i < player.inventory.mainInventory.length; i++) player.inventory.mainInventory[i] = null;
+    }
+
+    PlayerInteractEvent hit(int[] p) {
+        return ForgeEventFactory.onPlayerInteract(player, PlayerInteractEvent.Action.LEFT_CLICK_BLOCK, p[0], p[1], p[2], 1,
+            world);
+    }
+
+    int invCount(Item item) {
+        int n = 0;
+        for (ItemStack s : player.inventory.mainInventory) if (s != null && s.getItem() == item) n += s.stackSize;
+        return n;
+    }
+
+    int xpOf(String type, int n) {
+        int[] xp = new int[1];
+        MobLoot.Candidate c = new MobLoot.Candidate(type, null, true, 1);
+        for (int i = 0; i < n; i++) MobLoot.roll(world, bx + 8.5, y + 1, bz + 8.5, c, xp, 0);
+        return xp[0];
+    }
+
+    int fleshOf(int looting, int n) {
+        int flesh = 0;
+        MobLoot.Candidate c = new MobLoot.Candidate("Zombie", null, true, 1);
+        for (int i = 0; i < n; i++) {
+            for (ItemStack st : MobLoot.roll(world, bx + 8.5, y + 1, bz + 8.5, c, null, looting))
+                if (st.getItem() == Items.rotten_flesh) flesh += st.stackSize;
+        }
+        return flesh;
+    }
+
     int mobsNear(int[] p) {
         return world.getEntitiesWithinAABB(net.minecraft.entity.EntityLiving.class,
             AxisAlignedBB.getBoundingBox(p[0] - 8, p[1] - 4, p[2] - 8, p[0] + 9, p[1] + 5, p[2] + 9))
@@ -872,6 +1297,8 @@ public final class LootSelfTest {
 
     void finish() {
         done = true;
+        TweaksConfig.lootSpawnerInfernalMobs = infernalWas;
+        TweaksConfig.lootSpawnerSpecialMobs = specialWas;
         FMLCommonHandler.instance()
             .bus()
             .unregister(this);

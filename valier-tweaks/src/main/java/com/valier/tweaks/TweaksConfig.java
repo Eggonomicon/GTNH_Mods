@@ -20,8 +20,16 @@ public final class TweaksConfig {
     public static String[] lootSpawnerBlockedMobs = { "WitherBoss", "EnderDragon" };
     public static String lootSpawnerFilterItem = "minecraft:emerald_block";
     public static int lootSpawnerFilterItemCount = 1;
+    public static String lootSpawnerXpItem = "minecraft:gold_block";
+    public static int lootSpawnerXpItemCount = 1;
+    public static int lootSpawnerXpPerBottle = 7;
+    public static String lootSpawnerLootingItem = "minecraft:lapis_block";
+    public static int[] lootSpawnerLootingBlocks = { 1, 3, 6 };
+    public static boolean lootSpawnerInfernalMobs = true;
+    public static boolean lootSpawnerSpecialMobs = true;
     public static boolean lootSpawnerWrench = true;
     public static boolean lootSpawnerHoverName = true;
+    public static boolean lootSpawnerSpawnEggs = false;
 
     private TweaksConfig() {}
 
@@ -85,6 +93,37 @@ public final class TweaksConfig {
                 + "name, optionally with :meta. Empty, or a name that isn't an item: it can't be switched on or off "
                 + "(spawners already set keep throwing damaged items away).");
         lootSpawnerFilterItemCount = c.getInt("lootSpawnerFilterItemCount", cat, 1, 1, 64, "How many of that item it takes.");
+        lootSpawnerXpItem = c.getString("lootSpawnerXpItem", cat, "minecraft:gold_block",
+            "Sneak-right-click a loot spawner with this and the XP its mobs would have dropped (as a player kill) comes "
+                + "out as bottles o' enchanting, one per lootSpawnerXpPerBottle XP, with the loot. The item is kept in the "
+                + "spawner (not in creative): doing it again switches that off and gives it back, and it drops if the "
+                + "spawner is broken. An item name, optionally with :meta. Empty, or a name that isn't an item: it can't "
+                + "be switched on or off (spawners already set keep making bottles).");
+        lootSpawnerXpItemCount = c.getInt("lootSpawnerXpItemCount", cat, 1, 1, 64, "How many of that item it takes.");
+        lootSpawnerXpPerBottle = c.getInt("lootSpawnerXpPerBottle", cat, 7, 1, 1000,
+            "XP per bottle o' enchanting. 7 is what a thrown bottle gives back on average (3 to 11). What is left over "
+                + "waits for the next batch.");
+        lootSpawnerLootingItem = c.getString("lootSpawnerLootingItem", cat, "minecraft:lapis_block",
+            "Sneak-right-click a loot spawner with this to put one in: its mobs' loot is then rolled with Looting, as if "
+                + "killed with a Looting sword. How many it holds sets the level (lootSpawnerLootingBlocks). They stay in "
+                + "it and drop when it is broken (a wrench keeps them in the item). An item name, optionally with :meta. "
+                + "Empty, or a name that isn't an item: none can be put in (spawners that have some keep their Looting).");
+        int[] tiers = c.get(cat, "lootSpawnerLootingBlocks", new int[] { 1, 3, 6 },
+            "How many of that item a loot spawner needs in it for each Looting level, in order: by default 1 for Looting "
+                + "I, 3 for Looting II, 6 for Looting III. More numbers allow higher levels (each larger than the last).")
+            .getIntList();
+        boolean rising = tiers.length > 0 && tiers.length <= 10;
+        for (int i = 0; rising && i < tiers.length; i++) rising = tiers[i] > (i == 0 ? 0 : tiers[i - 1]);
+        if (!rising) ValierTweaks.LOG.warn("lootSpawnerLootingBlocks must be 1 to 10 rising numbers above 0; using 1, 3, 6");
+        lootSpawnerLootingBlocks = rising ? tiers : new int[] { 1, 3, 6 };
+        lootSpawnerInfernalMobs = c.getBoolean("lootSpawnerInfernalMobs", cat, true,
+            "With Infernal Mobs installed, a loot spawner's mobs can be elites as real spawned mobs are (Infernal Mobs' own "
+                + "rarity settings), and the elites' extra loot (enchanted armour, tools, books and so on) and XP come out "
+                + "too.");
+        lootSpawnerSpecialMobs = c.getBoolean("lootSpawnerSpecialMobs", cat, true,
+            "With Special Mobs installed, a loot spawner's mobs are swapped for its variants as real spawned mobs are "
+                + "(Special Mobs' own weights: on a GTNH server every blaze, and some zombies, creepers, skeletons and "
+                + "others), and the variants' own loot comes out.");
         lootSpawnerWrench = c.getBoolean("lootSpawnerWrench", cat, true,
             "Sneak-right-click a loot spawner with a wrench (GregTech, EnderIO Yeta, AE2 quartz, BuildCraft and the like) "
                 + "and it comes off as a Valier Loot Spawner item: same mob, settings and emerald block; the loot it was "
@@ -94,6 +133,10 @@ public final class TweaksConfig {
             "Players' WAILA hover on a loot spawner says \"Monster Spawner (Valier Loot Spawner: Zombie)\" instead of "
                 + "\"Monster Spawner (Zombie)\". The price: the little mob inside the cage isn't drawn, because clients "
                 + "draw it from that same name. Off: the mob spins in the cage and the hover names only the mob.");
+        lootSpawnerSpawnEggs = c.getBoolean("lootSpawnerSpawnEggs", cat, false,
+            "Sneak-right-click a loot spawner with a spawn egg and it makes that mob's loot from now on, the mobs dressed "
+                + "as a vanilla spawner dresses them. The egg is used up (not in creative). Claims apply, blocked mobs are "
+                + "refused, and what it was keeping and its emerald block stay. Plain spawners are left alone.");
         if (c.hasChanged()) c.save();
     }
 }

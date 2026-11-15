@@ -16,6 +16,7 @@ import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.IEntityLivingData;
 import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.item.EntityXPOrb;
 import net.minecraft.entity.passive.EntityChicken;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
@@ -39,7 +40,7 @@ import cpw.mods.fml.relauncher.ReflectionHelper;
  * The loot of one mob, without the mob: it is made in memory (never added to the world, so no AI, pathfinding or
  * entity ticking), then put through what a player kill runs in {@code EntityLivingBase.onDeath}: dropFewItems,
  * dropEquipment, the 2.5% rare drop (a player kill, no Looting), and Forge's LivingDropsEvent, so loot other mods add
- * comes too. No XP.
+ * comes too. The XP a player kill gives can be counted too ({@link #roll} with an {@code xp} counter).
  * <p>
  * While that runs, anything the mob tries to add to the world is stopped ({@link Guard}): items join the loot, and
  * mobs (a slime's smaller slimes, a spider jockey's skeleton) are killed the same way for their loot, up to
@@ -62,11 +63,14 @@ public final class MobLoot {
         new String[] { "dropRareDrop", "func_70600_l" }, int.class);
     private static final Method CAN_DROP_LOOT = ReflectionHelper.findMethod(EntityLivingBase.class, null,
         new String[] { "func_146066_aG" });
+    private static final Method GET_XP = ReflectionHelper.findMethod(EntityLivingBase.class, null,
+        new String[] { "getExperiencePoints", "func_70693_a" }, EntityPlayer.class);
 
     /** Set while a roll runs: the world, and what tried to join it. */
     private static World active;
     private static final List<ItemStack> joinedItems = new ArrayList<>();
     private static final List<EntityLivingBase> joinedMobs = new ArrayList<>();
+    private static int joinedXp; // XP orbs a mod tried to add (Infernal Mobs' elites drop one)
     private static final Set<String> warned = new HashSet<>();
 
     private MobLoot() {}
@@ -131,12 +135,21 @@ public final class MobLoot {
 
     /** The loot of one kill of this candidate at x y z (its smaller slimes, riders and so on included). */
     static List<ItemStack> roll(WorldServer world, double x, double y, double z, Candidate c) {
+        return roll(world, x, y, z, c, null, 0);
+    }
+
+    /**
+     * The same, killed as if with a Looting {@code looting} weapon, adding the XP those kills give a player to
+     * {@code xp[0]} (when not null).
+     */
+    static List<ItemStack> roll(WorldServer world, double x, double y, double z, Candidate c, int[] xp, int looting) {
         List<ItemStack> out = new ArrayList<>();
         if (c == null || blocked(c.type)) return out;
         World before = active;
         active = world;
         joinedItems.clear();
         joinedMobs.clear();
+        joinedXp = 0;
         try {
             Entity entity = EntityList.createEntityByName(c.type, world);
             if (!(entity instanceof EntityLiving)) return out; // a minecart, an arrow: nothing to loot
@@ -158,28 +171,50 @@ public final class MobLoot {
                 entity.readFromNBT(tag);
                 entity.setLocationAndAngles(x, y, z, entity.rotationYaw, 0.0F);
             }
+            // Special Mobs swaps a spawned mob for one of its variants a tick after it joins the world; this one never
+            // joins, so ask it now. The variant it spawns is caught by Guard (into joinedMobs) and the original dies.
+            if (TweaksConfig.lootSpawnerSpecialMobs) Special.replace((EntityLiving) entity);
             ArrayDeque<EntityLivingBase> queue = new ArrayDeque<>();
-            queue.add((EntityLivingBase) entity);
+            if (!entity.isDead) queue.add((EntityLivingBase) entity);
             queue.addAll(joinedMobs); // a jockey's rider, added by onSpawnWithEgg
             joinedMobs.clear();
             int killed = 0;
             while (!queue.isEmpty() && killed++ < MAX_MOBS) {
-                kill(world, queue.poll(), out);
+                kill(world, queue.poll(), out, xp, looting);
                 queue.addAll(joinedMobs);
                 joinedMobs.clear();
             }
             out.addAll(joinedItems);
+            if (xp != null) xp[0] += joinedXp;
         } catch (Throwable t) {
             if (warned.add(c.type)) ValierTweaks.LOG.warn("Loot spawner: rolling the loot of " + c.type + " failed", t);
         } finally {
             active = before;
             joinedItems.clear();
             joinedMobs.clear();
+            joinedXp = 0;
         }
         return out;
     }
 
-    private static void kill(WorldServer world, EntityLivingBase mob, List<ItemStack> out) throws Exception {
+    private static void kill(WorldServer world, EntityLivingBase mob, List<ItemStack> out, int[] xp, int looting)
+        throws Exception {
+        // Infernal Mobs decides as a mob joins the world whether it is an elite; this one never joins, so ask it here.
+        if (TweaksConfig.lootSpawnerInfernalMobs) Infernal.process(mob);
+        try {
+            killNow(world, mob, out, xp, looting);
+        } finally {
+            Infernal.forget(mob); // it forgets elites in its drop event, but not if another mod cancelled that
+        }
+    }
+
+    /** Test hook: the class of every mob killed for loot, while not null. */
+    static List<String> killedLog;
+
+    private static void killNow(WorldServer world, EntityLivingBase mob, List<ItemStack> out, int[] xp, int looting)
+        throws Exception {
+        if (killedLog != null) killedLog.add(mob.getClass()
+            .getName());
         FakePlayer killer = killers.get(world);
         if (killer == null) killers.put(world, killer = new FakePlayer(world, KILLER));
         killer.setPosition(mob.posX, mob.posY, mob.posZ);
@@ -192,10 +227,10 @@ public final class MobLoot {
         try {
             if ((Boolean) CAN_DROP_LOOT.invoke(mob) && world.getGameRules()
                 .getGameRuleBooleanValue("doMobLoot")) {
-                DROP_FEW.invoke(mob, true, 0);
-                DROP_EQUIPMENT.invoke(mob, true, 0);
+                DROP_FEW.invoke(mob, true, looting);
+                DROP_EQUIPMENT.invoke(mob, true, looting);
                 special = mob.getRNG()
-                    .nextInt(200);
+                    .nextInt(200) - looting;
                 if (special < 5) DROP_RARE.invoke(mob, special <= 0 ? 1 : 0);
             }
         } finally {
@@ -205,7 +240,7 @@ public final class MobLoot {
         mob.capturedDrops.clear();
         boolean cancelled = false;
         try {
-            cancelled = ForgeHooks.onLivingDrops(mob, DamageSource.causePlayerDamage(killer), drops, 0, true, special);
+            cancelled = ForgeHooks.onLivingDrops(mob, DamageSource.causePlayerDamage(killer), drops, looting, true, special);
         } catch (Throwable t) {
             String key = EntityList.getEntityString(mob) + " drops event";
             if (warned.add(key)) ValierTweaks.LOG.warn("Loot spawner: a mod's drop handler failed for " + key, t);
@@ -214,6 +249,16 @@ public final class MobLoot {
             for (EntityItem item : drops) {
                 ItemStack stack = item.getEntityItem();
                 if (stack != null && stack.getItem() != null && stack.stackSize > 0) out.add(stack.copy());
+            }
+        }
+        // The XP vanilla drops as the mob's death ends (onDeathUpdate): for a player kill, if it drops loot at all.
+        if (xp != null && (Boolean) CAN_DROP_LOOT.invoke(mob) && world.getGameRules()
+            .getGameRuleBooleanValue("doMobLoot")) {
+            try {
+                xp[0] += Math.max(0, (Integer) GET_XP.invoke(mob, killer));
+            } catch (Throwable t) {
+                String key = EntityList.getEntityString(mob) + " XP";
+                if (warned.add(key)) ValierTweaks.LOG.warn("Loot spawner: counting the XP of " + key + " failed", t);
             }
         }
         // Loot some mods hand straight to the killer.
@@ -243,6 +288,8 @@ public final class MobLoot {
                 if (stack != null && stack.getItem() != null && stack.stackSize > 0) joinedItems.add(stack.copy());
             } else if (e instanceof EntityLivingBase && !(e instanceof EntityPlayer)) {
                 joinedMobs.add((EntityLivingBase) e);
+            } else if (e instanceof EntityXPOrb) {
+                joinedXp += Math.max(0, ((EntityXPOrb) e).getXpValue());
             }
             event.setCanceled(true);
         }
@@ -250,6 +297,114 @@ public final class MobLoot {
         @SubscribeEvent
         public void onUnload(net.minecraftforge.event.world.WorldEvent.Unload event) {
             killers.remove(event.world);
+        }
+    }
+
+    /**
+     * Infernal Mobs, found by name: {@code processEntitySpawn} (what it runs as a mob joins the world: by its own
+     * rarity settings the mob may become an elite) and {@code removeEntFromElites}. Its own drop handler, which our
+     * drop event reaches, then drops the elite's loot and XP into the world, where {@link Guard} catches them.
+     */
+    static final class Infernal {
+
+        private static boolean looked;
+        private static Object core;
+        private static Method process, remove, isRare;
+
+        private static boolean ready() {
+            if (!looked) {
+                looked = true;
+                try {
+                    Class<?> c = Class.forName("atomicstryker.infernalmobs.common.InfernalMobsCore", false,
+                        MobLoot.class.getClassLoader());
+                    core = c.getMethod("instance")
+                        .invoke(null);
+                    process = c.getMethod("processEntitySpawn", EntityLivingBase.class);
+                    remove = c.getMethod("removeEntFromElites", EntityLivingBase.class);
+                    isRare = c.getMethod("getIsRareEntity", EntityLivingBase.class);
+                } catch (Throwable t) {
+                    core = null; // not installed
+                }
+            }
+            return core != null;
+        }
+
+        static boolean present() {
+            return ready();
+        }
+
+        static void process(EntityLivingBase mob) {
+            if (!ready()) return;
+            try {
+                process.invoke(core, mob);
+            } catch (Throwable t) {
+                if (warned.add("infernal")) ValierTweaks.LOG.warn("Loot spawner: Infernal Mobs failed to set up a mob", t);
+            }
+        }
+
+        static boolean isElite(EntityLivingBase mob) {
+            try {
+                return ready() && (Boolean) isRare.invoke(null, mob);
+            } catch (Throwable t) {
+                return false;
+            }
+        }
+
+        static void forget(EntityLivingBase mob) {
+            if (!ready()) return;
+            try {
+                remove.invoke(null, mob);
+            } catch (Throwable ignored) {}
+        }
+
+        static Object core() {
+            return ready() ? core : null;
+        }
+    }
+
+    /**
+     * Special Mobs, found by name: {@code MobHelper.canReplace} and {@code ReplacementEntry.replace}, what its join
+     * handler queues and runs a tick later. The variant it makes is spawned into the world (Guard catches it) and the
+     * original is set dead.
+     */
+    static final class Special {
+
+        private static boolean looked;
+        private static Method canReplace, replace;
+        private static java.lang.reflect.Constructor<?> entry;
+
+        private static boolean ready() {
+            if (!looked) {
+                looked = true;
+                try {
+                    ClassLoader cl = MobLoot.class.getClassLoader();
+                    canReplace = Class.forName("toast.specialMobs.MobHelper", false, cl)
+                        .getMethod("canReplace", EntityLiving.class);
+                    Class<?> e = Class.forName("toast.specialMobs.ReplacementEntry", false, cl);
+                    entry = e.getConstructor(EntityLiving.class);
+                    replace = e.getMethod("replace");
+                } catch (Throwable t) {
+                    canReplace = null; // not installed
+                }
+            }
+            return canReplace != null;
+        }
+
+        static boolean present() {
+            return ready();
+        }
+
+        /** Swaps in a variant if Special Mobs would; true if it did (the original is then dead). */
+        static boolean replace(EntityLiving mob) {
+            if (!ready()) return false;
+            try {
+                if (!(Boolean) canReplace.invoke(null, mob)) return false;
+                replace.invoke(entry.newInstance(mob));
+                return mob.isDead;
+            } catch (Throwable t) {
+                if (warned.add("special")) ValierTweaks.LOG.warn("Loot spawner: Special Mobs failed to swap a mob", t);
+                return false;
+            }
         }
     }
 

@@ -80,6 +80,8 @@ hostile spawners do nothing at all. A loot spawner skips the mobs and makes just
   every 10 to 40 seconds) it makes the loot those mobs would have dropped and puts it into the inventories touching
   it, on any side: chests (double chests too), barrels, drawers, hoppers, machines, AE2 interfaces, GregTech item
   pipes, EnderIO item conduits and BuildCraft pipes.
+- **Every side:** each stack is offered to all six neighbours in turn (below, above, north, south, west, east), and
+  what doesn't fit in one goes on to the next. So with the chest below full, the loot goes into the chest beside it.
 - **When everything is full** it keeps that batch itself (up to 27 stacks) and makes no more until the loot has gone.
   Nothing is ever dropped on the ground. Hoppers under it, EnderIO conduits set to extract and AE2 import buses can
   also pull from what it keeps. With nothing touching it, it makes nothing.
@@ -93,11 +95,37 @@ hostile spawners do nothing at all. A loot spawner skips the mobs and makes just
   keeping goes too. The emerald block is kept in the spawner (not in creative): do it again to switch it off and get
   the block back, and it drops if the spawner is broken. Gear a mob picked up drops undamaged, so that still comes
   out.
+- **Looting from lapis blocks (1.7.0):** sneak-right-click a loot spawner with a **block of lapis lazuli** to put
+  one in. Its mobs' loot is then rolled with Looting, as if killed with a Looting sword: 1 block gives Looting I, 3
+  give Looting II, 6 give Looting III (`lootSpawnerLootingBlocks`; more numbers allow higher levels). One goes in per
+  click; the message says how many more the next level takes. The level shows in its status, in players' hover
+  ("Valier Loot Spawner: Zombie, Looting II") and in the wrench's item. The blocks stay in it and drop when it is
+  broken. Claims apply.
+- **XP as bottles o' enchanting (1.7.0):** sneak-right-click a loot spawner with a **block of gold** and the XP its
+  mobs would have given a player comes out as bottles o' enchanting with the loot, one per 7 XP
+  (`lootSpawnerXpPerBottle`; a thrown bottle gives 3 to 11, 7 on average). What is left over waits for the next batch.
+  The gold block is kept in it: do it again to switch it off and get it back; it drops if the spawner is broken.
+- **Infernal Mobs (1.7.0):** a loot spawner's mobs can be Infernal Mobs elites, as real spawned mobs are (1 in 20 on
+  a GTNH server, by Infernal Mobs' own settings). An elite's extra loot comes out too: the enchanted chainmail, iron,
+  gold and diamond armour witches were known for in mob farms, tools, books, potions and the rest of Infernal Mobs'
+  lists, all undamaged, and its extra XP counts for bottles. `lootSpawnerInfernalMobs` switches it off.
+- **Special Mobs (1.7.0):** a loot spawner's mobs are swapped for Special Mobs variants as real spawned mobs are (by
+  its own weights; on a GTNH server every blaze, and some zombies, creepers, skeletons and others), and the variants'
+  own loot comes out. `lootSpawnerSpecialMobs` switches it off.
+- **Taking the blocks back (1.7.0):** sneak and hit (left-click) a loot spawner with an empty hand: every lapis, gold
+  and emerald block in it comes back to you, and Looting, bottles and the damaged-items filter switch off. The gold
+  and emerald blocks can also be switched off on their own by sneak-right-clicking with that block again.
+- **Existing loot spawners** get all of this as soon as the new version runs: every batch is rolled fresh.
 - **Picking one up (1.5.0):** sneak-right-click a loot spawner with a **wrench** (GregTech's, EnderIO's Yeta wrench,
   AE2's quartz wrenches, BuildCraft's) and it comes off as an item called **Valier Loot Spawner** with its mob, say
   "Valier Loot Spawner (Zombie)". The item keeps its mob, its settings and its emerald block. The loot it was keeping
   drops. Place the item anywhere and it is a loot spawner again. Claims apply, as when making one. Placing works by
   hand (and by anything that places blocks the way a player does).
+- **Changing its mob with a spawn egg (1.6.0, off by default):** with `lootSpawnerSpawnEggs` on, sneak-right-click
+  a loot spawner with a spawn egg and it makes that mob's loot from now on, the mobs dressed as a vanilla spawner
+  dresses them. The egg is used up (not in creative). Claims apply and blocked mobs are refused. What it was keeping,
+  its timer and its emerald block stay. Plain spawners are left alone. (Botania's tooltip tip about spawn eggs is its
+  own creative-only feature, and it doesn't change a loot spawner.)
 - **What players see (1.5.0):** clients need nothing. The WAILA hover reads "Monster Spawner (Valier Loot Spawner:
   Zombie)". The price: the little mob inside the cage isn't drawn. Clients draw it from that same name, and no mob has
   it, so the cage stays empty, the way vanilla shows a spawner of a mob that isn't installed. With
@@ -139,7 +167,15 @@ way. Without the mod, it is simply an ordinary spawner of the same mob again.
 | `lootSpawnerBlockedMobs` | `WitherBoss`, `EnderDragon` | Mobs whose spawners can't become loot spawners. |
 | `lootSpawnerFilterItem` | `minecraft:emerald_block` | What makes a loot spawner throw damaged items away (kept in it, given back when switched off). Empty or not an item: it can't be switched (ones already set stay set). |
 | `lootSpawnerFilterItemCount` | `1` | How many of that item. |
+| `lootSpawnerLootingItem` | `minecraft:lapis_block` | What gives a loot spawner Looting, one per click. Empty or not an item: none can be put in. |
+| `lootSpawnerLootingBlocks` | `1, 3, 6` | How many it needs for Looting I, II, III (rising; more numbers, higher levels). |
+| `lootSpawnerXpItem` | `minecraft:gold_block` | What switches bottles o' enchanting on (kept in it, given back when switched off). Empty or not an item: it can't be switched. |
+| `lootSpawnerXpItemCount` | `1` | How many of that item. |
+| `lootSpawnerXpPerBottle` | `7` | XP per bottle o' enchanting. |
+| `lootSpawnerInfernalMobs` | `true` | Infernal Mobs elites and their loot, as with real spawned mobs. |
+| `lootSpawnerSpecialMobs` | `true` | Special Mobs variants and their loot, as with real spawned mobs. |
 | `lootSpawnerWrench` | `true` | Sneak-right-click with a wrench picks a loot spawner up as a Valier Loot Spawner item. |
+| `lootSpawnerSpawnEggs` | `false` | Sneak-right-click with a spawn egg changes a loot spawner's mob (egg used up). |
 | `lootSpawnerHoverName` | `true` | The WAILA hover says "Valier Loot Spawner: Zombie" (and no mob is drawn in the cage). Off: the mob is drawn and the hover names only the mob. |
 
 ## Build and test
@@ -189,6 +225,26 @@ way. Without the mod, it is simply an ordinary spawner of the same mob again.
     NEI naming another mob for it changes nothing. A claim that stops placing keeps the item, and with loot spawners off
     it places a plain zombie spawner, dropping the emerald block. The hover packet names it and carries no spawn data;
     with `lootSpawnerHoverName` off it carries the mob and its spawn data.
+  - **Spawn eggs:** with `lootSpawnerSpawnEggs` off (the default) an egg changes nothing. On, a skeleton egg makes a
+    zombie loot spawner a skeleton one (one egg used, its loot and emerald block kept, saved as a skeleton spawner,
+    the hover renamed). The same mob again, an egg with no mob, a blocked mob and a protected spawner use nothing, and
+    a plain spawner is left alone.
+  - **Every side:** with the chest below full, a batch goes into the chest beside it.
+  - **Gold block:** XP is counted as for a player kill (10 blazes give 100, cows 1 to 3 each). Without a gold block
+    no bottles; with one (kept in it), 4 blazes (40 XP) give 5 bottles with 5 XP kept, the next 4 give 6 more with
+    3 kept. The status says so, it survives a save, a protected one can't be switched, switching it off gives the
+    block back, and on a plain spawner it only says how.
+  - **Lapis blocks:** 1, 3 and 6 give Looting I, II and III (the setting changes that), and zombies rolled with
+    Looting III drop far more rotten flesh. One block per click, none where protected, none past the most. The
+    status, the hover and the wrench's item say Looting III, a placed one keeps it, and breaking it drops its 6
+    blocks.
+  - **Infernal Mobs:** with its rarity set to 1 for the test, every witch is an elite: armour comes out, none of it
+    damaged, the elites' extra XP counts, and none stay in its list. With `lootSpawnerInfernalMobs` off, no elites.
+    (It is off for the rest of the test, so counts stay exact.)
+  - **Special Mobs:** every blaze and some zombies come as its variants, killed for loot and never in the world or
+    in its replacement queue. With `lootSpawnerSpecialMobs` off, plain blazes. (Off for the rest of the test too.)
+  - **Taking back:** a sneaking hit with an empty hand gives back 3 lapis, the gold and the emerald block and switches
+    those off. Not without sneaking, not where protected, and an empty one says so.
   - **No surprise mobs:** with a player beside them, a plain spawner counts as active and a loot spawner doesn't. Run
     6 times the way EnderIO does on a break, the loot spawner spawns nothing. A plain spawner isn't active while its
     conversion is being asked about. The real player range (16) is still saved and sent to clients.

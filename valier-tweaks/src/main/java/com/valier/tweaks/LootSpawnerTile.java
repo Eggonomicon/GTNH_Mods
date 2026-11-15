@@ -51,6 +51,18 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
     boolean noDamaged;
     /** What the player paid to switch {@link #noDamaged} on: given back when switched off, dropped when it breaks. */
     ItemStack filterPaid;
+    /** The XP its mobs would have dropped comes out as bottles o' enchanting. */
+    boolean xpBottles;
+    /** What the player paid to switch {@link #xpBottles} on: given back when switched off, dropped when it breaks. */
+    ItemStack xpPaid;
+    /** XP made but not yet a bottle. */
+    int xp;
+    /** Looting items put in: they set its Looting level ({@link LootSpawners#lootingLevel}). */
+    int lootingBlocks;
+    /** How many of them were paid for (not in creative): these drop when it breaks. */
+    int lootingPaid;
+    /** One of the item put in, so what drops is what was paid. */
+    ItemStack lootingItem;
     /**
      * The spawner's own RequiredPlayerRange, saved and sent as it is. The live vanilla logic gets 0, so it never counts
      * as active and never spawns a mob, even when another mod runs it: EnderIO runs a spawner up to 6 times when a
@@ -140,6 +152,12 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         timer = mark.hasKey("Timer") ? mark.getInteger("Timer") : -1;
         noDamaged = mark.getBoolean("NoDamaged");
         filterPaid = mark.hasKey("Paid", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("Paid")) : null;
+        xpBottles = mark.getBoolean("XpBottles");
+        xpPaid = mark.hasKey("XpPaid", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("XpPaid")) : null;
+        xp = mark.getInteger("Xp");
+        lootingBlocks = mark.getInteger("LootingBlocks");
+        lootingPaid = mark.getInteger("LootingPaid");
+        lootingItem = mark.hasKey("LootingItem", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("LootingItem")) : null;
         for (int i = 0; i < SLOTS; i++) items[i] = null;
         NBTTagList list = mark.getTagList("Items", 10);
         for (int i = 0; i < list.tagCount(); i++) {
@@ -175,7 +193,8 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         savedSinceBreak = true;
     }
 
-    private void writeAll(NBTTagCompound nbt) {
+    /** Everything, as {@link #writeToNBT} saves it, but not counted as a save (see {@link #savedSinceBreak}). */
+    void writeAll(NBTTagCompound nbt) {
         MobSpawnerBaseLogic logic = logic();
         if (!isMarked(this)) mark(this);
         logic.spawnDelay = Short.MAX_VALUE;
@@ -186,6 +205,12 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         mark.setInteger("Timer", timer);
         if (noDamaged) mark.setBoolean("NoDamaged", true);
         if (filterPaid != null) mark.setTag("Paid", filterPaid.writeToNBT(new NBTTagCompound()));
+        if (xpBottles) mark.setBoolean("XpBottles", true);
+        if (xpPaid != null) mark.setTag("XpPaid", xpPaid.writeToNBT(new NBTTagCompound()));
+        if (xp > 0) mark.setInteger("Xp", xp);
+        if (lootingBlocks > 0) mark.setInteger("LootingBlocks", lootingBlocks);
+        if (lootingPaid > 0) mark.setInteger("LootingPaid", lootingPaid);
+        if (lootingItem != null) mark.setTag("LootingItem", lootingItem.writeToNBT(new NBTTagCompound()));
         NBTTagList list = new NBTTagList();
         for (int i = 0; i < SLOTS; i++) {
             if (items[i] == null) continue;
@@ -219,16 +244,17 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         data.removeTag(MARK);
         if (egg && data.hasNoTags()) nbt.removeTag("SpawnData");
         if (TweaksConfig.lootSpawnerHoverName) {
-            nbt.setString("EntityId", hoverName(logic().getEntityNameToSpawn()));
+            nbt.setString("EntityId", hoverName(logic().getEntityNameToSpawn(), LootSpawners.lootingLevel(lootingBlocks)));
             nbt.removeTag("SpawnData");
         }
         nbt.setShort("Delay", (short) Math.max(0, Math.min(Short.MAX_VALUE, timer)));
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, nbt);
     }
 
-    /** "Valier Loot Spawner: Zombie", what players' WAILA shows inside "Monster Spawner (...)". */
-    static String hoverName(String type) {
-        return EnumChatFormatting.GOLD + "Valier Loot Spawner" + EnumChatFormatting.RESET + ": " + LootSpawners.mobWords(type);
+    /** "Valier Loot Spawner: Zombie, Looting II", what players' WAILA shows inside "Monster Spawner (...)". */
+    static String hoverName(String type, int looting) {
+        return EnumChatFormatting.GOLD + "Valier Loot Spawner" + EnumChatFormatting.RESET + ": " + LootSpawners.mobWords(type)
+            + (looting > 0 ? ", Looting " + LootSpawners.roman(looting) : "");
     }
 
     /**
@@ -243,6 +269,7 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
             .getCompoundTag(MARK);
         mark.removeTag("Items");
         mark.removeTag("Timer");
+        mark.removeTag("Xp"); // the part of a bottle made so far: equal spawners' items then stack
         return (NBTTagCompound) nbt.copy(); // vanilla's SpawnPotentials entries share compounds with the live logic
     }
 
@@ -253,9 +280,9 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         return true;
     }
 
-    /** Something drops when it breaks: loot it holds, or what was paid for {@link #noDamaged}. */
+    /** Something drops when it breaks: loot it holds, or what was paid for {@link #noDamaged} or {@link #xpBottles}. */
     boolean hasDrops() {
-        return filterPaid != null || !isEmpty();
+        return filterPaid != null || xpPaid != null || lootingPaid > 0 || !isEmpty();
     }
 
     int freeSlots() {
