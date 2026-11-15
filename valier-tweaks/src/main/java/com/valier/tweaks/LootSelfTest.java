@@ -14,7 +14,10 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagFloat;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
+import net.minecraft.tileentity.MobSpawnerBaseLogic;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.tileentity.TileEntityHopper;
 import net.minecraft.tileentity.TileEntityMobSpawner;
@@ -53,6 +56,9 @@ import gregtech.api.util.GTOreDictUnificator;
  * data, rare skull), nothing for a blocked mob or a non-mob, and nothing joins the world;</li>
  * <li>cycles: loot into a chest, held when the chest is full and handed over later, nothing with nothing touching it,
  * into a hopper beside it, pulled by a hopper under it, never put into, and into a GregTech item pipe;</li>
+ * <li>damaged items: an emerald block switches a loot spawner to throwing worn gear away (kept in it, given back when
+ * switched off, refused where protected, not on a plain spawner); zombies' worn swords stop coming out, undamaged
+ * ones still do;</li>
  * <li>saving: saves as a plain spawner with its loot inside, loads as a plain spawner without the mod, comes back after
  * a dolly-style move (the scan) and as its chunk loads; clients get a plain spawner packet;</li>
  * <li>settings: a misspelled conversion item makes none (not free ones); blown up, its loot drops; switched off, it is
@@ -90,6 +96,7 @@ public final class LootSelfTest {
         clicks();
         rolls();
         cycles();
+        damagedItems();
         saving();
         settings();
         later();
@@ -275,6 +282,125 @@ public final class LootSelfTest {
         return n;
     }
 
+    // ---- damaged items ----------------------------------------------------------------------------------------------
+
+    void damagedItems() {
+        int[] s1 = { bx + 2, y, bz + 2 }, s2 = { bx + 6, y, bz + 2 };
+        TileEntity t1 = te(s1);
+        if (!(t1 instanceof LootSpawnerTile)) {
+            SelfTest.check(false, "the zombie loot spawner from the clicks is there (" + t1 + ")");
+            return;
+        }
+        LootSpawnerTile l1 = (LootSpawnerTile) t1;
+        SelfTest.check(LootSpawners.damaged(worn(Items.iron_sword)) && LootSpawners.damaged(worn(Items.iron_chestplate))
+            && !LootSpawners.damaged(new ItemStack(Items.iron_sword)) && !LootSpawners.damaged(new ItemStack(Items.rotten_flesh))
+            && !LootSpawners.damaged(new ItemStack(Items.dye, 1, 4)), "damaged means worn gear (not new gear, not items with a meta)");
+        player.setSneaking(true);
+        player.inventory.setInventorySlotContents(0, new ItemStack(Blocks.emerald_block, 3));
+        l1.addToBuffer(worn(Items.iron_sword));
+        l1.addToBuffer(new ItemStack(Items.rotten_flesh, 2));
+        said[0] = null;
+        PlayerInteractEvent ev = click(s1);
+        SelfTest.check(ev.isCanceled() && l1.noDamaged && held() == 2 && l1.filterPaid != null && l1.filterPaid.getItem() == emerald()
+            && l1.filterPaid.stackSize == 1 && said[0] != null && said[0].contains("throws damaged items away"),
+            "sneak-right-click with an emerald block makes it throw damaged items away, keeping the block (" + said[0] + ")");
+        SelfTest.check(countHeld(l1, Items.iron_sword) == 0 && countHeld(l1, Items.rotten_flesh) == 2,
+            "a worn sword it was keeping is thrown away, the rest kept");
+        player.inventory.setInventorySlotContents(0, null);
+        said[0] = null;
+        click(s1);
+        SelfTest.check(said[0] != null && said[0].contains("Damaged items are thrown away"), "its status says so");
+        NBTTagCompound tag = new NBTTagCompound();
+        l1.writeToNBT(tag);
+        LootSpawnerTile copy = new LootSpawnerTile();
+        copy.readFromNBT(tag);
+        SelfTest.check(copy.noDamaged && copy.filterPaid != null && copy.filterPaid.getItem() == emerald(),
+            "saved and loaded (or moved with a dolly), it still throws them away and still has the emerald block");
+        player.inventory.setInventorySlotContents(0, new ItemStack(Blocks.emerald_block, 2));
+        SelfTest.DenyBreaks guard = new SelfTest.DenyBreaks();
+        MinecraftForge.EVENT_BUS.register(guard);
+        said[0] = null;
+        try {
+            click(s1);
+        } finally {
+            MinecraftForge.EVENT_BUS.unregister(guard);
+        }
+        SelfTest.check(l1.noDamaged && held() == 2 && said[0] != null && said[0].contains("protected"),
+            "where a claim protects it, it can't be switched (" + said[0] + ")");
+        said[0] = null;
+        ev = click(s1);
+        SelfTest.check(ev.isCanceled() && !l1.noDamaged && l1.filterPaid == null && held() == 3,
+            "doing it again switches that off and gives the emerald block back (" + said[0] + ")");
+        TileEntity v2 = te(s2);
+        said[0] = null;
+        ev = click(s2);
+        SelfTest.check(ev.isCanceled() && te(s2) == v2 && held() == 3 && said[0] != null && said[0].contains("loot spawner first"),
+            "on a plain spawner an emerald block does nothing but say how (" + said[0] + ")");
+        player.inventory.setInventorySlotContents(0, null);
+        for (int i = 0; i < LootSpawnerTile.SLOTS; i++) l1.items[i] = null;
+
+        // Zombies holding iron swords that always drop: worn (drop chance 1, as mobs' own gear drops), or undamaged
+        // (drop chance 2, as gear a mob picked up drops).
+        int[] pa = { bx + 14, y, bz + 10 }, pb = { bx + 14, y, bz + 14 };
+        LootSpawnerTile la = swordZombies(pa, 1.0F), lb = swordZombies(pb, 2.0F);
+        IInventory ca = (IInventory) world.getTileEntity(pa[0], y - 1, pa[2]);
+        IInventory cb = (IInventory) world.getTileEntity(pb[0], y - 1, pb[2]);
+        la.timer = 0;
+        LootSpawners.cycle(la);
+        SelfTest.check(la.rolls == 1 && countWorn(ca, Items.iron_sword) >= 4,
+            "zombies' swords drop worn, and come out as usual (" + countWorn(ca, Items.iron_sword) + " worn swords)");
+        clearInv(ca);
+        la.noDamaged = true;
+        la.timer = 0;
+        LootSpawners.cycle(la);
+        SelfTest.check(la.rolls == 2 && count(ca, Items.iron_sword) == 0 && countHeld(la, Items.iron_sword) == 0,
+            "throwing damaged items away, no worn sword comes out (" + count(ca, Items.iron_sword) + ")");
+        lb.noDamaged = true;
+        lb.timer = 0;
+        LootSpawners.cycle(lb);
+        SelfTest.check(lb.rolls == 1 && count(cb, Items.iron_sword) >= 4 && countWorn(cb, Items.iron_sword) == 0,
+            "undamaged swords still come out (" + count(cb, Items.iron_sword) + ")");
+    }
+
+    LootSpawnerTile swordZombies(int[] p, float dropChance) {
+        TileEntityMobSpawner v = spawner(p, "Zombie");
+        NBTTagCompound props = new NBTTagCompound();
+        NBTTagList equipment = new NBTTagList();
+        NBTTagList chances = new NBTTagList();
+        equipment.appendTag(new ItemStack(Items.iron_sword).writeToNBT(new NBTTagCompound()));
+        chances.appendTag(new NBTTagFloat(dropChance));
+        for (int i = 0; i < 4; i++) {
+            equipment.appendTag(new NBTTagCompound());
+            chances.appendTag(new NBTTagFloat(0.0F));
+        }
+        props.setTag("Equipment", equipment);
+        props.setTag("DropChances", chances);
+        MobSpawnerBaseLogic logic = v.func_145881_a();
+        logic.setRandomEntity(logic.new WeightedRandomMinecart(props, "Zombie"));
+        world.setBlock(p[0], y - 1, p[2], Blocks.chest);
+        LootSpawnerTile.mark(v);
+        return LootSpawners.swap(world, v);
+    }
+
+    static ItemStack worn(Item item) {
+        ItemStack s = new ItemStack(item);
+        s.setItemDamage(40);
+        return s;
+    }
+
+    static Item emerald() {
+        return Item.getItemFromBlock(Blocks.emerald_block);
+    }
+
+    static int countWorn(IInventory inv, Item item) {
+        int n = 0;
+        for (int i = 0; i < inv.getSizeInventory(); i++) {
+            ItemStack s = inv.getStackInSlot(i);
+            if (s != null && s.getItem() == item && s.isItemDamaged()) n += s.stackSize;
+        }
+        return n;
+    }
+
     // ---- saving ---------------------------------------------------------------------------------------------------
 
     void saving() {
@@ -357,15 +483,20 @@ public final class LootSelfTest {
         int[] s12 = { bx + 2, y, bz + 14 };
         LootSpawnerTile l12 = lootSpawner(s12, "Cow");
         l12.addToBuffer(new ItemStack(Items.leather, 4));
+        l12.noDamaged = true;
+        l12.filterPaid = new ItemStack(Blocks.emerald_block);
         ArrayList<ItemStack> drops = new ArrayList<>();
         MinecraftForge.EVENT_BUS.post(new BlockEvent.HarvestDropsEvent(s12[0], y, s12[2], world, Blocks.mob_spawner, 0, 0,
             1.0F, drops, null, false));
-        SelfTest.check(has(drops, Items.leather, -1) && l12.isEmpty(), "blown up, what it kept is among the drops");
+        SelfTest.check(has(drops, Items.leather, -1) && has(drops, emerald(), -1) && l12.isEmpty() && l12.filterPaid == null,
+            "blown up, what it kept (and the emerald block it took) is among the drops");
 
         // Switched off: marked spawners become plain spawners again, dressed as before, what they kept dropped on top.
         int[] s13 = { bx + 6, y, bz + 14 }, s14 = { bx + 10, y, bz + 14 };
         LootSpawnerTile l13 = lootSpawner(s13, "Cow");
         l13.addToBuffer(new ItemStack(Items.leather, 2));
+        l13.noDamaged = true;
+        l13.filterPaid = new ItemStack(Blocks.emerald_block);
         NBTTagCompound tag = new NBTTagCompound();
         l13.writeToNBT(tag);
         TileEntityMobSpawner v14 = spawner(s14, "Pig");
@@ -381,7 +512,9 @@ public final class LootSelfTest {
             && "Cow".equals(v14.func_145881_a()
                 .getEntityNameToSpawn()),
             "switched off in the config, a loot spawner is a plain cow spawner again, ready to spawn");
-        SelfTest.check(itemsNear(s14, Items.leather) == 2, "and what it kept drops on top of it (" + itemsNear(s14, Items.leather) + " leather)");
+        SelfTest.check(itemsNear(s14, Items.leather) == 2 && itemsNear(s14, emerald()) == 1,
+            "and what it kept drops on top of it (" + itemsNear(s14, Items.leather) + " leather, "
+                + itemsNear(s14, emerald()) + " emerald block)");
         killItems(s14);
     }
 
@@ -400,6 +533,8 @@ public final class LootSelfTest {
         s6p = new int[] { bx + 10, y, bz + 10 };
         LootSpawnerTile s6 = lootSpawner(s6p, "Cow");
         s6.addToBuffer(new ItemStack(Items.leather, 7));
+        s6.noDamaged = true;
+        s6.filterPaid = new ItemStack(Blocks.emerald_block);
         MinecraftForge.EVENT_BUS.post(new BlockEvent.BreakEvent(s6p[0], y, s6p[2], world, Blocks.mob_spawner, 0, player));
         world.setBlockToAir(s6p[0], y, s6p[2]);
         TileEntity t7 = te(s7p);
@@ -423,8 +558,9 @@ public final class LootSelfTest {
         ticks++;
         try {
             if (ticks == 3) {
-                SelfTest.check(itemsNear(s6p, Items.leather) == 7, "a broken loot spawner drops what it held ("
-                    + itemsNear(s6p, Items.leather) + " leather)");
+                SelfTest.check(itemsNear(s6p, Items.leather) == 7 && itemsNear(s6p, emerald()) == 1,
+                    "a broken loot spawner drops what it held, and the emerald block it took ("
+                        + itemsNear(s6p, Items.leather) + " leather, " + itemsNear(s6p, emerald()) + " emerald block)");
                 SelfTest.check(itemsNear(s7p, Items.leather) == 0, "a break event alone (a permission check) drops nothing");
                 killItems(s6p);
             } else if (ticks == 15) {

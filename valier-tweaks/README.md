@@ -88,14 +88,19 @@ hostile spawners do nothing at all. A loot spawner skips the mobs and makes just
   the drop event other mods add loot through. So drops only a player kill gives (blaze rods) come too. There's no
   Looting and no XP. Big slimes split into small ones and those drop slimeballs, as when killed. A spawner that dresses
   its mobs (a skeleton's bow, Nether skeletons that are wither skeletons) does so here too.
+- **No damaged items (1.4.0):** sneak-right-click a loot spawner with a **block of emerald** and it throws damaged
+  items away: the worn swords, bows and armour mobs drop never come out, only undamaged loot. Anything damaged it was
+  keeping goes too. The emerald block is kept in the spawner (not in creative): do it again to switch it off and get
+  the block back, and it drops if the spawner is broken. Gear a mob picked up drops undamaged, so that still comes
+  out.
 - **Looks the same:** clients need nothing; it is an ordinary spawner to them. The little mob spins faster as the next
   batch comes up.
 - **Status:** sneak-right-click it with an empty hand to see its mob, its timing, whether it is working or waiting
   (and why) and when the next batch comes. On an ordinary spawner the same click says how to make one.
 - **Protection:** it only works where the player could break the spawner, so claims keep others from converting
   yours. Ops always may.
-- **Breaking it** (or blowing it up) drops whatever it was keeping. It is still a spawner: it drops nothing else, as
-  before. Removed by a command or WorldEdit, what it kept is gone.
+- **Breaking it** (or blowing it up) drops whatever it was keeping, and the emerald block if it has one. It is still a
+  spawner: it drops nothing else of its own, as before (EnderIO's broken spawner aside). Removed by a command or WorldEdit, what it kept is gone.
 - **Blocked mobs:** the Wither and the Ender Dragon (`lootSpawnerBlockedMobs`).
 
 How it is stored: in the world save it is an ordinary spawner of the same mob, marked by a small compound
@@ -118,6 +123,8 @@ way. Without the mod, it is simply an ordinary spawner of the same mob again.
 | `lootSpawnerSpeed` | `1.0` | 1 = as fast as the spawner would spawn mobs; 2 = twice as often. |
 | `lootSpawnerNeedsPlayer` | `false` | Only work with a player within 16 blocks, like a vanilla spawner. Off: whenever its chunk is loaded. |
 | `lootSpawnerBlockedMobs` | `WitherBoss`, `EnderDragon` | Mobs whose spawners can't become loot spawners. |
+| `lootSpawnerFilterItem` | `minecraft:emerald_block` | What makes a loot spawner throw damaged items away (kept in it, given back when switched off). Empty or not an item: it can't be switched (ones already set stay set). |
+| `lootSpawnerFilterItemCount` | `1` | How many of that item. |
 
 ## Build and test
 
@@ -155,10 +162,15 @@ way. Without the mod, it is simply an ordinary spawner of the same mob again.
   - **Output:** into a chest; kept when the chest is full and handed over later; nothing with nothing touching it;
     into a hopper beside it; pulled by a hopper under it; nothing can be put into it; a GregTech item pipe connects
     to it and takes its loot.
+  - **Damaged items:** an emerald block switches it to throwing damaged items away (one block kept in it, a worn
+    sword it was keeping gone, the status says so, it survives a save) and switches it back, giving the block back.
+    A protected one can't be switched, and a plain spawner only says how. Zombies with swords that drop worn give
+    worn swords, none once it throws damaged items away, and swords that drop undamaged still come out.
   - **Saving:** it saves as a plain spawner with its loot inside and would load as one without the mod. It comes back
     after a dolly-style move and as its chunk loads, and clients get a plain spawner packet.
-  - **Settings:** a misspelled conversion item makes none (not free ones); blown up, what it kept drops; switched off,
-    it is a plain spawner again (dressed as before, ready to spawn) and what it kept drops on top. A real chicken
+  - **Settings:** a misspelled conversion item makes none (not free ones); blown up, what it kept (and its emerald
+    block) drops; switched off, it is a plain spawner again (dressed as before, ready to spawn) and what it kept drops
+    on top, emerald block included. A real chicken
     nearby is never taken as a baby zombie's mount during 2000 zombie rolls.
-  - **Over 70 ticks:** a broken one drops what it kept (a permission check alone doesn't). Its chunk unloads and loads
+  - **Over 70 ticks:** a broken one drops what it kept and its emerald block (a permission check alone doesn't). Its chunk unloads and loads
     again with it still working, and one left running fills its chest on its own.

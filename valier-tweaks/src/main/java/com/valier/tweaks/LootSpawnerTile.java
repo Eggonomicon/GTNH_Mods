@@ -46,6 +46,10 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
     int minDelay = 200, maxDelay = 800, spawnCount = 4;
     /** What it can spawn: one entry, or its SpawnPotentials. */
     List<MobLoot.Candidate> candidates = Collections.emptyList();
+    /** Damaged items (worn tools, weapons and armour) are thrown away instead of handed out. */
+    boolean noDamaged;
+    /** What the player paid to switch {@link #noDamaged} on: given back when switched off, dropped when it breaks. */
+    ItemStack filterPaid;
 
     // Not saved: what the status message reports.
     LootSpawners.Status status = LootSpawners.Status.STARTING;
@@ -126,6 +130,8 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         NBTTagCompound mark = data.field_98222_b.getCompoundTag(MARK);
         egg = mark.getBoolean("Egg");
         timer = mark.hasKey("Timer") ? mark.getInteger("Timer") : -1;
+        noDamaged = mark.getBoolean("NoDamaged");
+        filterPaid = mark.hasKey("Paid", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("Paid")) : null;
         for (int i = 0; i < SLOTS; i++) items[i] = null;
         NBTTagList list = mark.getTagList("Items", 10);
         for (int i = 0; i < list.tagCount(); i++) {
@@ -161,6 +167,8 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         NBTTagCompound mark = new NBTTagCompound();
         mark.setBoolean("Egg", egg);
         mark.setInteger("Timer", timer);
+        if (noDamaged) mark.setBoolean("NoDamaged", true);
+        if (filterPaid != null) mark.setTag("Paid", filterPaid.writeToNBT(new NBTTagCompound()));
         NBTTagList list = new NBTTagList();
         for (int i = 0; i < SLOTS; i++) {
             if (items[i] == null) continue;
@@ -197,6 +205,11 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
     boolean isEmpty() {
         for (ItemStack s : items) if (s != null) return false;
         return true;
+    }
+
+    /** Something drops when it breaks: loot it holds, or what was paid for {@link #noDamaged}. */
+    boolean hasDrops() {
+        return filterPaid != null || !isEmpty();
     }
 
     int freeSlots() {

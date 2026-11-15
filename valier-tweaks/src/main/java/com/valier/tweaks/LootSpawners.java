@@ -85,7 +85,10 @@ public final class LootSpawners {
         TileEntity te = world.getTileEntity(x, y, z);
         ItemStack held = player.getHeldItem();
         if (te instanceof LootSpawnerTile) {
-            if (held == null || isConvertItem(held)) {
+            if (isFilterItem(held)) {
+                event.setCanceled(true);
+                toggleFilter(player, (LootSpawnerTile) te, held);
+            } else if (held == null || isConvertItem(held)) {
                 event.setCanceled(true);
                 tell(player, status((LootSpawnerTile) te));
             }
@@ -96,6 +99,15 @@ public final class LootSpawners {
         if (LootSpawnerTile.isMarked(spawner)) { // a loot spawner the scan hasn't picked up yet
             event.setCanceled(true);
             tell(player, status(swap(world, spawner)));
+            return;
+        }
+        if (isFilterItem(held) && !isConvertItem(held)) {
+            event.setCanceled(true); // don't place the emerald block
+            tell(player, text(EnumChatFormatting.GRAY, "Make it a loot spawner first (sneak-right-click with ")
+                .appendSibling(costText(TweaksConfig.lootSpawnerItem, TweaksConfig.lootSpawnerItemCount))
+                .appendSibling(new ChatComponentText("); then ")
+                    .appendSibling(costText(TweaksConfig.lootSpawnerFilterItem, TweaksConfig.lootSpawnerFilterItemCount))
+                    .appendSibling(new ChatComponentText(" makes it throw damaged items away."))));
             return;
         }
         if (costUnknown()) {
@@ -141,6 +153,71 @@ public final class LootSpawners {
         tell(player, text(EnumChatFormatting.GREEN, "Loot spawner made. ").appendSibling(status(loot)));
     }
 
+    /**
+     * Sneak-right-click on a loot spawner with the filter item (an emerald block by default): damaged items are thrown
+     * away from now on, and the item is kept in the spawner. Again: switched off, and the item is given back.
+     */
+    static void toggleFilter(EntityPlayer player, LootSpawnerTile t, ItemStack held) {
+        if (!mayChange(player, t.getWorldObj(), t.xCoord, t.yCoord, t.zCoord)) {
+            tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
+            return;
+        }
+        if (t.noDamaged) {
+            t.noDamaged = false;
+            ItemStack back = t.filterPaid;
+            t.filterPaid = null;
+            t.markDirty();
+            IChatComponent msg = text(EnumChatFormatting.GREEN, "Damaged items come out of this loot spawner again.");
+            if (back != null) {
+                msg.appendSibling(new ChatComponentText(" Here is your "))
+                    .appendSibling(new ChatComponentTranslation(back.getUnlocalizedName() + ".name"))
+                    .appendSibling(new ChatComponentText(back.stackSize > 1 ? " × " + back.stackSize + " back." : " back."));
+                give(player, back);
+            }
+            ValierTweaks.LOG.info("{} let damaged items out of the loot spawner at {} again", player.getCommandSenderName(),
+                t.where());
+            tell(player, msg);
+            return;
+        }
+        int cost = TweaksConfig.lootSpawnerFilterItemCount;
+        boolean creative = player.capabilities.isCreativeMode;
+        if (!creative && held.stackSize < cost) {
+            tell(player, text(EnumChatFormatting.RED, "That takes " + cost + " of them."));
+            return;
+        }
+        if (!creative) {
+            t.filterPaid = held.splitStack(cost);
+            if (held.stackSize <= 0) player.inventory.setInventorySlotContents(player.inventory.currentItem, null);
+            player.inventoryContainer.detectAndSendChanges();
+        }
+        t.noDamaged = true;
+        int thrown = 0;
+        for (int i = 0; i < LootSpawnerTile.SLOTS; i++) {
+            if (damaged(t.items[i])) {
+                t.items[i] = null;
+                thrown++;
+            }
+        }
+        t.markDirty();
+        ValierTweaks.LOG.info("{} made the loot spawner at {} throw damaged items away", player.getCommandSenderName(),
+            t.where());
+        tell(player, text(EnumChatFormatting.GREEN, "This loot spawner throws damaged items away now (worn tools, weapons "
+            + "and armour): only undamaged loot comes out" + (thrown > 0 ? ", and the " + thrown + " damaged it was keeping are gone" : "")
+            + ". Do it again to switch that off and get the item back."));
+    }
+
+    /** Worn: a tool, weapon or piece of armour that has lost durability (mobs' gear drops worn). */
+    static boolean damaged(ItemStack stack) {
+        return stack != null && stack.getItem() != null && stack.isItemDamaged();
+    }
+
+    /** Into the player's inventory, or dropped at their feet if it doesn't fit. */
+    static void give(EntityPlayer player, ItemStack stack) {
+        player.inventory.addItemStackToInventory(stack);
+        if (stack.stackSize > 0) player.dropPlayerItemWithRandomChoice(stack, false);
+        player.inventoryContainer.detectAndSendChanges();
+    }
+
     /** Whether the player could break the spawner (claims and other protection decide), or is an op. */
     static boolean mayChange(EntityPlayer player, World world, int x, int y, int z) {
         if (player instanceof EntityPlayerMP && MinecraftServer.getServer() != null
@@ -172,7 +249,7 @@ public final class LootSpawners {
     public void onBreak(BlockEvent.BreakEvent event) {
         if (asking || event.world.isRemote || event.block != Blocks.mob_spawner) return;
         TileEntity te = event.world.getTileEntity(event.x, event.y, event.z);
-        if (te instanceof LootSpawnerTile && !((LootSpawnerTile) te).isEmpty()) {
+        if (te instanceof LootSpawnerTile && ((LootSpawnerTile) te).hasDrops()) {
             ((LootSpawnerTile) te).savedSinceBreak = false;
             spills.add((LootSpawnerTile) te);
         }
@@ -192,6 +269,8 @@ public final class LootSpawners {
             if (t.items[i] != null) event.drops.add(t.items[i]);
             t.items[i] = null;
         }
+        if (t.filterPaid != null) event.drops.add(t.filterPaid);
+        t.filterPaid = null;
         t.markDirty();
     }
 
@@ -208,6 +287,8 @@ public final class LootSpawners {
                 t.items[i] = null;
                 if (s != null) drop(w, t.xCoord, t.yCoord, t.zCoord, s);
             }
+            if (t.filterPaid != null) drop(w, t.xCoord, t.yCoord, t.zCoord, t.filterPaid);
+            t.filterPaid = null;
         }
         spills.clear();
     }
@@ -232,7 +313,25 @@ public final class LootSpawners {
     }
 
     static Item convertItem() {
-        String name = TweaksConfig.lootSpawnerItem.trim();
+        return itemOf(TweaksConfig.lootSpawnerItem);
+    }
+
+    static int convertMeta() {
+        return metaOf(TweaksConfig.lootSpawnerItem);
+    }
+
+    static boolean isConvertItem(ItemStack stack) {
+        return matches(TweaksConfig.lootSpawnerItem, stack);
+    }
+
+    /** The item that makes a loot spawner throw damaged items away (empty or not an item: none does). */
+    static boolean isFilterItem(ItemStack stack) {
+        return matches(TweaksConfig.lootSpawnerFilterItem, stack);
+    }
+
+    /** The item a config setting names ("mod:item" or "mod:item:meta"), or null. */
+    static Item itemOf(String setting) {
+        String name = setting.trim();
         if (name.isEmpty()) return null;
         int colon = name.lastIndexOf(':');
         if (colon > name.indexOf(':')) name = name.substring(0, colon); // "mod:item:meta"
@@ -240,8 +339,8 @@ public final class LootSpawners {
         return item instanceof Item && Item.itemRegistry.containsKey(name) ? (Item) item : null;
     }
 
-    static int convertMeta() {
-        String name = TweaksConfig.lootSpawnerItem.trim();
+    static int metaOf(String setting) {
+        String name = setting.trim();
         int first = name.indexOf(':'), last = name.lastIndexOf(':');
         if (last <= first) return -1;
         try {
@@ -251,10 +350,10 @@ public final class LootSpawners {
         }
     }
 
-    static boolean isConvertItem(ItemStack stack) {
-        Item item = convertItem();
+    static boolean matches(String setting, ItemStack stack) {
+        Item item = itemOf(setting);
         if (stack == null || item == null || stack.getItem() != item) return false;
-        int meta = convertMeta();
+        int meta = metaOf(setting);
         return meta < 0 || stack.getItemDamage() == meta;
     }
 
@@ -350,6 +449,8 @@ public final class LootSpawners {
             ItemStack s = ItemStack.loadItemStackFromNBT(items.getCompoundTagAt(i));
             if (s != null) drop(world, spawner.xCoord, spawner.yCoord + 1, spawner.zCoord, s);
         }
+        ItemStack paid = mark.hasKey("Paid", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("Paid")) : null;
+        if (paid != null) drop(world, spawner.xCoord, spawner.yCoord + 1, spawner.zCoord, paid);
         data.removeTag(LootSpawnerTile.MARK);
         if (mark.getBoolean("Egg")) {
             tag.removeTag("SpawnData");
@@ -404,6 +505,7 @@ public final class LootSpawners {
                 MobLoot.pick(t.candidates, world.rand));
             any |= !loot.isEmpty();
             for (ItemStack stack : MobLoot.merge(loot)) {
+                if (t.noDamaged && damaged(stack)) continue; // thrown away
                 ItemStack left = insertAround(world, t.xCoord, t.yCoord, t.zCoord, stack);
                 if (left != null) left = t.addToBuffer(left);
                 if (left != null) drop(world, t.xCoord, t.yCoord + 1, t.zCoord, left); // more than 27 stacks: never lose it
@@ -532,21 +634,25 @@ public final class LootSpawners {
         if (held > 0) msg.appendSibling(new ChatComponentText(" (holding " + held + (held == 1 ? " stack" : " stacks") + ")"));
         if (t.timer > 0 && t.status != Status.NO_PLAYER) msg.appendSibling(new ChatComponentText(", next batch in " + seconds(t.timer) + " s"));
         msg.appendSibling(new ChatComponentText("."));
+        if (t.noDamaged) msg.appendSibling(new ChatComponentText(" Damaged items are thrown away."));
+        else if (itemOf(TweaksConfig.lootSpawnerFilterItem) != null) msg.appendSibling(new ChatComponentText(" Sneak-right-click it with ")
+            .appendSibling(costText(TweaksConfig.lootSpawnerFilterItem, TweaksConfig.lootSpawnerFilterItemCount))
+            .appendSibling(new ChatComponentText(" to throw damaged items away.")));
         return msg;
     }
 
+    /** "a Block of Diamond", "2 × Block of Emerald", or "an empty hand" when the setting names no item. */
+    static IChatComponent costText(String setting, int count) {
+        Item item = itemOf(setting);
+        if (item == null) return new ChatComponentText("an empty hand");
+        ItemStack shown = new ItemStack(item, 1, Math.max(0, metaOf(setting)));
+        return new ChatComponentText(count != 1 ? count + " × " : "a ")
+            .appendSibling(new ChatComponentTranslation(shown.getUnlocalizedName() + ".name"));
+    }
+
     static IChatComponent hint(TileEntityMobSpawner spawner) {
-        Item item = convertItem();
-        IChatComponent msg = text(EnumChatFormatting.GRAY, "Sneak-right-click this spawner with ");
-        if (item == null) msg.appendSibling(new ChatComponentText("an empty hand"));
-        else {
-            int meta = Math.max(0, convertMeta());
-            ItemStack shown = new ItemStack(item, 1, meta);
-            int n = TweaksConfig.lootSpawnerItemCount;
-            if (n != 1) msg.appendSibling(new ChatComponentText(n + " × "));
-            else msg.appendSibling(new ChatComponentText("a "));
-            msg.appendSibling(new ChatComponentTranslation(shown.getUnlocalizedName() + ".name"));
-        }
+        IChatComponent msg = text(EnumChatFormatting.GRAY, "Sneak-right-click this spawner with ")
+            .appendSibling(costText(TweaksConfig.lootSpawnerItem, TweaksConfig.lootSpawnerItemCount));
         msg.appendSibling(new ChatComponentText(" to make it a loot spawner: no more mobs, just the loot of each "))
             .appendSibling(mobName(spawner.func_145881_a()
                 .getEntityNameToSpawn()))

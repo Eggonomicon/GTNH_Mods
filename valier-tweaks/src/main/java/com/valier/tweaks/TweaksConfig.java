@@ -18,6 +18,8 @@ public final class TweaksConfig {
     public static double lootSpawnerSpeed = 1.0;
     public static boolean lootSpawnerNeedsPlayer = false;
     public static String[] lootSpawnerBlockedMobs = { "WitherBoss", "EnderDragon" };
+    public static String lootSpawnerFilterItem = "minecraft:emerald_block";
+    public static int lootSpawnerFilterItemCount = 1;
 
     private TweaksConfig() {}
 
@@ -74,6 +76,13 @@ public final class TweaksConfig {
         lootSpawnerBlockedMobs = c.getStringList("lootSpawnerBlockedMobs", cat, new String[] { "WitherBoss", "EnderDragon" },
             "Mobs (entity names, as in a spawner's EntityId) whose spawners can't become loot spawners and make "
                 + "nothing if one already is.");
+        lootSpawnerFilterItem = c.getString("lootSpawnerFilterItem", cat, "minecraft:emerald_block",
+            "Sneak-right-click a loot spawner with this and it throws damaged items away (the worn tools, weapons and "
+                + "armour mobs drop), so only undamaged loot comes out. The item is kept in the spawner (not in creative): "
+                + "doing it again switches that off and gives it back, and it drops if the spawner is broken. An item "
+                + "name, optionally with :meta. Empty, or a name that isn't an item: it can't be switched on or off "
+                + "(spawners already set keep throwing damaged items away).");
+        lootSpawnerFilterItemCount = c.getInt("lootSpawnerFilterItemCount", cat, 1, 1, 64, "How many of that item it takes.");
         if (c.hasChanged()) c.save();
     }
 }
