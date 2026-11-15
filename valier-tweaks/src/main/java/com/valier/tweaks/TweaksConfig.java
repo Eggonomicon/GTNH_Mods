@@ -20,6 +20,8 @@ public final class TweaksConfig {
     public static String[] lootSpawnerBlockedMobs = { "WitherBoss", "EnderDragon" };
     public static String lootSpawnerFilterItem = "minecraft:emerald_block";
     public static int lootSpawnerFilterItemCount = 1;
+    public static boolean lootSpawnerWrench = true;
+    public static boolean lootSpawnerHoverName = true;
 
     private TweaksConfig() {}
 
@@ -83,6 +85,15 @@ public final class TweaksConfig {
                 + "name, optionally with :meta. Empty, or a name that isn't an item: it can't be switched on or off "
                 + "(spawners already set keep throwing damaged items away).");
         lootSpawnerFilterItemCount = c.getInt("lootSpawnerFilterItemCount", cat, 1, 1, 64, "How many of that item it takes.");
+        lootSpawnerWrench = c.getBoolean("lootSpawnerWrench", cat, true,
+            "Sneak-right-click a loot spawner with a wrench (GregTech, EnderIO Yeta, AE2 quartz, BuildCraft and the like) "
+                + "and it comes off as a Valier Loot Spawner item: same mob, settings and emerald block; the loot it was "
+                + "keeping drops. Placing the item makes it a loot spawner again. Claims are respected. Breaking one "
+                + "with a pickaxe is unchanged.");
+        lootSpawnerHoverName = c.getBoolean("lootSpawnerHoverName", cat, true,
+            "Players' WAILA hover on a loot spawner says \"Monster Spawner (Valier Loot Spawner: Zombie)\" instead of "
+                + "\"Monster Spawner (Zombie)\". The price: the little mob inside the cage isn't drawn, because clients "
+                + "draw it from that same name. Off: the mob spins in the cage and the hover names only the mob.");
         if (c.hasChanged()) c.save();
     }
 }

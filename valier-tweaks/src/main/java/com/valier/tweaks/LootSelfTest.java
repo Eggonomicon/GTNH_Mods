@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import net.minecraft.block.Block;
+import net.minecraft.entity.EntityList;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.passive.EntityChicken;
 import net.minecraft.init.Blocks;
@@ -46,6 +47,7 @@ import gregtech.api.interfaces.metatileentity.IMetaTileEntity;
 import gregtech.api.interfaces.tileentity.IGregTechTileEntity;
 import gregtech.api.metatileentity.implementations.MTEItemPipe;
 import gregtech.api.util.GTOreDictUnificator;
+import gregtech.common.items.IDMetaTool01;
 
 /**
  * {@code valiertweaks selftest lootspawner}, test server only. In an empty chunk of the flat test world:
@@ -59,6 +61,13 @@ import gregtech.api.util.GTOreDictUnificator;
  * <li>damaged items: an emerald block switches a loot spawner to throwing worn gear away (kept in it, given back when
  * switched off, refused where protected, not on a plain spawner); zombies' worn swords stop coming out, undamaged
  * ones still do;</li>
+ * <li>wrench: a GregTech wrench (not its hammer, not a pickaxe) picks a loot spawner up as a "Valier Loot Spawner"
+ * item, its loot dropped, not where protected, not without sneaking, not a plain spawner, not with the setting off;
+ * placed, the item is the same loot spawner again (mob, settings, emerald block), even after NEI names a mob; a claim
+ * that stops placing keeps the item; with loot spawners off it places a plain spawner; the hover packet names it and
+ * carries no spawn data (the setting off: the mob and its spawn data); with a player beside it a loot spawner's own
+ * logic is never active (EnderIO runs a spawner when a player breaks it), nor is a plain spawner while it is asked for
+ * permission to convert it;</li>
  * <li>saving: saves as a plain spawner with its loot inside, loads as a plain spawner without the mod, comes back after
  * a dolly-style move (the scan) and as its chunk loads; clients get a plain spawner packet;</li>
  * <li>settings: a misspelled conversion item makes none (not free ones); blown up, its loot drops; switched off, it is
@@ -72,6 +81,7 @@ public final class LootSelfTest {
     final WorldServer world = DimensionManager.getWorld(0);
     final int bx = SelfTest.CX << 4, bz = (SelfTest.CZ + 3) << 4;
     final int rx = (SelfTest.CX + 2) << 4; // a chunk that is unloaded and loaded again
+    final int wx = (SelfTest.CX - 1) << 4; // the wrench tests, on the other side from the unloaded chunk
     int y, ticks;
     boolean done;
     final String[] said = new String[1];
@@ -82,9 +92,11 @@ public final class LootSelfTest {
     void start() {
         world.theChunkProviderServer.loadChunk(bx >> 4, bz >> 4);
         world.theChunkProviderServer.loadChunk(rx >> 4, bz >> 4);
+        world.theChunkProviderServer.loadChunk(wx >> 4, bz >> 4);
         y = world.getHeightValue(bx + 8, bz + 8) + 2;
         clear(bx, bz);
         clear(rx, bz);
+        clear(wx, bz);
         player = new FakePlayer(world, new GameProfile(UUID.fromString("00000000-0000-4000-8000-000000000d02"), "LootTester")) {
 
             @Override
@@ -97,6 +109,7 @@ public final class LootSelfTest {
         rolls();
         cycles();
         damagedItems();
+        wrench();
         saving();
         settings();
         later();
@@ -401,6 +414,279 @@ public final class LootSelfTest {
         return n;
     }
 
+    // ---- wrench ---------------------------------------------------------------------------------------------------
+
+    void wrench() {
+        int[] w1 = { wx + 2, y, bz + 2 }, w2 = { wx + 6, y, bz + 2 }, w3 = { wx + 10, y, bz + 2 }, w4 = { wx + 14, y, bz + 2 };
+        int[] w5 = { wx + 2, y, bz + 6 }, w6 = { wx + 6, y, bz + 6 }, w7 = { wx + 10, y, bz + 6 };
+        ItemStack wrench = gtTool(IDMetaTool01.WRENCH), hammer = gtTool(IDMetaTool01.HARDHAMMER);
+        if (wrench == null) {
+            SelfTest.check(false, "made a GregTech steel wrench");
+            return;
+        }
+        SelfTest.check(wrenchy(wrench, w1) && !wrenchy(hammer, w1) && !wrenchy(new ItemStack(Items.diamond_pickaxe), w1)
+            && !wrenchy(null, w1), "a GregTech wrench is a wrench (its hammer and a pickaxe aren't)");
+
+        // A zombie loot spawner with its own settings, loot kept, throwing damaged items away.
+        TileEntityMobSpawner v1 = spawner(w1, "Zombie");
+        NBTTagCompound settings = new NBTTagCompound();
+        v1.writeToNBT(settings);
+        settings.setShort("SpawnCount", (short) 6);
+        settings.setShort("MinSpawnDelay", (short) 100);
+        settings.setShort("MaxSpawnDelay", (short) 300);
+        v1.readFromNBT(settings);
+        LootSpawnerTile.mark(v1);
+        LootSpawnerTile l1 = LootSpawners.swap(world, v1);
+        l1.addToBuffer(new ItemStack(Items.leather, 3));
+        l1.noDamaged = true;
+        l1.filterPaid = new ItemStack(Blocks.emerald_block);
+
+        player.inventory.setInventorySlotContents(0, wrench);
+        player.setSneaking(false);
+        PlayerInteractEvent ev = click(w1);
+        SelfTest.check(!ev.isCanceled() && te(w1) == l1, "without sneaking, a wrench changes nothing");
+        player.setSneaking(true);
+        SelfTest.DenyBreaks guard = new SelfTest.DenyBreaks();
+        MinecraftForge.EVENT_BUS.register(guard);
+        said[0] = null;
+        try {
+            click(w1);
+        } finally {
+            MinecraftForge.EVENT_BUS.unregister(guard);
+        }
+        SelfTest.check(te(w1) == l1 && said[0] != null && said[0].contains("protected") && takeSpawnerItem() == null,
+            "where a claim protects it, a wrench can't take it (" + said[0] + ")");
+        said[0] = null;
+        ev = click(w1);
+        ItemStack item = takeSpawnerItem();
+        SelfTest.check(ev.isCanceled() && world.isAirBlock(w1[0], y, w1[2]) && item != null
+            && player.inventory.getStackInSlot(0) == wrench && said[0] != null && said[0].startsWith("Picked up"),
+            "sneak-right-click with a GregTech wrench picks it up as an item (" + said[0] + ")");
+        if (item == null) return;
+        NBTTagList lore = item.getTagCompound()
+            .getCompoundTag("display")
+            .getTagList("Lore", 8);
+        SelfTest.check(item.getDisplayName()
+            .contains("Valier Loot Spawner") && item.getDisplayName()
+                .contains("Zombie")
+            && lore.tagCount() == 3 && lore.getStringTagAt(1)
+                .contains("damaged")
+            && item.getItemDamage() == 54 && LootSpawners.savedSpawner(item) != null,
+            "the item is a Valier Loot Spawner (Zombie) that says it throws damaged items away, with the zombie's id ("
+                + item.getDisplayName() + ", " + item.getItemDamage() + ")");
+        SelfTest.check(itemsNear(w1, Items.leather) == 3 && itemsNear(w1, emerald()) == 0,
+            "the loot it kept drops, the emerald block goes with the item (" + itemsNear(w1, Items.leather) + " leather, "
+                + itemsNear(w1, emerald()) + " emerald blocks on the ground)");
+        killItems(w1);
+
+        // Placed again (as a player places a block: Forge's placement and its PlaceEvent).
+        TileEntity t2 = placeItem(item, w2);
+        SelfTest.check(item.stackSize == 0 && t2 instanceof LootSpawnerTile, "placed, the item is a loot spawner again (" + t2 + ")");
+        if (!(t2 instanceof LootSpawnerTile)) return;
+        LootSpawnerTile l2 = (LootSpawnerTile) t2;
+        SelfTest.check("Zombie".equals(l2.logic()
+            .getEntityNameToSpawn()) && l2.candidates.size() == 1 && l2.candidates.get(0).egg && l2.spawnCount == 6
+            && l2.minDelay == 100 && l2.maxDelay == 300 && l2.noDamaged && l2.filterPaid != null
+            && l2.filterPaid.getItem() == emerald() && l2.isEmpty() && l2.timer > 0,
+            "with the same mob, settings and emerald block, none of the loot, and a fresh wait");
+        l2.logic()
+            .setEntityName("Pig"); // what NEI asks for after placing a spawner item whose mob it doesn't know
+        NBTTagCompound after = new NBTTagCompound();
+        l2.writeToNBT(after);
+        SelfTest.check("Zombie".equals(l2.logic()
+            .getEntityNameToSpawn()) && "Zombie".equals(after.getString("EntityId")),
+            "NEI naming a mob for the placed spawner changes nothing");
+        NBTTagCompound sent = packetNbt((S35PacketUpdateTileEntity) l2.getDescriptionPacket());
+        String hover = sent == null ? null : sent.getString("EntityId");
+        SelfTest.check(hover != null && hover.contains("Valier Loot Spawner") && hover.contains("Zombie") && !sent.hasKey("SpawnData")
+            && EntityList.createEntityByName(hover, null) == null,
+            "players' hover names it (Monster Spawner (" + hover + ")): no mob has that name, so none is drawn");
+        LootSpawnerTile l5 = swordZombies(w5, 1.0F);
+        NBTTagCompound sent5 = packetNbt((S35PacketUpdateTileEntity) l5.getDescriptionPacket());
+        TweaksConfig.lootSpawnerHoverName = false;
+        NBTTagCompound off5;
+        try {
+            off5 = packetNbt((S35PacketUpdateTileEntity) l5.getDescriptionPacket());
+        } finally {
+            TweaksConfig.lootSpawnerHoverName = true;
+        }
+        SelfTest.check(sent5 != null && !sent5.hasKey("SpawnData") && sent5.getString("EntityId")
+            .contains("Valier Loot Spawner"), "with spawn data (zombies with swords) the hover packet leaves it out too");
+        SelfTest.check(off5 != null && "Zombie".equals(off5.getString("EntityId")) && off5.getCompoundTag("SpawnData")
+            .hasKey("Equipment"), "with lootSpawnerHoverName off, clients get the mob and its spawn data again");
+
+        // Picked up again: placing it where a claim stops it places nothing and keeps the item.
+        player.inventory.setInventorySlotContents(0, wrench);
+        click(w2);
+        ItemStack item2 = takeSpawnerItem();
+        if (item2 == null) {
+            SelfTest.check(false, "the placed loot spawner can be picked up again");
+            return;
+        }
+        ItemStack spare = item2.copy();
+        DenyPlaces deny = new DenyPlaces();
+        MinecraftForge.EVENT_BUS.register(deny);
+        TileEntity t3;
+        try {
+            t3 = placeItem(item2, w3);
+        } finally {
+            MinecraftForge.EVENT_BUS.unregister(deny);
+        }
+        SelfTest.check(t3 == null && world.isAirBlock(w3[0], y, w3[2]) && item2.stackSize == 1,
+            "where a claim stops placing, nothing is placed and the item is kept");
+
+        // Loot spawners switched off: the item places a plain spawner of its mob, the emerald block dropped.
+        TweaksConfig.lootSpawners = false;
+        TileEntity t4;
+        try {
+            t4 = placeItem(spare, w4);
+        } finally {
+            TweaksConfig.lootSpawners = true;
+        }
+        SelfTest.check(t4 != null && t4.getClass() == TileEntityMobSpawner.class && !LootSpawnerTile.isMarked((TileEntityMobSpawner) t4)
+            && "Zombie".equals(((TileEntityMobSpawner) t4).func_145881_a()
+                .getEntityNameToSpawn())
+            && itemsNear(w4, emerald()) == 1,
+            "with loot spawners switched off, the item places a plain zombie spawner and drops its emerald block");
+        world.setBlockToAir(w4[0], y, w4[2]);
+        killItems(w4);
+
+        LootSpawnerTile l6 = lootSpawner(w6, "Cow");
+        TweaksConfig.lootSpawnerWrench = false;
+        try {
+            player.inventory.setInventorySlotContents(0, wrench);
+            ev = click(w6);
+        } finally {
+            TweaksConfig.lootSpawnerWrench = true;
+        }
+        SelfTest.check(!ev.isCanceled() && te(w6) == l6, "with lootSpawnerWrench off, a wrench leaves it alone");
+        TileEntityMobSpawner v7 = spawner(w7, "Spider");
+        ev = click(w7);
+        SelfTest.check(!ev.isCanceled() && te(w7) == v7, "a wrench leaves a plain spawner alone");
+        player.inventory.setInventorySlotContents(0, null);
+        inert();
+    }
+
+    /**
+     * EnderIO runs a spawner up to 6 times when a player breaks it, and the permission check is a break event: with a
+     * player next to it, a loot spawner's own logic never counts as active (so nothing spawns), and a plain spawner
+     * being converted isn't active while it is asked. Its real range is still saved and sent.
+     */
+    void inert() {
+        int[] e1 = { wx + 2, y, bz + 10 }, e2 = { wx + 6, y, bz + 10 }, e3 = { wx + 10, y, bz + 10 };
+        LootSpawnerTile le = lootSpawner(e1, "Blaze");
+        TileEntityMobSpawner plain = spawner(e2, "Blaze"), convert = spawner(e3, "Cow");
+        player.setPosition(e2[0] + 0.5, y, e2[2] + 2.5);
+        ActiveAtBreak seen = new ActiveAtBreak();
+        world.playerEntities.add(player); // so spawners see a player next to them; nothing here spawns or ticks meanwhile
+        try {
+            boolean plainActive = plain.func_145881_a()
+                .isActivated(), lootActive = le.logic()
+                    .isActivated();
+            int before = mobsNear(e1);
+            for (int i = 0; i < 6; i++) { // what EnderIO does on a break
+                le.logic().spawnDelay = 0;
+                le.logic()
+                    .updateSpawner();
+            }
+            SelfTest.check(plainActive && !lootActive && mobsNear(e1) == before,
+                "with a player beside it, a plain spawner is active but a loot spawner isn't: run as EnderIO does on a "
+                    + "break, it spawns nothing (" + before + " -> " + mobsNear(e1) + " mobs)");
+            MinecraftForge.EVENT_BUS.register(seen);
+            try {
+                player.inventory.setInventorySlotContents(0, new ItemStack(Blocks.diamond_block, 1));
+                player.setSneaking(true);
+                click(e3);
+            } finally {
+                MinecraftForge.EVENT_BUS.unregister(seen);
+            }
+            SelfTest.check(seen.active != null && !seen.active && te(e3) instanceof LootSpawnerTile && convert.isInvalid(),
+                "a plain spawner being converted isn't active while its break event is asked (" + seen.active + ")");
+        } finally {
+            world.playerEntities.remove(player);
+            player.setPosition(bx + 8.5, y, bz + 0.5);
+            player.inventory.setInventorySlotContents(0, null);
+        }
+        NBTTagCompound live = new NBTTagCompound(), saved = new NBTTagCompound();
+        le.logic()
+            .writeToNBT(live);
+        le.writeToNBT(saved);
+        NBTTagCompound sent = packetNbt((S35PacketUpdateTileEntity) le.getDescriptionPacket());
+        SelfTest.check(live.getShort("RequiredPlayerRange") == 0 && saved.getShort("RequiredPlayerRange") == 16
+            && sent != null && sent.getShort("RequiredPlayerRange") == 16,
+            "it saves and sends its own player range (16), only its live logic has 0");
+    }
+
+    int mobsNear(int[] p) {
+        return world.getEntitiesWithinAABB(net.minecraft.entity.EntityLiving.class,
+            AxisAlignedBB.getBoundingBox(p[0] - 8, p[1] - 4, p[2] - 8, p[0] + 9, p[1] + 5, p[2] + 9))
+            .size();
+    }
+
+    /** Whether the spawner at a break event's spot counts as active (a player near enough) as the event comes. */
+    public static final class ActiveAtBreak {
+
+        Boolean active;
+
+        @SubscribeEvent
+        public void see(BlockEvent.BreakEvent event) {
+            TileEntity te = event.world.getTileEntity(event.x, event.y, event.z);
+            if (te instanceof TileEntityMobSpawner) active = ((TileEntityMobSpawner) te).func_145881_a()
+                .isActivated();
+        }
+    }
+
+    /** A steel GregTech tool. By reflection: the tool class's other interfaces (Forestry, Railcraft) aren't compiled against. */
+    static ItemStack gtTool(IDMetaTool01 id) {
+        try {
+            Object tools = Class.forName("gregtech.common.items.MetaGeneratedTool01")
+                .getField("INSTANCE")
+                .get(null);
+            return (ItemStack) tools.getClass()
+                .getMethod("getToolWithStats", int.class, int.class, Materials.class, Materials.class, long[].class)
+                .invoke(tools, id.ID, 1, Materials.Steel, Materials.Steel, null);
+        } catch (Throwable e) {
+            ValierTweaks.LOG.warn("[ValierTweaks SelfTest] couldn't make a GregTech tool", e);
+            return null;
+        }
+    }
+
+    /** GregTech's tools ask the player's held item, so it goes in the hand first. */
+    boolean wrenchy(ItemStack stack, int[] p) {
+        player.inventory.setInventorySlotContents(0, stack);
+        return LootSpawners.isWrench(stack, player, p[0], p[1], p[2]);
+    }
+
+    /** Takes the first spawner item out of the player's inventory. */
+    ItemStack takeSpawnerItem() {
+        Item spawnerItem = Item.getItemFromBlock(Blocks.mob_spawner);
+        for (int i = 0; i < player.inventory.mainInventory.length; i++) {
+            ItemStack s = player.inventory.mainInventory[i];
+            if (s != null && s.getItem() == spawnerItem && s.stackSize > 0) {
+                player.inventory.mainInventory[i] = null;
+                return s;
+            }
+        }
+        return null;
+    }
+
+    /** Places the item on a stone block below {@code p}, held in the hand, the way a player does. */
+    TileEntity placeItem(ItemStack item, int[] p) {
+        world.setBlock(p[0], p[1] - 1, p[2], Blocks.stone);
+        player.inventory.setInventorySlotContents(0, item);
+        item.tryPlaceItemIntoWorld(player, world, p[0], p[1] - 1, p[2], 1, 0.5F, 1.0F, 0.5F);
+        player.inventory.setInventorySlotContents(0, null);
+        return te(p);
+    }
+
+    public static final class DenyPlaces {
+
+        @SubscribeEvent
+        public void protect(BlockEvent.PlaceEvent event) {
+            event.setCanceled(true);
+        }
+    }
+
     // ---- saving ---------------------------------------------------------------------------------------------------
 
     void saving() {
@@ -438,9 +724,8 @@ public final class LootSelfTest {
 
         S35PacketUpdateTileEntity packet = (S35PacketUpdateTileEntity) s4.getDescriptionPacket();
         NBTTagCompound sent = packetNbt(packet); // its getter is client-only
-        SelfTest.check(sent != null && !sent.getCompoundTag("SpawnData")
-            .hasKey(LootSpawnerTile.MARK) && !sent.hasKey("SpawnPotentials") && "Cow".equals(sent.getString("EntityId")),
-            "clients get a plain spawner packet, without the loot data");
+        SelfTest.check(sent != null && !sent.hasKey("SpawnData") && !sent.hasKey("SpawnPotentials") && sent.getString("EntityId")
+            .contains("Valier Loot Spawner"), "clients get a plain spawner packet, without the loot data");
     }
 
     static NBTTagCompound packetNbt(S35PacketUpdateTileEntity packet) {
@@ -592,6 +877,7 @@ public final class LootSelfTest {
             .unregister(this);
         clear(bx, bz);
         clear(rx, bz);
+        clear(wx, bz);
         SelfTest.summary();
     }
 

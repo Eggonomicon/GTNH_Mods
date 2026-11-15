@@ -93,14 +93,28 @@ hostile spawners do nothing at all. A loot spawner skips the mobs and makes just
   keeping goes too. The emerald block is kept in the spawner (not in creative): do it again to switch it off and get
   the block back, and it drops if the spawner is broken. Gear a mob picked up drops undamaged, so that still comes
   out.
-- **Looks the same:** clients need nothing; it is an ordinary spawner to them. The little mob spins faster as the next
-  batch comes up.
+- **Picking one up (1.5.0):** sneak-right-click a loot spawner with a **wrench** (GregTech's, EnderIO's Yeta wrench,
+  AE2's quartz wrenches, BuildCraft's) and it comes off as an item called **Valier Loot Spawner** with its mob, say
+  "Valier Loot Spawner (Zombie)". The item keeps its mob, its settings and its emerald block. The loot it was keeping
+  drops. Place the item anywhere and it is a loot spawner again. Claims apply, as when making one. Placing works by
+  hand (and by anything that places blocks the way a player does).
+- **What players see (1.5.0):** clients need nothing. The WAILA hover reads "Monster Spawner (Valier Loot Spawner:
+  Zombie)". The price: the little mob inside the cage isn't drawn. Clients draw it from that same name, and no mob has
+  it, so the cage stays empty, the way vanilla shows a spawner of a mob that isn't installed. With
+  `lootSpawnerHoverName` off, the mob spins in the cage again (faster as the next batch comes up) and the hover says
+  "Monster Spawner (Zombie)".
 - **Status:** sneak-right-click it with an empty hand to see its mob, its timing, whether it is working or waiting
   (and why) and when the next batch comes. On an ordinary spawner the same click says how to make one.
 - **Protection:** it only works where the player could break the spawner, so claims keep others from converting
   yours. Ops always may.
+- **No surprise mobs (fixed in 1.5.0):** EnderIO runs a spawner up to 6 times when a player breaks it, to spawn a last
+  few mobs. The protection check above looks like a break to it. So a player who isn't an op could get a burst of real
+  mobs when making a loot spawner, switching the emerald filter or picking one up, and breaking one did it for anyone.
+  Now a loot spawner's own spawner part never runs: it needs a player within 0 blocks, and its real range is kept in
+  the save. A plain spawner is held the same way for the moment it is being converted.
 - **Breaking it** (or blowing it up) drops whatever it was keeping, and the emerald block if it has one. It is still a
-  spawner: it drops nothing else of its own, as before (EnderIO's broken spawner aside). Removed by a command or WorldEdit, what it kept is gone.
+  spawner: it drops nothing else of its own (EnderIO turns it into a broken spawner). To keep it, use a wrench.
+  Removed by a command or WorldEdit, what it kept is gone.
 - **Blocked mobs:** the Wither and the Ender Dragon (`lootSpawnerBlockedMobs`).
 
 How it is stored: in the world save it is an ordinary spawner of the same mob, marked by a small compound
@@ -125,6 +139,8 @@ way. Without the mod, it is simply an ordinary spawner of the same mob again.
 | `lootSpawnerBlockedMobs` | `WitherBoss`, `EnderDragon` | Mobs whose spawners can't become loot spawners. |
 | `lootSpawnerFilterItem` | `minecraft:emerald_block` | What makes a loot spawner throw damaged items away (kept in it, given back when switched off). Empty or not an item: it can't be switched (ones already set stay set). |
 | `lootSpawnerFilterItemCount` | `1` | How many of that item. |
+| `lootSpawnerWrench` | `true` | Sneak-right-click with a wrench picks a loot spawner up as a Valier Loot Spawner item. |
+| `lootSpawnerHoverName` | `true` | The WAILA hover says "Valier Loot Spawner: Zombie" (and no mob is drawn in the cage). Off: the mob is drawn and the hover names only the mob. |
 
 ## Build and test
 
@@ -166,8 +182,18 @@ way. Without the mod, it is simply an ordinary spawner of the same mob again.
     sword it was keeping gone, the status says so, it survives a save) and switches it back, giving the block back.
     A protected one can't be switched, and a plain spawner only says how. Zombies with swords that drop worn give
     worn swords, none once it throws damaged items away, and swords that drop undamaged still come out.
+  - **Wrench:** a real GregTech steel wrench counts (its hammer and a pickaxe don't). A sneaking fake player picks a
+    loot spawner up as a "Valier Loot Spawner (Zombie)" item with the zombie's id, the loot it kept dropping. Not
+    without sneaking, not where protected, not a plain spawner, not with `lootSpawnerWrench` off. Placed through
+    Forge's own placement, the item is the same loot spawner (mob, its own settings, emerald block, a fresh wait), and
+    NEI naming another mob for it changes nothing. A claim that stops placing keeps the item, and with loot spawners off
+    it places a plain zombie spawner, dropping the emerald block. The hover packet names it and carries no spawn data;
+    with `lootSpawnerHoverName` off it carries the mob and its spawn data.
+  - **No surprise mobs:** with a player beside them, a plain spawner counts as active and a loot spawner doesn't. Run
+    6 times the way EnderIO does on a break, the loot spawner spawns nothing. A plain spawner isn't active while its
+    conversion is being asked about. The real player range (16) is still saved and sent to clients.
   - **Saving:** it saves as a plain spawner with its loot inside and would load as one without the mod. It comes back
-    after a dolly-style move and as its chunk loads, and clients get a plain spawner packet.
+    after a dolly-style move and as its chunk loads, and clients get a plain spawner packet without the loot data.
   - **Settings:** a misspelled conversion item makes none (not free ones); blown up, what it kept (and its emerald
     block) drops; switched off, it is a plain spawner again (dressed as before, ready to spawn) and what it kept drops
     on top, emerald block included. A real chicken

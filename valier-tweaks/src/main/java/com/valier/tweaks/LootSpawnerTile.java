@@ -13,6 +13,7 @@ import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
 import net.minecraft.tileentity.MobSpawnerBaseLogic;
 import net.minecraft.tileentity.TileEntityMobSpawner;
+import net.minecraft.util.EnumChatFormatting;
 
 /**
  * A mob spawner turned into a loot spawner ({@link LootSpawners}): it never spawns a mob. Instead, every spawner cycle
@@ -50,6 +51,12 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
     boolean noDamaged;
     /** What the player paid to switch {@link #noDamaged} on: given back when switched off, dropped when it breaks. */
     ItemStack filterPaid;
+    /**
+     * The spawner's own RequiredPlayerRange, saved and sent as it is. The live vanilla logic gets 0, so it never counts
+     * as active and never spawns a mob, even when another mod runs it: EnderIO runs a spawner up to 6 times when a
+     * player breaks it, or when a break event is only asked (as {@link LootSpawners#mayChange} does).
+     */
+    int playerRange = 16;
 
     // Not saved: what the status message reports.
     LootSpawners.Status status = LootSpawners.Status.STARTING;
@@ -122,7 +129,8 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
 
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
-        super.readFromNBT(nbt);
+        playerRange = nbt.hasKey("RequiredPlayerRange", 99) ? nbt.getShort("RequiredPlayerRange") : 16;
+        super.readFromNBT(inert(nbt));
         MobSpawnerBaseLogic logic = logic();
         logic.spawnDelay = Short.MAX_VALUE;
         if (!isMarked(this)) mark(this); // not marked yet (shouldn't happen): mark it now
@@ -152,6 +160,14 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         candidates = MobLoot.candidates(nbt, egg);
     }
 
+    /** A copy of a spawner's data whose logic never counts as active (RequiredPlayerRange 0; see {@link #playerRange}). */
+    static NBTTagCompound inert(NBTTagCompound nbt) {
+        NBTTagCompound copy = (NBTTagCompound) nbt.copy();
+        if (!copy.hasKey("MaxNearbyEntities", 99)) copy.setShort("MaxNearbyEntities", (short) 6); // vanilla reads both or neither
+        copy.setShort("RequiredPlayerRange", (short) 0);
+        return copy;
+    }
+
     /** Writes the state into the mark, then saves as a vanilla spawner ("MobSpawner") so a world without the mod keeps it. */
     @Override
     public void writeToNBT(NBTTagCompound nbt) {
@@ -164,6 +180,7 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         if (!isMarked(this)) mark(this);
         logic.spawnDelay = Short.MAX_VALUE;
         super.writeToNBT(nbt); // TileEntity writes our registered id; the spawner logic writes a copy of SpawnData
+        nbt.setShort("RequiredPlayerRange", (short) playerRange); // its own, not the live logic's 0
         NBTTagCompound mark = new NBTTagCompound();
         mark.setBoolean("Egg", egg);
         mark.setInteger("Timer", timer);
@@ -187,6 +204,11 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
     /**
      * What clients get: the vanilla spawner packet, without the mark. "Delay" is the time to the next roll, so the
      * little mob spins faster as the next batch of loot comes up.
+     * <p>
+     * With {@link TweaksConfig#lootSpawnerHoverName} the mob's name is replaced by {@link #hoverName}: WAILA shows a
+     * spawner as "Monster Spawner (its EntityId)", read from this packet. No client has an entity of that name, so the
+     * cage stays empty, the way vanilla shows a spawner of a mob that isn't installed. SpawnData has to go too: a client
+     * with SpawnData but no entity would fail drawing it.
      */
     @Override
     public Packet getDescriptionPacket() {
@@ -196,8 +218,32 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         NBTTagCompound data = nbt.getCompoundTag("SpawnData");
         data.removeTag(MARK);
         if (egg && data.hasNoTags()) nbt.removeTag("SpawnData");
+        if (TweaksConfig.lootSpawnerHoverName) {
+            nbt.setString("EntityId", hoverName(logic().getEntityNameToSpawn()));
+            nbt.removeTag("SpawnData");
+        }
         nbt.setShort("Delay", (short) Math.max(0, Math.min(Short.MAX_VALUE, timer)));
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, nbt);
+    }
+
+    /** "Valier Loot Spawner: Zombie", what players' WAILA shows inside "Monster Spawner (...)". */
+    static String hoverName(String type) {
+        return EnumChatFormatting.GOLD + "Valier Loot Spawner" + EnumChatFormatting.RESET + ": " + LootSpawners.mobWords(type);
+    }
+
+    /**
+     * What a wrench takes away in the item ({@link LootSpawners#pickUp}): everything a placed one needs (mob, spawn
+     * data, settings, the damaged-items filter and what was paid for it), without its place, timer or loot.
+     */
+    NBTTagCompound saveForItem() {
+        NBTTagCompound nbt = new NBTTagCompound();
+        writeAll(nbt);
+        for (String key : new String[] { "x", "y", "z", "id", "Delay" }) nbt.removeTag(key);
+        NBTTagCompound mark = nbt.getCompoundTag("SpawnData")
+            .getCompoundTag(MARK);
+        mark.removeTag("Items");
+        mark.removeTag("Timer");
+        return (NBTTagCompound) nbt.copy(); // vanilla's SpawnPotentials entries share compounds with the live logic
     }
 
     // ---- the buffer ----------------------------------------------------------------------------------------------

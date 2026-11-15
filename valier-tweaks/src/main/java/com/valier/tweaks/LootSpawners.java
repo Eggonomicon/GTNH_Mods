@@ -3,7 +3,10 @@ package com.valier.tweaks;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
+import net.minecraft.block.Block;
+import net.minecraft.entity.EntityList;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
@@ -11,6 +14,8 @@ import net.minecraft.inventory.IInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
+import net.minecraft.nbt.NBTTagString;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.tileentity.TileEntityChest;
@@ -20,6 +25,7 @@ import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
+import net.minecraft.util.StatCollector;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
@@ -39,7 +45,8 @@ import cpw.mods.fml.common.gameevent.TickEvent;
  * spawning mobs. Every spawner cycle (its own delay, 10 to 40 seconds for a vanilla spawner) it makes the loot of the
  * mobs it would have spawned ({@link MobLoot}) and puts it into the chests, barrels, drawers, machines and pipes touching
  * it. When nothing can take any more it holds what it has and waits. Sneak-right-click it with an empty hand to see how
- * it is doing. See {@link LootSpawnerTile} for how it is stored.
+ * it is doing, with an emerald block to have it throw damaged items away, with a wrench to pick it up as an item
+ * (placing that item puts it back). See {@link LootSpawnerTile} for how it is stored.
  */
 public final class LootSpawners {
 
@@ -66,6 +73,19 @@ public final class LootSpawners {
     private static final Method INJECT = BC_COLOR == null ? null
         : method(INJECTABLE, "injectItem", ItemStack.class, boolean.class, ForgeDirection.class, BC_COLOR);
 
+    // Wrenches, found by name: BuildCraft's IToolWrench (GregTech's tools, EnderIO's Yeta wrench, AE2's quartz wrenches,
+    // BuildCraft's own all have it; GregTech's say yes only for its wrenches), AE2's own, and IC2's.
+    private static final Class<?> BC_WRENCH = find("buildcraft.api.tools.IToolWrench");
+    private static final Method BC_CAN_WRENCH = method(BC_WRENCH, "canWrench", EntityPlayer.class, int.class, int.class, int.class);
+    private static final Method BC_WRENCH_USED = method(BC_WRENCH, "wrenchUsed", EntityPlayer.class, int.class, int.class, int.class);
+    private static final Class<?> AE_WRENCH = find("appeng.api.implementations.items.IAEWrench");
+    private static final Method AE_CAN_WRENCH = method(AE_WRENCH, "canWrench", ItemStack.class, EntityPlayer.class, int.class,
+        int.class, int.class);
+    private static final Class<?> IC2_WRENCH = find("ic2.core.item.tool.ItemToolWrench");
+
+    /** The tag in a Valier Loot Spawner item holding the spawner (see {@link LootSpawnerTile#saveForItem}). */
+    static final String ITEM_TAG = "ValierLootSpawner";
+
     private int tick;
 
     // ---- turning a spawner into a loot spawner -------------------------------------------------------------------
@@ -85,7 +105,10 @@ public final class LootSpawners {
         TileEntity te = world.getTileEntity(x, y, z);
         ItemStack held = player.getHeldItem();
         if (te instanceof LootSpawnerTile) {
-            if (isFilterItem(held)) {
+            if (TweaksConfig.lootSpawnerWrench && isWrench(held, player, x, y, z)) {
+                event.setCanceled(true);
+                pickUp(player, (LootSpawnerTile) te, held);
+            } else if (isFilterItem(held)) {
                 event.setCanceled(true);
                 toggleFilter(player, (LootSpawnerTile) te, held);
             } else if (held == null || isConvertItem(held)) {
@@ -131,7 +154,7 @@ public final class LootSpawners {
                 .appendSibling(new ChatComponentText(" spawner can't be made into a loot spawner on this server.")));
             return;
         }
-        if (!mayChange(player, world, x, y, z)) {
+        if (!mayChangeSpawner(player, spawner)) {
             tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
             return;
         }
@@ -206,6 +229,164 @@ public final class LootSpawners {
             + ". Do it again to switch that off and get the item back."));
     }
 
+    // ---- picking one up with a wrench, and putting it back ----------------------------------------------------------
+
+    /** A wrench, as the mods that make them say: GregTech's tools are all BuildCraft wrenches, but only wrenches say yes. */
+    static boolean isWrench(ItemStack held, EntityPlayer player, int x, int y, int z) {
+        if (held == null || held.getItem() == null) return false;
+        Item item = held.getItem();
+        try {
+            if (BC_WRENCH != null && BC_WRENCH.isInstance(item))
+                return BC_CAN_WRENCH == null || (Boolean) BC_CAN_WRENCH.invoke(item, player, x, y, z);
+            if (AE_WRENCH != null && AE_WRENCH.isInstance(item))
+                return AE_CAN_WRENCH == null || (Boolean) AE_CAN_WRENCH.invoke(item, held, player, x, y, z);
+        } catch (Throwable e) {
+            ValierTweaks.LOG.debug("Loot spawner: couldn't ask {} if it is a wrench: {}", item.getClass()
+                .getName(), e);
+            return false;
+        }
+        if (IC2_WRENCH != null && IC2_WRENCH.isInstance(item)) return true;
+        return item.getToolClasses(held)
+            .contains("wrench");
+    }
+
+    /** Lets the wrench know it was used (some take durability for it). */
+    static void wrenchUsed(ItemStack held, EntityPlayer player, int x, int y, int z) {
+        if (held == null || BC_WRENCH == null || BC_WRENCH_USED == null || !BC_WRENCH.isInstance(held.getItem())) return;
+        try {
+            BC_WRENCH_USED.invoke(held.getItem(), player, x, y, z);
+        } catch (Throwable e) {
+            ValierTweaks.LOG.debug("Loot spawner: {} failed as a wrench: {}", held.getItem()
+                .getClass()
+                .getName(), e);
+        }
+    }
+
+    /**
+     * Sneak-right-click on a loot spawner with a wrench: it comes off as a Valier Loot Spawner item ({@link #toItem})
+     * carrying its mob, settings and the damaged-items filter with what was paid for it. The loot it was keeping drops.
+     */
+    static void pickUp(EntityPlayer player, LootSpawnerTile t, ItemStack wrench) {
+        World world = t.getWorldObj();
+        int x = t.xCoord, y = t.yCoord, z = t.zCoord;
+        if (!mayChange(player, world, x, y, z)) {
+            tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
+            return;
+        }
+        String type = t.logic()
+            .getEntityNameToSpawn();
+        boolean filtered = t.noDamaged;
+        ItemStack item = toItem(t);
+        int stacks = 0;
+        for (int i = 0; i < LootSpawnerTile.SLOTS; i++) {
+            if (t.items[i] != null) {
+                drop(world, x, y, z, t.items[i]);
+                stacks++;
+            }
+            t.items[i] = null;
+        }
+        t.filterPaid = null; // it goes with the item
+        t.markDirty();
+        world.playAuxSFX(2001, x, y, z, Block.getIdFromBlock(Blocks.mob_spawner)); // the sound and bits of a break
+        world.setBlockToAir(x, y, z); // no break or harvest event: nothing else drops
+        give(player, item);
+        wrenchUsed(wrench, player, x, y, z);
+        ValierTweaks.LOG.info("{} picked up the {} loot spawner at dim {} {} {} {} with a wrench", player.getCommandSenderName(),
+            type, world.provider.dimensionId, x, y, z);
+        IChatComponent msg = text(EnumChatFormatting.GREEN, "Picked up the loot spawner (").appendSibling(mobName(type))
+            .appendSibling(new ChatComponentText("). Place it anywhere and it is a loot spawner again, with the same mob and "
+                + "settings" + (filtered ? ", still throwing damaged items away" : "") + "."));
+        if (stacks > 0) msg.appendSibling(new ChatComponentText(" The loot it was keeping dropped."));
+        tell(player, msg);
+    }
+
+    /**
+     * A vanilla spawner item named "Valier Loot Spawner (Zombie)", holding the spawner in {@value #ITEM_TAG}; its damage
+     * is the mob's id, so clients with NEI draw the right mob in it.
+     */
+    static ItemStack toItem(LootSpawnerTile t) {
+        String type = t.logic()
+            .getEntityNameToSpawn();
+        String mob = mobWords(type);
+        ItemStack stack = new ItemStack(Blocks.mob_spawner, 1, entityId(type));
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setTag(ITEM_TAG, t.saveForItem());
+        NBTTagCompound display = new NBTTagCompound();
+        display.setString("Name", EnumChatFormatting.RESET + "" + EnumChatFormatting.GOLD + "Valier Loot Spawner"
+            + EnumChatFormatting.RESET + " (" + mob + ")");
+        String grey = EnumChatFormatting.RESET + "" + EnumChatFormatting.GRAY;
+        NBTTagList lore = new NBTTagList();
+        lore.appendTag(new NBTTagString(grey + "Makes the loot of each " + mob + ", no mobs."));
+        if (t.noDamaged) lore.appendTag(new NBTTagString(grey + "Throws damaged items away."));
+        lore.appendTag(new NBTTagString(grey + "Place it and it is a loot spawner again."));
+        display.setTag("Lore", lore);
+        tag.setTag("display", display);
+        stack.setTagCompound(tag);
+        return stack;
+    }
+
+    /** The spawner a Valier Loot Spawner item holds, or null for any other item. */
+    static NBTTagCompound savedSpawner(ItemStack stack) {
+        if (stack == null || stack.getItem() != Item.getItemFromBlock(Blocks.mob_spawner) || !stack.hasTagCompound()) return null;
+        NBTTagCompound tag = stack.getTagCompound();
+        return tag.hasKey(ITEM_TAG, 10) ? tag.getCompoundTag(ITEM_TAG) : null;
+    }
+
+    /**
+     * A Valier Loot Spawner item placed: the spawner vanilla just made (a pig spawner) gets what the item holds and
+     * becomes a loot spawner. Lowest priority and not for cancelled placements, so claims that stop it win.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void onPlace(BlockEvent.PlaceEvent event) {
+        if (event.world.isRemote || event.placedBlock != Blocks.mob_spawner) return;
+        NBTTagCompound saved = savedSpawner(event.itemInHand);
+        if (saved != null) place(event.world, event.x, event.y, event.z, saved, event.player);
+    }
+
+    static TileEntity place(World world, int x, int y, int z, NBTTagCompound saved, EntityPlayer player) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te == null || te.getClass() != TileEntityMobSpawner.class) return te;
+        NBTTagCompound tag = (NBTTagCompound) saved.copy();
+        tag.setInteger("x", x);
+        tag.setInteger("y", y);
+        tag.setInteger("z", z);
+        tag.setString("id", "MobSpawner");
+        TileEntityMobSpawner spawner = (TileEntityMobSpawner) te;
+        spawner.readFromNBT(tag);
+        if (!LootSpawnerTile.isMarked(spawner)) return spawner;
+        if (!TweaksConfig.lootSpawners) { // switched off: a plain spawner of that mob, its emerald block dropped
+            revert(world, spawner);
+            return spawner;
+        }
+        LootSpawnerTile loot = swap(world, spawner);
+        loot.timer = nextDelay(loot, world);
+        ValierTweaks.LOG.info("{} placed a {} loot spawner at {}", player == null ? "Something" : player.getCommandSenderName(),
+            loot.logic()
+                .getEntityNameToSpawn(),
+            loot.where());
+        return loot;
+    }
+
+    /** The mob's global entity id (what NEI's spawner item uses), or 0 for mobs without one. */
+    static int entityId(String type) {
+        Object cls = EntityList.stringToClassMapping.get(type);
+        if (cls == null) return 0;
+        for (Object o : EntityList.IDtoClassMapping.entrySet()) {
+            Map.Entry<?, ?> e = (Map.Entry<?, ?>) o;
+            if (e.getValue() == cls && e.getKey() instanceof Integer) return (Integer) e.getKey();
+        }
+        return 0;
+    }
+
+    /** The mob's name as the server's language has it ("Zombie"), else its entity name without the mod's prefix. */
+    static String mobWords(String type) {
+        if (type == null) return "nothing";
+        String key = "entity." + type + ".name";
+        if (StatCollector.canTranslate(key)) return StatCollector.translateToLocal(key);
+        int dot = type.lastIndexOf('.');
+        return dot >= 0 ? type.substring(dot + 1) : type;
+    }
+
     /** Worn: a tool, weapon or piece of armour that has lost durability (mobs' gear drops worn). */
     static boolean damaged(ItemStack stack) {
         return stack != null && stack.getItem() != null && stack.isItemDamaged();
@@ -232,6 +413,24 @@ public final class LootSpawners {
             return !MinecraftForge.EVENT_BUS.post(event);
         } finally {
             asking = false;
+        }
+    }
+
+    /**
+     * {@link #mayChange} for a plain spawner, made inert while it is asked: EnderIO runs a spawner up to 6 times on a
+     * player's break event, even one that is only asked, which would spawn real mobs at the click.
+     */
+    static boolean mayChangeSpawner(EntityPlayer player, TileEntityMobSpawner spawner) {
+        World world = spawner.getWorldObj();
+        int x = spawner.xCoord, y = spawner.yCoord, z = spawner.zCoord;
+        if (spawner instanceof LootSpawnerTile) return mayChange(player, world, x, y, z); // never active anyway
+        NBTTagCompound own = new NBTTagCompound();
+        spawner.writeToNBT(own);
+        spawner.readFromNBT(LootSpawnerTile.inert(own));
+        try {
+            return mayChange(player, world, x, y, z);
+        } finally {
+            spawner.readFromNBT((NBTTagCompound) own.copy());
         }
     }
 
@@ -638,6 +837,7 @@ public final class LootSpawners {
         else if (itemOf(TweaksConfig.lootSpawnerFilterItem) != null) msg.appendSibling(new ChatComponentText(" Sneak-right-click it with ")
             .appendSibling(costText(TweaksConfig.lootSpawnerFilterItem, TweaksConfig.lootSpawnerFilterItemCount))
             .appendSibling(new ChatComponentText(" to throw damaged items away.")));
+        if (TweaksConfig.lootSpawnerWrench) msg.appendSibling(new ChatComponentText(" A wrench picks it up."));
         return msg;
     }
 
