@@ -69,7 +69,7 @@ final class SelfTest {
 
     static final boolean ENABLED = Boolean.getBoolean("valiertweaks.selftest");
 
-    private static final int CX = 400, CZ = 200; // an empty corner of the test world
+    static final int CX = 400, CZ = 200; // an empty corner of the test world
     private static final int HEIGHT = 10;
 
     private static int passed, failed;
@@ -80,8 +80,8 @@ final class SelfTest {
     private static String stepName = "trees";
 
     static void run(ICommandSender sender, String step) {
-        if (!"trees".equals(step) && !"peaceful".equals(step) && !"boilers".equals(step)) {
-            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers"));
+        if (!"trees".equals(step) && !"peaceful".equals(step) && !"boilers".equals(step) && !"lootspawner".equals(step)) {
+            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner"));
             return;
         }
         passed = failed = 0;
@@ -90,6 +90,7 @@ final class SelfTest {
         try {
             if ("trees".equals(step)) new Trees().start();
             else if ("boilers".equals(step)) new Boilers().start();
+            else if ("lootspawner".equals(step)) new LootSelfTest().start();
             else new Peaceful().start();
         } catch (Throwable t) {
             ValierTweaks.LOG.error("[ValierTweaks SelfTest] " + step + " threw", t);
@@ -500,12 +501,12 @@ final class SelfTest {
                 .getBoolean("Broken");
     }
 
-    private static void summary() {
+    static void summary() {
         String s = "SUMMARY " + stepName + ": " + passed + " passed, " + failed + " failed" + (failures.isEmpty() ? "" : " " + failures);
         log(s);
     }
 
-    private static void check(boolean ok, String what) {
+    static void check(boolean ok, String what) {
         if (ok) passed++;
         else {
             failed++;
@@ -514,7 +515,7 @@ final class SelfTest {
         log((ok ? "PASS " : "FAIL ") + what);
     }
 
-    private static void log(String text) {
+    static void log(String text) {
         ValierTweaks.LOG.info("[ValierTweaks SelfTest] " + text);
     }
 }

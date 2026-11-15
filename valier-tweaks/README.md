@@ -69,6 +69,40 @@ is installed):
 - **Advanced boilers:** in `MTEAdvancedBoilerBase.consumeFuel`, the two calls that add tiny ash to the output slot add
   nothing.
 
+## Loot spawners (1.3.0)
+
+A mob farm spawns real mobs, which then have to be killed and their drops picked up: lag, and on a peaceful server
+hostile spawners do nothing at all. A loot spawner skips the mobs and makes just their loot:
+
+- **Making one:** sneak-right-click a mob spawner with a **block of diamond** (used up; not in creative). Any spawner
+  works: one found in a dungeon or fortress, or one moved with JABBA's diamond dolly. The diamond block isn't placed.
+- **What it does:** it stops spawning mobs. Every spawner cycle (its own timing; for a vanilla spawner, up to 4 mobs
+  every 10 to 40 seconds) it makes the loot those mobs would have dropped and puts it into the inventories touching
+  it, on any side: chests (double chests too), barrels, drawers, hoppers, machines, AE2 interfaces, GregTech item
+  pipes, EnderIO item conduits and BuildCraft pipes.
+- **When everything is full** it keeps that batch itself (up to 27 stacks) and makes no more until the loot has gone.
+  Nothing is ever dropped on the ground. Hoppers under it, EnderIO conduits set to extract and AE2 import buses can
+  also pull from what it keeps. With nothing touching it, it makes nothing.
+- **The loot:** the mob is made in memory only (never added to the world, so no AI, pathfinding or ticking), then put
+  through what a player kill runs: the mob's normal drops, its equipment, the 2.5% rare drop (a wither skull, say), and
+  the drop event other mods add loot through. So drops only a player kill gives (blaze rods) come too. There's no
+  Looting and no XP. Big slimes split into small ones and those drop slimeballs, as when killed. A spawner that dresses
+  its mobs (a skeleton's bow, Nether skeletons that are wither skeletons) does so here too.
+- **Looks the same:** clients need nothing; it is an ordinary spawner to them. The little mob spins faster as the next
+  batch comes up.
+- **Status:** sneak-right-click it with an empty hand to see its mob, its timing, whether it is working or waiting
+  (and why) and when the next batch comes. On an ordinary spawner the same click says how to make one.
+- **Protection:** it only works where the player could break the spawner, so claims keep others from converting
+  yours. Ops always may.
+- **Breaking it** (or blowing it up) drops whatever it was keeping. It is still a spawner: it drops nothing else, as
+  before. Removed by a command or WorldEdit, what it kept is gone.
+- **Blocked mobs:** the Wither and the Ender Dragon (`lootSpawnerBlockedMobs`).
+
+How it is stored: in the world save it is an ordinary spawner of the same mob, marked by a small compound
+(`ValierLootSpawner`) inside its spawn data. Vanilla keeps that through everything (saves, dollies, NBT tools). The
+mod turns a marked spawner back into a loot spawner as its chunk loads, or within 2 seconds if it turns up some other
+way. Without the mod, it is simply an ordinary spawner of the same mob again.
+
 ## Config (`config/valiertweaks.cfg`)
 
 | Setting | Default | Meaning |
@@ -78,6 +112,12 @@ is installed):
 | `logsPerTick` | `128` | Extra logs broken per tick (Tinkers' own rate). |
 | `pdim` / `peacefulDimensions` | `true` | The `/pdim peaceful` switch. Off: no dimension is kept peaceful. |
 | `boilers` / `noBoilerAsh` | `true` | Solid fuel boilers make no ash. Off: GregTech's normal ash. |
+| `lootspawner` / `lootSpawners` | `true` | Loot spawners work. Off: none can be made, and existing ones become ordinary spawners of the same mob again within 2 seconds of loading, dropping what they kept. |
+| `lootSpawnerItem` | `minecraft:diamond_block` | What it takes to make one (`mod:item` or `mod:item:meta`). Empty: free, with an empty hand. A name that isn't an item: none can be made (a warning is logged). |
+| `lootSpawnerItemCount` | `1` | How many of that item. |
+| `lootSpawnerSpeed` | `1.0` | 1 = as fast as the spawner would spawn mobs; 2 = twice as often. |
+| `lootSpawnerNeedsPlayer` | `false` | Only work with a player within 16 blocks, like a vanilla spawner. Off: whenever its chunk is loaded. |
+| `lootSpawnerBlockedMobs` | `WitherBoss`, `EnderDragon` | Mobs whose spawners can't become loot spawners. |
 
 ## Build and test
 
@@ -107,3 +147,18 @@ is installed):
   - **Ash back on**, to show the test reaches GregTech's ash code: the same 60 coal leave ash, and a coal block leaves
     one dust of dark ash.
   - The setting is put back and the boilers are removed.
+- **Loot spawner self-test:** `valiertweaks selftest lootspawner` (same flag), in an empty chunk of the test world.
+  - **Clicks:** a sneaking fake player with diamond blocks makes one (one block used, none placed). Not sneaking does
+    nothing, an empty hand shows the status or a hint, and a protected spawner or a Wither spawner is refused.
+  - **Loot:** zombies, blazes (blaze rods), spiders, slimes (splitting) and wither skeletons from spawn data (the rare
+    skull, no arrows). Nothing for a blocked mob or an arrow, and nothing joins the world.
+  - **Output:** into a chest; kept when the chest is full and handed over later; nothing with nothing touching it;
+    into a hopper beside it; pulled by a hopper under it; nothing can be put into it; a GregTech item pipe connects
+    to it and takes its loot.
+  - **Saving:** it saves as a plain spawner with its loot inside and would load as one without the mod. It comes back
+    after a dolly-style move and as its chunk loads, and clients get a plain spawner packet.
+  - **Settings:** a misspelled conversion item makes none (not free ones); blown up, what it kept drops; switched off,
+    it is a plain spawner again (dressed as before, ready to spawn) and what it kept drops on top. A real chicken
+    nearby is never taken as a baby zombie's mount during 2000 zombie rolls.
+  - **Over 70 ticks:** a broken one drops what it kept (a permission check alone doesn't). Its chunk unloads and loads
+    again with it still working, and one left running fills its chest on its own.

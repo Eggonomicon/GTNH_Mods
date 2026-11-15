@@ -11,12 +11,14 @@ import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
+import cpw.mods.fml.common.registry.GameRegistry;
 
 /**
  * Small server-side gameplay fixes for Valier: a Tinkers' Construct lumber axe fells the whole tree even when it breaks
  * partway ({@link TreeFinisher}), players can make their Personal Space dimension peaceful ({@link PeacefulDims},
- * {@code /pdim}), and GregTech's solid fuel boilers make no ash ({@code mixin} package, loaded by
- * {@link LateMixinLoader}).
+ * {@code /pdim}), GregTech's solid fuel boilers make no ash ({@code mixin} package, loaded by
+ * {@link LateMixinLoader}), and a spawner can become a loot spawner that makes its mobs' loot without the mobs
+ * ({@link LootSpawners}).
  */
 @Mod(
     modid = ValierTweaks.MODID,
@@ -42,6 +44,14 @@ public class ValierTweaks {
         FMLCommonHandler.instance()
             .bus()
             .register(peaceful); // the sweep, on server ticks
+        // Loot spawners. The tile is always registered: it saves as a vanilla spawner but needs an id while saving.
+        GameRegistry.registerTileEntity(LootSpawnerTile.class, MODID + ".LootSpawner");
+        LootSpawners loot = new LootSpawners();
+        MinecraftForge.EVENT_BUS.register(loot); // clicks, chunk loads
+        FMLCommonHandler.instance()
+            .bus()
+            .register(loot); // the scan, on server ticks
+        MinecraftForge.EVENT_BUS.register(new MobLoot.Guard()); // what a loot roll tries to add to the world
     }
 
     @Mod.EventHandler
