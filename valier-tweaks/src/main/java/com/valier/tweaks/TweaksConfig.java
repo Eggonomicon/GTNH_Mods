@@ -25,6 +25,9 @@ public final class TweaksConfig {
     public static int lootSpawnerXpPerBottle = 7;
     public static String lootSpawnerLootingItem = "minecraft:lapis_block";
     public static int[] lootSpawnerLootingBlocks = { 1, 3, 6 };
+    public static String lootSpawnerSpeedItem = "ExtraUtilities:cursedearthside:0";
+    public static int[] lootSpawnerSpeedBlocks = { 1, 3, 6 };
+    public static boolean lootSpawnerSpeedBelow = true;
     public static boolean lootSpawnerInfernalMobs = true;
     public static boolean lootSpawnerSpecialMobs = true;
     public static boolean lootSpawnerWrench = true;
@@ -32,6 +35,14 @@ public final class TweaksConfig {
     public static boolean lootSpawnerSpawnEggs = false;
 
     private TweaksConfig() {}
+
+    /** Levels' block counts: 1 to 10 rising numbers above 0, else 1, 3, 6 (with a warning). */
+    private static int[] tiers(int[] tiers, String key) {
+        boolean rising = tiers.length > 0 && tiers.length <= 10;
+        for (int i = 0; rising && i < tiers.length; i++) rising = tiers[i] > (i == 0 ? 0 : tiers[i - 1]);
+        if (!rising) ValierTweaks.LOG.warn(key + " must be 1 to 10 rising numbers above 0; using 1, 3, 6");
+        return rising ? tiers : new int[] { 1, 3, 6 };
+    }
 
     static void load(File file) {
         Configuration c = new Configuration(file);
@@ -108,14 +119,24 @@ public final class TweaksConfig {
                 + "killed with a Looting sword. How many it holds sets the level (lootSpawnerLootingBlocks). They stay in "
                 + "it and drop when it is broken (a wrench keeps them in the item). An item name, optionally with :meta. "
                 + "Empty, or a name that isn't an item: none can be put in (spawners that have some keep their Looting).");
-        int[] tiers = c.get(cat, "lootSpawnerLootingBlocks", new int[] { 1, 3, 6 },
+        lootSpawnerLootingBlocks = tiers(c.get(cat, "lootSpawnerLootingBlocks", new int[] { 1, 3, 6 },
             "How many of that item a loot spawner needs in it for each Looting level, in order: by default 1 for Looting "
                 + "I, 3 for Looting II, 6 for Looting III. More numbers allow higher levels (each larger than the last).")
-            .getIntList();
-        boolean rising = tiers.length > 0 && tiers.length <= 10;
-        for (int i = 0; rising && i < tiers.length; i++) rising = tiers[i] > (i == 0 ? 0 : tiers[i - 1]);
-        if (!rising) ValierTweaks.LOG.warn("lootSpawnerLootingBlocks must be 1 to 10 rising numbers above 0; using 1, 3, 6");
-        lootSpawnerLootingBlocks = rising ? tiers : new int[] { 1, 3, 6 };
+            .getIntList(), "lootSpawnerLootingBlocks");
+        lootSpawnerSpeedItem = c.getString("lootSpawnerSpeedItem", cat, "ExtraUtilities:cursedearthside:0",
+            "Sneak-right-click a loot spawner with this to put one in: its batches come faster. How many it holds sets "
+                + "the Speed level (lootSpawnerSpeedBlocks), and each level adds its normal speed once more: Speed I is "
+                + "twice as fast, II three times, III four times. They stay in it and drop when it is broken (a wrench "
+                + "keeps them in the item). By default Extra Utilities' cursed earth. An item name, optionally with :meta. "
+                + "Empty, or a name that isn't an item: none can be put in (spawners that have some keep their Speed).");
+        lootSpawnerSpeedBlocks = tiers(c.get(cat, "lootSpawnerSpeedBlocks", new int[] { 1, 3, 6 },
+            "How many of that item a loot spawner needs in it for each Speed level, in order: by default 1 for Speed I, "
+                + "3 for Speed II, 6 for Speed III. More numbers allow higher levels (each larger than the last). However "
+                + "fast, a loot spawner makes at most one batch a second.")
+            .getIntList(), "lootSpawnerSpeedBlocks");
+        lootSpawnerSpeedBelow = c.getBoolean("lootSpawnerSpeedBelow", cat, true,
+            "That item placed as a block right under a loot spawner counts as one put in, the way Extra Utilities' cursed "
+                + "earth under a spawner speeds it up.");
         lootSpawnerInfernalMobs = c.getBoolean("lootSpawnerInfernalMobs", cat, true,
             "With Infernal Mobs installed, a loot spawner's mobs can be elites as real spawned mobs are (Infernal Mobs' own "
                 + "rarity settings), and the elites' extra loot (enchanted armour, tools, books and so on) and XP come out "

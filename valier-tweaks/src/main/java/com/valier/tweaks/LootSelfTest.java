@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.UUID;
 
 import net.minecraft.block.Block;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityList;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.passive.EntityChicken;
+import net.minecraft.entity.passive.EntityVillager;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
 import net.minecraft.inventory.IInventory;
@@ -86,6 +88,11 @@ import gregtech.common.items.IDMetaTool01;
  * queue); switched off, none;</li>
  * <li>taking back: a sneaking hit with an empty hand gives back the lapis, gold and emerald blocks and switches those
  * off; not without sneaking, not where protected, and an empty one says so;</li>
+ * <li>cursed earth (Extra Utilities): 1, 3 and 6 give Speed I, II and III, batches 2, 3 and 4 times as often (the one
+ * counting down too); one per click, refused where protected and past the most; status, hover, the wrench's item and
+ * a save keep it; taken back, normal speed; one under it counts as one (not with the setting off); only a hint on a
+ * plain spawner; and Extra Utilities' own spawner code (cursed earth under any spawner) counts a plain spawner down but
+ * never gets a loot spawner's count to 0, so no real mob comes out;</li>
  * <li>saving: saves as a plain spawner with its loot inside, loads as a plain spawner without the mod, comes back after
  * a dolly-style move (the scan) and as its chunk loads; clients get a plain spawner packet;</li>
  * <li>settings: a misspelled conversion item makes none (not free ones); blown up, its loot drops; switched off, it is
@@ -139,6 +146,7 @@ public final class LootSelfTest {
         infernal();
         special();
         takeBack();
+        speed();
         saving();
         settings();
         later();
@@ -808,7 +816,7 @@ public final class LootSelfTest {
         player.inventory.setInventorySlotContents(0, new ItemStack(Blocks.lapis_block, 10));
         said[0] = null;
         ev = click(x2);
-        SelfTest.check(ev.isCanceled() && ll.lootingBlocks == 1 && LootSpawners.lootingLevel(ll.lootingBlocks) == 1 && held() == 9
+        SelfTest.check(ev.isCanceled() && ll.looting.blocks == 1 && LootSpawners.lootingLevel(ll.looting.blocks) == 1 && held() == 9
             && said[0] != null && said[0].startsWith("Looting I now"), "one lapis block gives Looting I (" + said[0] + ")");
         MinecraftForge.EVENT_BUS.register(guard);
         said[0] = null;
@@ -817,12 +825,12 @@ public final class LootSelfTest {
         } finally {
             MinecraftForge.EVENT_BUS.unregister(guard);
         }
-        SelfTest.check(ll.lootingBlocks == 1 && held() == 9 && said[0] != null && said[0].contains("protected"),
+        SelfTest.check(ll.looting.blocks == 1 && held() == 9 && said[0] != null && said[0].contains("protected"),
             "where a claim protects it, none goes in (" + said[0] + ")");
         click(x2);
         said[0] = null;
         click(x2);
-        SelfTest.check(ll.lootingBlocks == 3 && held() == 7 && said[0] != null && said[0].startsWith("Looting II now")
+        SelfTest.check(ll.looting.blocks == 3 && held() == 7 && said[0] != null && said[0].startsWith("Looting II now")
             && said[0].contains("3 more for Looting III"), "3 give Looting II, and it says what Looting III takes (" + said[0] + ")");
         click(x2);
         click(x2);
@@ -831,7 +839,7 @@ public final class LootSelfTest {
         String third = said[0];
         said[0] = null;
         click(x2);
-        SelfTest.check(ll.lootingBlocks == 6 && ll.lootingPaid == 6 && held() == 4 && third != null && third.startsWith("Looting III now")
+        SelfTest.check(ll.looting.blocks == 6 && ll.looting.paid == 6 && held() == 4 && third != null && third.startsWith("Looting III now")
             && said[0] != null && said[0].contains("the most"), "6 give Looting III, and no more go in (" + third + " / " + said[0] + ")");
         player.inventory.setInventorySlotContents(0, null);
         said[0] = null;
@@ -842,7 +850,7 @@ public final class LootSelfTest {
         copy = new LootSpawnerTile();
         copy.readFromNBT(tag);
         SelfTest.check(said[0] != null && said[0].contains("Looting III (6 in it; the most)") && sent != null && sent.getString("EntityId")
-            .contains("Looting III") && copy.lootingBlocks == 6 && copy.lootingPaid == 6 && copy.lootingItem != null,
+            .contains("Looting III") && copy.looting.blocks == 6 && copy.looting.paid == 6 && copy.looting.item != null,
             "its status and players' hover say Looting III, and it is saved (" + said[0] + " / " + (sent == null ? null : sent.getString("EntityId")) + ")");
         ItemStack wrench = gtTool(IDMetaTool01.WRENCH);
         player.inventory.setInventorySlotContents(0, wrench);
@@ -857,8 +865,8 @@ public final class LootSelfTest {
                 .contains("Looting III");
         }
         TileEntity placed = item == null ? null : placeItem(item, x3);
-        SelfTest.check(named && placed instanceof LootSpawnerTile && ((LootSpawnerTile) placed).lootingBlocks == 6
-            && ((LootSpawnerTile) placed).lootingPaid == 6, "picked up with a wrench its item says Looting III, and placed it still has it");
+        SelfTest.check(named && placed instanceof LootSpawnerTile && ((LootSpawnerTile) placed).looting.blocks == 6
+            && ((LootSpawnerTile) placed).looting.paid == 6, "picked up with a wrench its item says Looting III, and placed it still has it");
         ArrayList<ItemStack> drops = new ArrayList<>();
         MinecraftForge.EVENT_BUS.post(new BlockEvent.HarvestDropsEvent(x3[0], y, x3[2], world, Blocks.mob_spawner, 0, 0, 1.0F,
             drops, null, false));
@@ -978,9 +986,9 @@ public final class LootSelfTest {
     void takeBack() {
         int[] t1 = { wx + 14, y, bz };
         LootSpawnerTile lt = lootSpawner(t1, "Zombie");
-        lt.lootingBlocks = 3;
-        lt.lootingPaid = 3;
-        lt.lootingItem = new ItemStack(Blocks.lapis_block);
+        lt.looting.blocks = 3;
+        lt.looting.paid = 3;
+        lt.looting.item = new ItemStack(Blocks.lapis_block);
         lt.xpBottles = true;
         lt.xpPaid = new ItemStack(Blocks.gold_block);
         lt.noDamaged = true;
@@ -988,7 +996,7 @@ public final class LootSelfTest {
         for (int i = 0; i < player.inventory.mainInventory.length; i++) player.inventory.mainInventory[i] = null;
         player.setSneaking(false);
         PlayerInteractEvent ev = hit(t1);
-        SelfTest.check(!ev.isCanceled() && lt.lootingBlocks == 3, "without sneaking, a hit takes nothing out");
+        SelfTest.check(!ev.isCanceled() && lt.looting.blocks == 3, "without sneaking, a hit takes nothing out");
         player.setSneaking(true);
         SelfTest.DenyBreaks guard = new SelfTest.DenyBreaks();
         MinecraftForge.EVENT_BUS.register(guard);
@@ -998,11 +1006,11 @@ public final class LootSelfTest {
         } finally {
             MinecraftForge.EVENT_BUS.unregister(guard);
         }
-        SelfTest.check(lt.lootingBlocks == 3 && lt.xpBottles && lt.noDamaged && said[0] != null && said[0].contains("protected"),
+        SelfTest.check(lt.looting.blocks == 3 && lt.xpBottles && lt.noDamaged && said[0] != null && said[0].contains("protected"),
             "where a claim protects it, nothing comes out (" + said[0] + ")");
         said[0] = null;
         ev = hit(t1);
-        SelfTest.check(ev.isCanceled() && lt.lootingBlocks == 0 && lt.lootingPaid == 0 && !lt.xpBottles && lt.xpPaid == null && !lt.noDamaged
+        SelfTest.check(ev.isCanceled() && lt.looting.blocks == 0 && lt.looting.paid == 0 && !lt.xpBottles && lt.xpPaid == null && !lt.noDamaged
             && lt.filterPaid == null && invCount(Item.getItemFromBlock(Blocks.lapis_block)) == 3
             && invCount(Item.getItemFromBlock(Blocks.gold_block)) == 1 && invCount(emerald()) == 1,
             "a sneaking hit with an empty hand gives back 3 lapis, the gold and the emerald block and switches those off ("
@@ -1012,6 +1020,146 @@ public final class LootSelfTest {
         hit(t1);
         SelfTest.check(said[0] != null && said[0].contains("no blocks"), "an empty one says so (" + said[0] + ")");
         for (int i = 0; i < player.inventory.mainInventory.length; i++) player.inventory.mainInventory[i] = null;
+    }
+
+    /**
+     * Cursed earth: one per click for Speed, one under it counts as one, and Extra Utilities' own spawner code (cursed
+     * earth under any spawner, every 5 s) never spawns real mobs from a loot spawner.
+     */
+    void speed() {
+        Item cursed = LootSpawners.itemOf(TweaksConfig.lootSpawnerSpeedItem);
+        SelfTest.check(cursed != null, "Extra Utilities' cursed earth is the Speed item (" + TweaksConfig.lootSpawnerSpeedItem + ")");
+        if (cursed == null) return;
+        Block earth = Block.getBlockFromItem(cursed);
+        boolean belowWas = TweaksConfig.lootSpawnerSpeedBelow;
+        TweaksConfig.lootSpawnerSpeedBelow = true;
+        LootSpawners.Kind sk = LootSpawners.Kind.SPEED;
+        SelfTest.check(sk.level(0) == 0 && sk.level(1) == 1 && sk.level(2) == 1 && sk.level(3) == 2 && sk.level(5) == 2
+            && sk.level(6) == 3 && sk.level(60) == 3, "1, 3 and 6 cursed earth give Speed I, II and III");
+        int[] p1 = { wx + 14, y, bz + 6 }, p2 = { wx + 2, y, bz }, plainAt = { wx + 10, y, bz };
+        LootSpawnerTile sp = lootSpawner(p1, "Zombie");
+        sp.minDelay = sp.maxDelay = 400;
+        int plain = LootSpawners.nextDelay(sp, world);
+        player.setSneaking(true);
+        for (int i = 0; i < player.inventory.mainInventory.length; i++) player.inventory.mainInventory[i] = null;
+        player.inventory.currentItem = 0;
+        player.inventory.setInventorySlotContents(0, new ItemStack(cursed, 10, 0));
+        sp.timer = 400;
+        said[0] = null;
+        PlayerInteractEvent ev = click(p1);
+        SelfTest.check(ev.isCanceled() && sp.speed.blocks == 1 && held() == 9 && said[0] != null
+            && said[0].startsWith("Speed I now, 2× as fast") && sp.timer == 200 && plain == 400
+            && LootSpawners.nextDelay(sp, world) == 200, "one cursed earth gives Speed I: batches twice as often, the one "
+                + "counting down too (" + said[0] + "; " + sp.timer + ", " + LootSpawners.nextDelay(sp, world) + " of " + plain + ")");
+        SelfTest.DenyBreaks guard = new SelfTest.DenyBreaks();
+        MinecraftForge.EVENT_BUS.register(guard);
+        said[0] = null;
+        try {
+            click(p1);
+        } finally {
+            MinecraftForge.EVENT_BUS.unregister(guard);
+        }
+        SelfTest.check(sp.speed.blocks == 1 && held() == 9 && said[0] != null && said[0].contains("protected"),
+            "where a claim protects it, none goes in (" + said[0] + ")");
+        click(p1);
+        said[0] = null;
+        click(p1);
+        String second = said[0];
+        click(p1);
+        click(p1);
+        said[0] = null;
+        click(p1);
+        String third = said[0];
+        said[0] = null;
+        click(p1);
+        SelfTest.check(sp.speed.blocks == 6 && sp.speed.paid == 6 && held() == 4 && second != null
+            && second.startsWith("Speed II now, 3× as fast") && second.contains("3 more for Speed III") && third != null
+            && third.startsWith("Speed III now, 4× as fast") && said[0] != null && said[0].contains("the most")
+            && LootSpawners.nextDelay(sp, world) == 100, "3 give Speed II, 6 Speed III (4 times as often), and no more go in ("
+                + second + " / " + third + " / " + said[0] + ")");
+        player.inventory.setInventorySlotContents(0, null);
+        said[0] = null;
+        click(p1);
+        NBTTagCompound sent = packetNbt((S35PacketUpdateTileEntity) sp.getDescriptionPacket());
+        NBTTagCompound tag = new NBTTagCompound();
+        sp.writeToNBT(tag);
+        LootSpawnerTile copy = new LootSpawnerTile();
+        copy.readFromNBT(tag);
+        boolean lore = false;
+        NBTTagList lines = LootSpawners.toItem(sp)
+            .getTagCompound()
+            .getCompoundTag("display")
+            .getTagList("Lore", 8);
+        for (int i = 0; i < lines.tagCount(); i++) lore |= lines.getStringTagAt(i)
+            .contains("Speed III, 4× as fast");
+        SelfTest.check(said[0] != null && said[0].contains("Speed III, 4× as fast (6 in it; the most)") && said[0].contains("Every 5–5 s")
+            && sent != null && sent.getString("EntityId")
+                .contains("Speed III")
+            && copy.speed.blocks == 6 && copy.speed.paid == 6 && copy.speed.item != null && lore,
+            "its status, players' hover and the wrench's item say Speed III, and it is saved (" + said[0] + " / "
+                + (sent == null ? null : sent.getString("EntityId")) + ")");
+        said[0] = null;
+        hit(p1);
+        SelfTest.check(sp.speed.blocks == 0 && sp.speed.paid == 0 && invCount(cursed) == 6 && LootSpawners.nextDelay(sp, world) == plain
+            && said[0] != null && said[0].startsWith("Speed switched off"),
+            "a sneaking hit with an empty hand gives the 6 back, at its normal speed again (" + said[0] + ")");
+
+        // One under it counts as one.
+        for (int i = 0; i < player.inventory.mainInventory.length; i++) player.inventory.mainInventory[i] = null;
+        world.setBlock(p1[0], y - 1, p1[2], earth, 0, 3);
+        boolean under = LootSpawners.speedBelow(sp) && sp.speedLevel() == 1 && LootSpawners.nextDelay(sp, world) == plain / 2;
+        TweaksConfig.lootSpawnerSpeedBelow = false;
+        boolean notOff = sp.speedLevel() == 0 && LootSpawners.nextDelay(sp, world) == plain;
+        TweaksConfig.lootSpawnerSpeedBelow = true;
+        player.inventory.setInventorySlotContents(0, new ItemStack(cursed, 2, 0));
+        said[0] = null;
+        click(p1);
+        SelfTest.check(under && notOff && sp.speed.blocks == 1 && said[0] != null && said[0].startsWith("Still Speed I")
+            && said[0].contains("(1 in it and one under it)") && said[0].contains("1 more for Speed II"),
+            "cursed earth under it counts as one (not with lootSpawnerSpeedBelow off), and one more in it is still Speed I ("
+                + said[0] + ")");
+
+        // On a plain spawner, only a hint (and no cursed earth placed).
+        TileEntity v = te(plainAt);
+        said[0] = null;
+        ev = click(plainAt);
+        SelfTest.check(ev.isCanceled() && v != null && v.getClass() == TileEntityMobSpawner.class && te(plainAt) == v && held() == 1
+            && said[0] != null && said[0].contains("loot spawner first") && said[0].contains("for Speed"),
+            "on a plain spawner cursed earth only says how (" + said[0] + ")");
+        for (int i = 0; i < player.inventory.mainInventory.length; i++) player.inventory.mainInventory[i] = null;
+
+        // Extra Utilities runs the vanilla countdown of any spawner on cursed earth, 100 ticks off every 5 s, and at 0
+        // spawns the mobs itself.
+        TileEntityMobSpawner pv = spawner(p2, "Villager");
+        world.setBlock(p2[0], y - 1, p2[2], earth, 0, 3);
+        pv.func_145881_a().spawnDelay = 300;
+        earth.updateTick(world, p2[0], y - 1, p2[2], world.rand);
+        int plainCount = pv.func_145881_a().spawnDelay;
+        pv.func_145881_a().spawnDelay = 0;
+        int plainBefore = mobsNear(p2);
+        earth.updateTick(world, p2[0], y - 1, p2[2], world.rand);
+        EntityVillager probe = new EntityVillager(world);
+        probe.setLocationAndAngles(p2[0] + 0.5, y + 1, p2[2] + 0.5, 0, 0);
+        SelfTest.log("cursed earth on a plain villager spawner at 0: " + (mobsNear(p2) - plainBefore) + " spawned, countdown "
+            + pv.func_145881_a().spawnDelay + " after; a villager could spawn above it: " + probe.getCanSpawnHere());
+        world.setBlockToAir(p2[0], y, p2[2]);
+        LootSpawnerTile vl = lootSpawner(p2, "Villager");
+        vl.logic().spawnDelay = 0; // as if Extra Utilities had counted it all the way down
+        vl.updateEntity(); // one tick of its own
+        int before = mobsNear(p2);
+        for (int i = 0; i < 5; i++) earth.updateTick(world, p2[0], y - 1, p2[2], world.rand);
+        int counted = vl.logic().spawnDelay, after = mobsNear(p2);
+        vl.updateEntity();
+        SelfTest.check(plainCount == 200 && counted == Short.MAX_VALUE - 500 && after == before
+            && vl.logic().spawnDelay == Short.MAX_VALUE, "on cursed earth Extra Utilities counts a plain spawner down 100 at a "
+                + "time (300 -> " + plainCount + "); a loot spawner's count is full again each tick (" + counted + " after 5 of "
+                + "its runs, then " + vl.logic().spawnDelay + "), so it never reaches 0 and spawns no real mob (" + (after - before) + ")");
+        for (Object o : world.getEntitiesWithinAABB(EntityVillager.class,
+            AxisAlignedBB.getBoundingBox(p2[0] - 10, p2[1] - 6, p2[2] - 10, p2[0] + 11, p2[1] + 6, p2[2] + 11)))
+            ((Entity) o).setDead();
+        world.setBlockToAir(p2[0], y, p2[2]);
+        world.setBlockToAir(p2[0], y - 1, p2[2]);
+        TweaksConfig.lootSpawnerSpeedBelow = belowWas;
     }
 
     PlayerInteractEvent hit(int[] p) {

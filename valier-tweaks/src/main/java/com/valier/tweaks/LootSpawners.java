@@ -123,7 +123,10 @@ public final class LootSpawners {
                 changeMob(player, (LootSpawnerTile) te, held);
             } else if (isLootingItem(held)) {
                 event.setCanceled(true);
-                addLooting(player, (LootSpawnerTile) te, held);
+                addBlock(player, (LootSpawnerTile) te, Kind.LOOTING, held);
+            } else if (isSpeedItem(held)) {
+                event.setCanceled(true);
+                addBlock(player, (LootSpawnerTile) te, Kind.SPEED, held);
             } else if (isXpItem(held)) {
                 event.setCanceled(true);
                 toggleXp(player, (LootSpawnerTile) te, held);
@@ -147,7 +150,14 @@ public final class LootSpawners {
             event.setCanceled(true); // don't place the lapis block
             tell(player, text(EnumChatFormatting.GRAY, "Make it a loot spawner first (sneak-right-click with ")
                 .appendSibling(costText(TweaksConfig.lootSpawnerItem, TweaksConfig.lootSpawnerItemCount))
-                .appendSibling(new ChatComponentText("); then ").appendSibling(lootingTiersText(false))));
+                .appendSibling(new ChatComponentText("); then ").appendSibling(tiersText(Kind.LOOTING, false))));
+            return;
+        }
+        if (isSpeedItem(held) && !isConvertItem(held)) {
+            event.setCanceled(true); // don't place the cursed earth
+            tell(player, text(EnumChatFormatting.GRAY, "Make it a loot spawner first (sneak-right-click with ")
+                .appendSibling(costText(TweaksConfig.lootSpawnerItem, TweaksConfig.lootSpawnerItemCount))
+                .appendSibling(new ChatComponentText("); then ").appendSibling(tiersText(Kind.SPEED, false))));
             return;
         }
         if (isXpItem(held) && !isConvertItem(held)) {
@@ -313,7 +323,8 @@ public final class LootSpawners {
         boolean filtered = t.noDamaged;
         ItemStack item = toItem(t);
         t.xpPaid = null; // it goes with the item too
-        t.lootingPaid = 0; // and its Looting items
+        t.looting.paid = 0; // and its Looting and Speed items
+        t.speed.paid = 0;
         int stacks = 0;
         for (int i = 0; i < LootSpawnerTile.SLOTS; i++) {
             if (t.items[i] != null) {
@@ -356,8 +367,9 @@ public final class LootSpawners {
         lore.appendTag(new NBTTagString(grey + "Makes the loot of each " + mob + ", no mobs."));
         if (t.noDamaged) lore.appendTag(new NBTTagString(grey + "Throws damaged items away."));
         if (t.xpBottles) lore.appendTag(new NBTTagString(grey + "Turns its XP into bottles o' enchanting."));
-        int looting = lootingLevel(t.lootingBlocks);
+        int looting = t.looting.level(), speed = t.speed.level();
         if (looting > 0) lore.appendTag(new NBTTagString(grey + "Looting " + roman(looting) + "."));
+        if (speed > 0) lore.appendTag(new NBTTagString(grey + "Speed " + roman(speed) + ", " + (speed + 1) + "× as fast."));
         lore.appendTag(new NBTTagString(grey + "Place it and it is a loot spawner again."));
         display.setTag("Lore", lore);
         tag.setTag("display", display);
@@ -529,44 +541,49 @@ public final class LootSpawners {
     }
 
     /**
-     * Sneak-right-click on a loot spawner with the Looting item (a lapis block by default): one goes in, and how many
-     * it holds sets the Looting its mobs' loot is rolled with ({@link TweaksConfig#lootSpawnerLootingBlocks}).
+     * Sneak-right-click on a loot spawner with a Looting item (a lapis block by default) or a Speed item (cursed earth):
+     * one goes in, and how many it holds sets the level ({@link Kind#tiers}). For Speed one right under it counts too.
      */
-    static void addLooting(EntityPlayer player, LootSpawnerTile t, ItemStack held) {
-        int[] tiers = TweaksConfig.lootSpawnerLootingBlocks;
-        int level = lootingLevel(t.lootingBlocks);
+    static void addBlock(EntityPlayer player, LootSpawnerTile t, Kind kind, ItemStack held) {
+        LootSpawnerTile.Upgrade u = kind.of(t);
+        int[] tiers = kind.tiers();
+        int below = kind == Kind.SPEED && speedBelow(t) ? 1 : 0;
+        int level = kind.level(u.blocks + below);
         if (level >= tiers.length) {
-            tell(player, text(EnumChatFormatting.GRAY, "It already has Looting " + roman(level) + ", the most it can have."));
+            tell(player, text(EnumChatFormatting.GRAY, "It already has " + kind.word + " " + roman(level) + ", the most it can have."));
             return;
         }
-        if (t.lootingPaid > 0 && t.lootingItem != null && !MobLoot.sameItem(t.lootingItem, copyOne(held))) {
-            tell(player, text(EnumChatFormatting.RED, "It holds ").appendSibling(itemName(t.lootingItem))
-                .appendSibling(new ChatComponentText(" for its Looting; only more of those go in.")));
+        if (u.paid > 0 && u.item != null && !MobLoot.sameItem(u.item, copyOne(held))) {
+            tell(player, text(EnumChatFormatting.RED, "It holds ").appendSibling(itemName(u.item))
+                .appendSibling(new ChatComponentText(" for its " + kind.word + "; only more of those go in.")));
             return;
         }
         if (!mayChange(player, t.getWorldObj(), t.xCoord, t.yCoord, t.zCoord)) {
             tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
             return;
         }
-        t.lootingBlocks++;
+        int factor = t.speedFactor();
+        u.blocks++;
         if (!player.capabilities.isCreativeMode) {
-            t.lootingPaid++;
-            if (t.lootingItem == null) t.lootingItem = copyOne(held);
+            u.paid++;
+            if (u.item == null) u.item = copyOne(held);
             held.stackSize--;
             if (held.stackSize <= 0) player.inventory.setInventorySlotContents(player.inventory.currentItem, null);
             player.inventoryContainer.detectAndSendChanges();
         }
-        int now = lootingLevel(t.lootingBlocks);
+        int now = kind.level(u.blocks + below);
+        if (t.timer > 0) t.timer = Math.max(1, t.timer * factor / t.speedFactor()); // the batch counting down speeds up too
         t.markDirty();
         t.getWorldObj()
-            .markBlockForUpdate(t.xCoord, t.yCoord, t.zCoord); // the hover names its Looting
-        ValierTweaks.LOG.info("{} put a looting item into the loot spawner at {}: {} now, Looting {}",
-            player.getCommandSenderName(), t.where(), t.lootingBlocks, now);
-        IChatComponent msg = text(EnumChatFormatting.GREEN, now > level ? "Looting " + roman(now) + " now" : now > 0
-            ? "Still Looting " + roman(now) : "No Looting yet");
-        msg.appendSibling(new ChatComponentText(" (" + t.lootingBlocks + " in it)."));
-        if (now < tiers.length) msg.appendSibling(new ChatComponentText(" " + (tiers[now] - t.lootingBlocks) + " more for Looting "
-            + roman(now + 1) + "."));
+            .markBlockForUpdate(t.xCoord, t.yCoord, t.zCoord); // the hover names its level
+        ValierTweaks.LOG.info("{} put a {} item into the loot spawner at {}: {} now, {} {}", player.getCommandSenderName(),
+            kind.word.toLowerCase(), t.where(), u.blocks, kind.word, now);
+        IChatComponent msg = text(EnumChatFormatting.GREEN, now > level ? kind.word + " " + roman(now) + " now" : now > 0
+            ? "Still " + kind.word + " " + roman(now) : "No " + kind.word + " yet");
+        if (kind == Kind.SPEED && now > 0) msg.appendSibling(new ChatComponentText(", " + (now + 1) + "× as fast"));
+        msg.appendSibling(new ChatComponentText(" (" + u.blocks + " in it" + (below > 0 ? " and one under it" : "") + ")."));
+        if (now < tiers.length) msg.appendSibling(new ChatComponentText(" " + (tiers[now] - u.blocks - below) + " more for "
+            + kind.word + " " + roman(now + 1) + "."));
         else msg.appendSibling(new ChatComponentText(" That's the most it can have."));
         tell(player, msg);
     }
@@ -576,7 +593,7 @@ public final class LootSpawners {
      * the gold block for bottles, the emerald block for the damaged-items filter), and those switch off.
      */
     static void takeBack(EntityPlayer player, LootSpawnerTile t) {
-        if (t.lootingBlocks == 0 && !t.xpBottles && !t.noDamaged) {
+        if (t.looting.blocks == 0 && t.speed.blocks == 0 && !t.xpBottles && !t.noDamaged) {
             tell(player, text(EnumChatFormatting.GRAY, "It has no blocks in it to take back."));
             return;
         }
@@ -584,17 +601,20 @@ public final class LootSpawners {
             tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
             return;
         }
-        List<ItemStack> back = lootingRefund(t.lootingItem, t.lootingPaid);
+        List<ItemStack> back = t.looting.refund();
+        back.addAll(t.speed.refund());
         if (t.xpPaid != null) back.add(t.xpPaid);
         if (t.filterPaid != null) back.add(t.filterPaid);
         IChatComponent msg = text(EnumChatFormatting.GREEN, "");
         List<String> off = new ArrayList<>();
-        if (t.lootingBlocks > 0) off.add("Looting");
+        if (t.looting.blocks > 0) off.add("Looting");
+        if (t.speed.blocks > 0) off.add("Speed");
         if (t.xpBottles) off.add("bottles o' enchanting");
         if (t.noDamaged) off.add("throwing damaged items away");
-        t.lootingBlocks = 0;
-        t.lootingPaid = 0;
-        t.lootingItem = null;
+        int factor = t.speedFactor();
+        t.looting.clear();
+        t.speed.clear();
+        if (t.timer > 0) t.timer = Math.max(1, t.timer * factor / t.speedFactor()); // the batch counting down slows again
         t.xpBottles = false;
         t.xpPaid = null;
         t.xp = 0;
@@ -602,7 +622,7 @@ public final class LootSpawners {
         t.filterPaid = null;
         t.markDirty();
         t.getWorldObj()
-            .markBlockForUpdate(t.xCoord, t.yCoord, t.zCoord); // the hover drops its Looting
+            .markBlockForUpdate(t.xCoord, t.yCoord, t.zCoord); // the hover drops its Looting and Speed
         msg.appendSibling(new ChatComponentText(joinWords(off) + " switched off."));
         if (!back.isEmpty()) {
             msg.appendSibling(new ChatComponentText(" Back to you: "));
@@ -629,14 +649,47 @@ public final class LootSpawners {
         return out.isEmpty() ? out : Character.toUpperCase(out.charAt(0)) + out.substring(1);
     }
 
+    /** The upgrades that take blocks one per click, the count setting a level: Looting and Speed. */
+    enum Kind {
+
+        LOOTING("Looting"),
+        SPEED("Speed");
+
+        /** Its name, as players see it and in the mark's keys ("LootingBlocks", "SpeedPaid", ...). */
+        final String word;
+
+        Kind(String word) {
+            this.word = word;
+        }
+
+        /** The config setting naming its item. */
+        String item() {
+            return this == LOOTING ? TweaksConfig.lootSpawnerLootingItem : TweaksConfig.lootSpawnerSpeedItem;
+        }
+
+        /** How many blocks each level takes, in order. */
+        int[] tiers() {
+            return this == LOOTING ? TweaksConfig.lootSpawnerLootingBlocks : TweaksConfig.lootSpawnerSpeedBlocks;
+        }
+
+        /** The level so many blocks give. */
+        int level(int blocks) {
+            int level = 0;
+            for (int need : tiers()) {
+                if (blocks < need) break;
+                level++;
+            }
+            return level;
+        }
+
+        LootSpawnerTile.Upgrade of(LootSpawnerTile t) {
+            return this == LOOTING ? t.looting : t.speed;
+        }
+    }
+
     /** The Looting level so many Looting items give ({@link TweaksConfig#lootSpawnerLootingBlocks}). */
     static int lootingLevel(int blocks) {
-        int level = 0;
-        for (int need : TweaksConfig.lootSpawnerLootingBlocks) {
-            if (blocks < need) break;
-            level++;
-        }
-        return level;
+        return Kind.LOOTING.level(blocks);
     }
 
     static String roman(int n) {
@@ -644,27 +697,39 @@ public final class LootSpawners {
         return n >= 0 && n < r.length ? r[n] : Integer.toString(n);
     }
 
-    /** "Sneak-right-click it with a Lapis Lazuli Block, one per click, for Looting: 1 for Looting I, 3 for II and 6 for III." */
-    static IChatComponent lootingTiersText(boolean capital) {
-        Item item = itemOf(TweaksConfig.lootSpawnerLootingItem);
+    /**
+     * "Sneak-right-click it with a Lapis Lazuli Block, one per click, for Looting: 1 for Looting I, 3 for II and 6 for
+     * III." Speed adds "(2×, 3× and 4× as fast)".
+     */
+    static IChatComponent tiersText(Kind kind, boolean capital) {
+        Item item = itemOf(kind.item());
         IChatComponent msg = new ChatComponentText(capital ? "Sneak-right-click it with a " : "sneak-right-click with a ");
         if (item != null) msg.appendSibling(new ChatComponentTranslation(
-            new ItemStack(item, 1, Math.max(0, metaOf(TweaksConfig.lootSpawnerLootingItem))).getUnlocalizedName() + ".name"));
-        StringBuilder s = new StringBuilder(", one per click, for Looting: ");
-        int[] tiers = TweaksConfig.lootSpawnerLootingBlocks;
+            new ItemStack(item, 1, Math.max(0, metaOf(kind.item()))).getUnlocalizedName() + ".name"));
+        StringBuilder s = new StringBuilder(", one per click, for " + kind.word + ": ");
+        int[] tiers = kind.tiers();
         for (int i = 0; i < tiers.length; i++) {
             if (i > 0) s.append(i == tiers.length - 1 ? " and " : ", ");
             s.append(tiers[i])
                 .append(" for ")
-                .append(i == 0 ? "Looting " : "")
+                .append(i == 0 ? kind.word + " " : "")
                 .append(roman(i + 1));
+        }
+        if (kind == Kind.SPEED) {
+            s.append(" (");
+            for (int i = 0; i < tiers.length; i++) {
+                if (i > 0) s.append(i == tiers.length - 1 ? " and " : ", ");
+                s.append(i + 2)
+                    .append('×');
+            }
+            s.append(" as fast)");
         }
         return msg.appendSibling(new ChatComponentText(s.append('.')
             .toString()));
     }
 
-    /** The Looting items paid into it, as stacks (what drops when it breaks). */
-    static List<ItemStack> lootingRefund(ItemStack item, int count) {
+    /** Items paid into it, as stacks (what drops when it breaks). */
+    static List<ItemStack> refund(ItemStack item, int count) {
         List<ItemStack> out = new ArrayList<>();
         if (item == null || count <= 0) return out;
         int max = Math.max(1, item.getMaxStackSize());
@@ -689,6 +754,25 @@ public final class LootSpawners {
 
     static boolean isLootingItem(ItemStack stack) {
         return matches(TweaksConfig.lootSpawnerLootingItem, stack);
+    }
+
+    static boolean isSpeedItem(ItemStack stack) {
+        return matches(TweaksConfig.lootSpawnerSpeedItem, stack);
+    }
+
+    /**
+     * The speed item placed as a block right under it ({@link TweaksConfig#lootSpawnerSpeedBelow}): Extra Utilities'
+     * cursed earth under a spawner speeds it up, so under a loot spawner it counts as one put in.
+     */
+    static boolean speedBelow(LootSpawnerTile t) {
+        World w = t.getWorldObj();
+        if (!TweaksConfig.lootSpawnerSpeedBelow || w == null || t.yCoord <= 0) return false;
+        Item item = itemOf(TweaksConfig.lootSpawnerSpeedItem);
+        Block want = item == null ? null : Block.getBlockFromItem(item);
+        int x = t.xCoord, y = t.yCoord - 1, z = t.zCoord;
+        if (want == null || want == Blocks.air || !w.blockExists(x, y, z) || w.getBlock(x, y, z) != want) return false;
+        int meta = metaOf(TweaksConfig.lootSpawnerSpeedItem);
+        return meta < 0 || want.damageDropped(w.getBlockMetadata(x, y, z)) == meta;
     }
 
     /** The item that makes a loot spawner turn its XP into bottles (empty or not an item: none does). */
@@ -781,8 +865,10 @@ public final class LootSpawners {
         t.filterPaid = null;
         if (t.xpPaid != null) event.drops.add(t.xpPaid);
         t.xpPaid = null;
-        event.drops.addAll(lootingRefund(t.lootingItem, t.lootingPaid));
-        t.lootingPaid = 0;
+        event.drops.addAll(t.looting.refund());
+        event.drops.addAll(t.speed.refund());
+        t.looting.paid = 0;
+        t.speed.paid = 0;
         t.markDirty();
     }
 
@@ -803,8 +889,10 @@ public final class LootSpawners {
             t.filterPaid = null;
             if (t.xpPaid != null) drop(w, t.xCoord, t.yCoord, t.zCoord, t.xpPaid);
             t.xpPaid = null;
-            for (ItemStack s : lootingRefund(t.lootingItem, t.lootingPaid)) drop(w, t.xCoord, t.yCoord, t.zCoord, s);
-            t.lootingPaid = 0;
+            for (LootSpawnerTile.Upgrade u : new LootSpawnerTile.Upgrade[] { t.looting, t.speed }) {
+                for (ItemStack s : u.refund()) drop(w, t.xCoord, t.yCoord, t.zCoord, s);
+                u.paid = 0;
+            }
         }
         spills.clear();
     }
@@ -969,10 +1057,11 @@ public final class LootSpawners {
         if (paid != null) drop(world, spawner.xCoord, spawner.yCoord + 1, spawner.zCoord, paid);
         ItemStack xpPaid = mark.hasKey("XpPaid", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("XpPaid")) : null;
         if (xpPaid != null) drop(world, spawner.xCoord, spawner.yCoord + 1, spawner.zCoord, xpPaid);
-        ItemStack lootingItem = mark.hasKey("LootingItem", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("LootingItem"))
-            : null;
-        for (ItemStack s : lootingRefund(lootingItem, mark.getInteger("LootingPaid")))
-            drop(world, spawner.xCoord, spawner.yCoord + 1, spawner.zCoord, s);
+        for (Kind kind : Kind.values()) {
+            LootSpawnerTile.Upgrade u = new LootSpawnerTile.Upgrade(kind);
+            u.read(mark);
+            for (ItemStack s : u.refund()) drop(world, spawner.xCoord, spawner.yCoord + 1, spawner.zCoord, s);
+        }
         data.removeTag(LootSpawnerTile.MARK);
         if (mark.getBoolean("Egg")) {
             tag.removeTag("SpawnData");
@@ -1023,7 +1112,7 @@ public final class LootSpawners {
         // One mob at a time: its loot goes out (what doesn't fit is kept). Stop early if what it keeps gets near full.
         boolean any = false;
         int[] xp = t.xpBottles ? new int[1] : null;
-        int looting = lootingLevel(t.lootingBlocks);
+        int looting = t.looting.level();
         for (int i = 0; i < Math.max(1, t.spawnCount) && t.freeSlots() >= 9; i++) {
             List<ItemStack> loot = MobLoot.roll((WorldServer) world, t.xCoord + 0.5, t.yCoord + 1.0, t.zCoord + 0.5,
                 MobLoot.pick(t.candidates, world.rand), xp, looting);
@@ -1064,7 +1153,7 @@ public final class LootSpawners {
     static int nextDelay(LootSpawnerTile t, World world) {
         int min = Math.max(1, t.minDelay), max = t.maxDelay;
         int ticks = max <= min ? min : min + world.rand.nextInt(max - min);
-        return Math.max(20, (int) Math.round(ticks / Math.max(0.01, TweaksConfig.lootSpawnerSpeed)));
+        return Math.max(20, (int) Math.round(ticks / (Math.max(0.01, TweaksConfig.lootSpawnerSpeed) * t.speedFactor())));
     }
 
     /** Pushes what the spawner holds to its neighbours. Returns whether anything that can take items touches it. */
@@ -1164,7 +1253,7 @@ public final class LootSpawners {
         if (mobs != null) msg.appendSibling(new ChatComponentText(mobs));
         else msg.appendSibling(mobName(t.candidates.get(0).type));
         int count = Math.max(1, t.spawnCount);
-        double speed = Math.max(0.01, TweaksConfig.lootSpawnerSpeed);
+        double speed = Math.max(0.01, TweaksConfig.lootSpawnerSpeed) * t.speedFactor();
         msg.appendSibling(new ChatComponentText(". Every " + seconds(t.minDelay / speed) + "–" + seconds(t.maxDelay / speed)
             + " s it makes the loot of " + count + (count == 1 ? " mob" : " mobs")
             + " and puts it into the chests, inventories and pipes touching it. Now: " + t.status.words));
@@ -1181,14 +1270,20 @@ public final class LootSpawners {
         else if (itemOf(TweaksConfig.lootSpawnerXpItem) != null) msg.appendSibling(new ChatComponentText(" Sneak-right-click it with ")
             .appendSibling(costText(TweaksConfig.lootSpawnerXpItem, TweaksConfig.lootSpawnerXpItemCount))
             .appendSibling(new ChatComponentText(" to turn its XP into bottles o' enchanting.")));
-        int looting = lootingLevel(t.lootingBlocks);
-        int[] tiers = TweaksConfig.lootSpawnerLootingBlocks;
-        if (looting > 0) msg.appendSibling(new ChatComponentText(" Looting " + roman(looting) + " (" + t.lootingBlocks + " in it"
-            + (looting < tiers.length ? "; " + (tiers[looting] - t.lootingBlocks) + " more for Looting " + roman(looting + 1) : "; the most")
-            + ")."));
-        else if (itemOf(TweaksConfig.lootSpawnerLootingItem) != null) msg.appendSibling(new ChatComponentText(" "))
-            .appendSibling(lootingTiersText(true));
-        if (t.lootingBlocks > 0 || t.xpBottles || t.noDamaged)
+        for (Kind kind : Kind.values()) {
+            LootSpawnerTile.Upgrade u = kind.of(t);
+            int below = kind == Kind.SPEED && speedBelow(t) ? 1 : 0;
+            int level = kind.level(u.blocks + below);
+            int[] tiers = kind.tiers();
+            if (level > 0) msg.appendSibling(new ChatComponentText(" " + kind.word + " " + roman(level)
+                + (kind == Kind.SPEED ? ", " + (level + 1) + "× as fast" : "") + " (" + u.blocks + " in it"
+                + (below > 0 ? " and one under it" : "") + (level < tiers.length ? "; " + (tiers[level] - u.blocks - below)
+                    + " more for " + kind.word + " " + roman(level + 1) : "; the most")
+                + ")."));
+            else if (itemOf(kind.item()) != null) msg.appendSibling(new ChatComponentText(" "))
+                .appendSibling(tiersText(kind, true));
+        }
+        if (t.looting.blocks > 0 || t.speed.blocks > 0 || t.xpBottles || t.noDamaged)
             msg.appendSibling(new ChatComponentText(" Sneak and hit it with an empty hand to take its blocks back."));
         if (TweaksConfig.lootSpawnerWrench) msg.appendSibling(new ChatComponentText(" A wrench picks it up."));
         if (TweaksConfig.lootSpawnerSpawnEggs) msg.appendSibling(new ChatComponentText(" A spawn egg changes its mob."));

@@ -112,9 +112,21 @@ hostile spawners do nothing at all. A loot spawner skips the mobs and makes just
 - **Special Mobs (1.7.0):** a loot spawner's mobs are swapped for Special Mobs variants as real spawned mobs are (by
   its own weights; on a GTNH server every blaze, and some zombies, creepers, skeletons and others), and the variants'
   own loot comes out. `lootSpawnerSpecialMobs` switches it off.
-- **Taking the blocks back (1.7.0):** sneak and hit (left-click) a loot spawner with an empty hand: every lapis, gold
-  and emerald block in it comes back to you, and Looting, bottles and the damaged-items filter switch off. The gold
-  and emerald blocks can also be switched off on their own by sneak-right-clicking with that block again.
+- **Speed from cursed earth (1.8.0):** sneak-right-click a loot spawner with Extra Utilities' **cursed earth** to put
+  one in. Its batches then come faster: 1 gives Speed I (twice as often), 3 give Speed II (3 times), 6 give Speed III
+  (4 times) (`lootSpawnerSpeedBlocks`; more numbers allow higher levels, each one more time as fast). The batch
+  already counting down speeds up too. Cursed earth placed right under a loot spawner counts as one put in
+  (`lootSpawnerSpeedBelow`), the way it speeds up a vanilla spawner. One goes in per click; the level shows in its
+  status, players' hover and the wrench's item; the blocks stay in it and drop when it is broken. However fast, a
+  loot spawner makes at most one batch a second. Claims apply.
+- **Cursed earth makes no real mobs (1.8.0):** Extra Utilities runs the vanilla countdown of any spawner standing on
+  cursed earth and, when it reaches 0, spawns the spawner's mobs itself (persistent ones, no player needed). A loot
+  spawner never used that countdown, so cursed earth didn't speed it up, but one left idle on cursed earth for about
+  half an hour could start spawning real mobs. Its countdown is now kept full every tick, so it never gets there.
+- **Taking the blocks back (1.7.0):** sneak and hit (left-click) a loot spawner with an empty hand: every lapis,
+  cursed earth, gold and emerald block in it comes back to you, and Looting, Speed, bottles and the damaged-items
+  filter switch off. The gold and emerald blocks can also be switched off on their own by sneak-right-clicking with
+  that block again.
 - **Existing loot spawners** get all of this as soon as the new version runs: every batch is rolled fresh.
 - **Picking one up (1.5.0):** sneak-right-click a loot spawner with a **wrench** (GregTech's, EnderIO's Yeta wrench,
   AE2's quartz wrenches, BuildCraft's) and it comes off as an item called **Valier Loot Spawner** with its mob, say
@@ -169,6 +181,9 @@ way. Without the mod, it is simply an ordinary spawner of the same mob again.
 | `lootSpawnerFilterItemCount` | `1` | How many of that item. |
 | `lootSpawnerLootingItem` | `minecraft:lapis_block` | What gives a loot spawner Looting, one per click. Empty or not an item: none can be put in. |
 | `lootSpawnerLootingBlocks` | `1, 3, 6` | How many it needs for Looting I, II, III (rising; more numbers, higher levels). |
+| `lootSpawnerSpeedItem` | `ExtraUtilities:cursedearthside:0` | What gives a loot spawner Speed, one per click. Empty or not an item: none can be put in. |
+| `lootSpawnerSpeedBlocks` | `1, 3, 6` | How many it needs for Speed I, II, III: 2, 3 and 4 times as often (rising; more numbers, higher levels). |
+| `lootSpawnerSpeedBelow` | `true` | That item as a block right under a loot spawner counts as one put in. |
 | `lootSpawnerXpItem` | `minecraft:gold_block` | What switches bottles o' enchanting on (kept in it, given back when switched off). Empty or not an item: it can't be switched. |
 | `lootSpawnerXpItemCount` | `1` | How many of that item. |
 | `lootSpawnerXpPerBottle` | `7` | XP per bottle o' enchanting. |
@@ -245,6 +260,12 @@ way. Without the mod, it is simply an ordinary spawner of the same mob again.
     in its replacement queue. With `lootSpawnerSpecialMobs` off, plain blazes. (Off for the rest of the test too.)
   - **Taking back:** a sneaking hit with an empty hand gives back 3 lapis, the gold and the emerald block and switches
     those off. Not without sneaking, not where protected, and an empty one says so.
+  - **Cursed earth:** 1, 3 and 6 give Speed I, II and III; batches of a 400-tick spawner come every 200 then 100
+    ticks, and the one counting down speeds up too. One per click, none where protected, none past the most. The
+    status, the hover, the wrench's item and a save keep Speed III; a sneaking hit gives the 6 back and its normal
+    speed. One under it counts as one (not with `lootSpawnerSpeedBelow` off). On a plain spawner, only a hint. Extra Utilities
+    counts a plain spawner on cursed earth down 100 at a time (300 to 200); a loot spawner's count is full again after
+    each of its own ticks, so it never reaches 0 and no real mob comes out.
   - **No surprise mobs:** with a player beside them, a plain spawner counts as active and a loot spawner doesn't. Run
     6 times the way EnderIO does on a break, the loot spawner spawns nothing. A plain spawner isn't active while its
     conversion is being asked about. The real player range (16) is still saved and sent to clients.

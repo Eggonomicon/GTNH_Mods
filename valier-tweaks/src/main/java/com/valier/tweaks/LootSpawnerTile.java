@@ -57,12 +57,10 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
     ItemStack xpPaid;
     /** XP made but not yet a bottle. */
     int xp;
-    /** Looting items put in: they set its Looting level ({@link LootSpawners#lootingLevel}). */
-    int lootingBlocks;
-    /** How many of them were paid for (not in creative): these drop when it breaks. */
-    int lootingPaid;
-    /** One of the item put in, so what drops is what was paid. */
-    ItemStack lootingItem;
+    /** Lapis blocks (by default) put in: they set the Looting its mobs' loot is rolled with. */
+    final Upgrade looting = new Upgrade(LootSpawners.Kind.LOOTING);
+    /** Cursed earth (by default) put in: its batches come faster ({@link #speedFactor}). */
+    final Upgrade speed = new Upgrade(LootSpawners.Kind.SPEED);
     /**
      * The spawner's own RequiredPlayerRange, saved and sent as it is. The live vanilla logic gets 0, so it never counts
      * as active and never spawns a mob, even when another mod runs it: EnderIO runs a spawner up to 6 times when a
@@ -80,6 +78,64 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
 
     public MobSpawnerBaseLogic logic() {
         return func_145881_a();
+    }
+
+    /**
+     * Blocks put into a loot spawner one per click, whose count sets a level: Looting and Speed. The mark keeps them as
+     * LootingBlocks, LootingPaid and LootingItem (Speed... the same way).
+     */
+    static final class Upgrade {
+
+        final LootSpawners.Kind kind;
+        /** How many are in it. */
+        int blocks;
+        /** How many of them were paid for (not in creative): these drop when it breaks. */
+        int paid;
+        /** One of the item put in, so what drops is what was paid. */
+        ItemStack item;
+
+        Upgrade(LootSpawners.Kind kind) {
+            this.kind = kind;
+        }
+
+        void read(NBTTagCompound mark) {
+            blocks = mark.getInteger(kind.word + "Blocks");
+            paid = mark.getInteger(kind.word + "Paid");
+            item = mark.hasKey(kind.word + "Item", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag(kind.word + "Item"))
+                : null;
+        }
+
+        void write(NBTTagCompound mark) {
+            if (blocks > 0) mark.setInteger(kind.word + "Blocks", blocks);
+            if (paid > 0) mark.setInteger(kind.word + "Paid", paid);
+            if (item != null) mark.setTag(kind.word + "Item", item.writeToNBT(new NBTTagCompound()));
+        }
+
+        /** The level the blocks in it give (for Speed, without one under it: see {@link #speedLevel}). */
+        int level() {
+            return kind.level(blocks);
+        }
+
+        /** What was paid, as stacks: what drops when it breaks, or comes back when taken out. */
+        List<ItemStack> refund() {
+            return LootSpawners.refund(item, paid);
+        }
+
+        void clear() {
+            blocks = 0;
+            paid = 0;
+            item = null;
+        }
+    }
+
+    /** Its Speed level: the speed items in it, and one more for one right under it ({@link LootSpawners#speedBelow}). */
+    int speedLevel() {
+        return speed.kind.level(speed.blocks + (LootSpawners.speedBelow(this) ? 1 : 0));
+    }
+
+    /** How many times its normal speed it makes batches: once more for each Speed level. */
+    int speedFactor() {
+        return 1 + speedLevel();
     }
 
     /** True if this vanilla spawner carries the loot spawner mark. */
@@ -119,6 +175,9 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
             super.updateEntity(); // never this class on a client, but stay vanilla there if it ever is
             return;
         }
+        // Extra Utilities' cursed earth runs the vanilla countdown of a spawner on it (100 ticks off every 5 s) and at 0
+        // spawns its mobs itself, real ones. Kept full every tick, that countdown never gets there.
+        logic().spawnDelay = Short.MAX_VALUE;
         // Stagger spawners over the 20 ticks so they don't all work on the same tick.
         if ((++ticks + ((xCoord * 31 + zCoord * 17 + yCoord) & 0xFFFF)) % 20 != 0) return;
         // A tile left over from before its chunk unloaded and loaded again in the same tick: only the chunk's own works.
@@ -155,9 +214,8 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         xpBottles = mark.getBoolean("XpBottles");
         xpPaid = mark.hasKey("XpPaid", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("XpPaid")) : null;
         xp = mark.getInteger("Xp");
-        lootingBlocks = mark.getInteger("LootingBlocks");
-        lootingPaid = mark.getInteger("LootingPaid");
-        lootingItem = mark.hasKey("LootingItem", 10) ? ItemStack.loadItemStackFromNBT(mark.getCompoundTag("LootingItem")) : null;
+        looting.read(mark);
+        speed.read(mark);
         for (int i = 0; i < SLOTS; i++) items[i] = null;
         NBTTagList list = mark.getTagList("Items", 10);
         for (int i = 0; i < list.tagCount(); i++) {
@@ -208,9 +266,8 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         if (xpBottles) mark.setBoolean("XpBottles", true);
         if (xpPaid != null) mark.setTag("XpPaid", xpPaid.writeToNBT(new NBTTagCompound()));
         if (xp > 0) mark.setInteger("Xp", xp);
-        if (lootingBlocks > 0) mark.setInteger("LootingBlocks", lootingBlocks);
-        if (lootingPaid > 0) mark.setInteger("LootingPaid", lootingPaid);
-        if (lootingItem != null) mark.setTag("LootingItem", lootingItem.writeToNBT(new NBTTagCompound()));
+        looting.write(mark);
+        speed.write(mark);
         NBTTagList list = new NBTTagList();
         for (int i = 0; i < SLOTS; i++) {
             if (items[i] == null) continue;
@@ -244,17 +301,18 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         data.removeTag(MARK);
         if (egg && data.hasNoTags()) nbt.removeTag("SpawnData");
         if (TweaksConfig.lootSpawnerHoverName) {
-            nbt.setString("EntityId", hoverName(logic().getEntityNameToSpawn(), LootSpawners.lootingLevel(lootingBlocks)));
+            nbt.setString("EntityId", hoverName(logic().getEntityNameToSpawn(), looting.level(), speedLevel()));
             nbt.removeTag("SpawnData");
         }
         nbt.setShort("Delay", (short) Math.max(0, Math.min(Short.MAX_VALUE, timer)));
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, nbt);
     }
 
-    /** "Valier Loot Spawner: Zombie, Looting II", what players' WAILA shows inside "Monster Spawner (...)". */
-    static String hoverName(String type, int looting) {
+    /** "Valier Loot Spawner: Zombie, Looting II, Speed I", what players' WAILA shows inside "Monster Spawner (...)". */
+    static String hoverName(String type, int looting, int speed) {
         return EnumChatFormatting.GOLD + "Valier Loot Spawner" + EnumChatFormatting.RESET + ": " + LootSpawners.mobWords(type)
-            + (looting > 0 ? ", Looting " + LootSpawners.roman(looting) : "");
+            + (looting > 0 ? ", Looting " + LootSpawners.roman(looting) : "")
+            + (speed > 0 ? ", Speed " + LootSpawners.roman(speed) : "");
     }
 
     /**
@@ -282,7 +340,7 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
 
     /** Something drops when it breaks: loot it holds, or what was paid for {@link #noDamaged} or {@link #xpBottles}. */
     boolean hasDrops() {
-        return filterPaid != null || xpPaid != null || lootingPaid > 0 || !isEmpty();
+        return filterPaid != null || xpPaid != null || looting.paid > 0 || speed.paid > 0 || !isEmpty();
     }
 
     int freeSlots() {
