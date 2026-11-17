@@ -162,6 +162,48 @@ How it is stored: in the world save it is an ordinary spawner of the same mob, m
 mod turns a marked spawner back into a loot spawner as its chunk loads, or within 2 seconds if it turns up some other
 way. Without the mod, it is simply an ordinary spawner of the same mob again.
 
+## XP crafters (1.9.0)
+
+GTNH has crafting recipes made only of XP buckets: a tiny pile of gallium dust from 8, a tiny pile of arsenic from 7,
+a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An XP crafter makes them from liquid XP.
+
+- **Making one:** craft GT++'s **Ultra Low Voltage Fluid Tank** with a **block of diamond** (`xpCrafterTank`,
+  `xpCrafterItem`). The result is a "Valier XP Crafter": the same tank item, with its fluid kept, renamed, with a
+  tooltip saying what it makes.
+- **Placed, it is still that tank:** clients and pipes see a ULV fluid tank (32,000 mB). Fill it with liquid XP the
+  usual way (EnderIO, OpenBlocks; both call it `xpjuice`). Its GUI works as before (right-click without sneaking).
+- **Choosing what it makes:** sneak-right-click it with that item, such as a tiny pile of gallium dust. The item isn't
+  used up. A dust no XP recipe makes is refused, with the list of what it can make. Claims apply.
+- **What it does:** once a second it takes the liquid XP it needs from its tank and makes the item, as many as it has
+  XP for (at most 64 a second), and puts each into the chests, inventories and pipes touching it, the same way loot
+  spawners do. A recipe's cost is the liquid XP in its buckets: 1,000 mB a bucket, so a tiny pile of gallium dust takes
+  8,000 mB. It takes XP only as it needs it, so with nothing to make, or nowhere to put it, the XP stays in the tank.
+  When everything touching it is full it keeps the one it made and waits.
+- **Bigger than the tank:** XP it has taken towards the next craft is held by the crafter itself, so a craft can cost
+  more than the tank holds (72,000 mB for full gallium dust).
+- **Full dust:** sneak-right-click it with a **block of emerald** (`xpCrafterFullItem`, kept in it; not in creative)
+  and it makes the whole dust instead of a tiny or small pile, for 9 or 4 times the liquid XP: gallium dust from
+  72,000 mB, arsenic dust from 63,000, brick dust from 16,000 (`xpCrafterTinyTimes`, `xpCrafterSmallTimes`; GregTech
+  makes a dust from 9 tiny or 4 small piles). Recipes that already make a whole item don't change. Sneak-right-click
+  with the emerald block again, or sneak and hit it with an empty hand, to switch it off and get the block back.
+- **Status:** sneak-right-click it with an empty hand: what it makes, the XP each takes, whether it is working or
+  waiting and why, its tank and the XP it holds, and how many it has made.
+- **Breaking it** (with drops: a player, an explosion) drops the XP crafter item with its recipe, emerald block and
+  the XP it held; placed again, it carries on. Removed without drops (a Matter Manipulator, a frame mover, a
+  command), it is forgotten and stays a plain tank there.
+- **What players see:** the crafting table shows the crafter in its output slot (the server sends it; clients don't
+  know the recipe, so NEI doesn't show it). WAILA shows the plain tank: GregTech tanks have no custom name. The item's
+  tooltip and the status say what it makes.
+
+Stored in each world's `data/valiertweaks_xpcrafters.dat`, by position. Without the mod they are plain tanks.
+
+## Whole steel dust from chain armour (1.9.0)
+
+GregTech macerates a chain helmet into 5 small piles of steel dust and chain leggings into 7. With
+`chainArmourFullDust` the helmet gives 1 steel dust and the leggings 2 (boots 1 and chestplates 2, as before), so a
+full set still gives 6. Every GregTech macerator uses these recipes; they are changed at server start. Clients' NEI
+still shows the small piles. The arc furnace (nuggets) is unchanged.
+
 ## Config (`config/valiertweaks.cfg`)
 
 | Setting | Default | Meaning |
@@ -192,11 +234,19 @@ way. Without the mod, it is simply an ordinary spawner of the same mob again.
 | `lootSpawnerWrench` | `true` | Sneak-right-click with a wrench picks a loot spawner up as a Valier Loot Spawner item. |
 | `lootSpawnerSpawnEggs` | `false` | Sneak-right-click with a spawn egg changes a loot spawner's mob (egg used up). |
 | `lootSpawnerHoverName` | `true` | The WAILA hover says "Valier Loot Spawner: Zombie" (and no mob is drawn in the cage). Off: the mob is drawn and the hover names only the mob. |
+| `xpcrafter` / `xpCrafter` | `true` | XP crafters can be made and work. Off: none can be made, and existing ones stop (keeping what they know). |
+| `xpCrafterTank` | `gregtech:gt.blockmachines:817` | The GregTech tank that becomes one (GT++'s ULV fluid tank). Any GregTech tank works. |
+| `xpCrafterItem` | `minecraft:diamond_block` | Crafted with the tank, makes it an XP crafter. Empty or not an item: none can be made. |
+| `xpCrafterFluids` | `xpjuice` | Fluids that count as liquid XP. Recipes made only of containers of these are what it can make. |
+| `xpCrafterFullItem` | `minecraft:emerald_block` | Switches full dust on (kept in it, given back when switched off). |
+| `xpCrafterTinyTimes` | `9` | Times the XP for a whole dust instead of a tiny pile. |
+| `xpCrafterSmallTimes` | `4` | Times the XP for a whole dust instead of a small pile. |
+| `macerator` / `chainArmourFullDust` | `true` | Chain helmets macerate into 1 steel dust, chain leggings into 2. |
 
 ## Build and test
 
 - **Build:** `gradlew --offline assemble` (JDK 25). It compiles against a GTNH 2.9 server's Tinkers' Construct,
-  UniMixins, GregTech, GTNHLib and ModularUI 2 jars (see `dependencies.gradle`). Point it at your server folder with
+  UniMixins, GregTech, GTNHLib, ModularUI 2 and AE2 jars (see `dependencies.gradle`). Point it at your server folder with
   `-PgtnhInstance=<folder>`; by default it is `../../GTNH_Instance`.
 - **Self-test:** on a test server started with `-Dvaliertweaks.selftest=true`, run `valiertweaks selftest trees`. It
   builds four trees and a log wall, and fake players chop them with real Tinkers lumber axes:
@@ -277,3 +327,20 @@ way. Without the mod, it is simply an ordinary spawner of the same mob again.
     nearby is never taken as a baby zombie's mount during 2000 zombie rolls.
   - **Over 70 ticks:** a broken one drops what it kept and its emerald block (a permission check alone doesn't). Its chunk unloads and loads
     again with it still working, and one left running fills its chest on its own.
+- **XP crafter self-test:** `valiertweaks selftest xpcrafter` (same flag), in an empty chunk of the test world.
+  - **Recipes:** GTNH's XP bucket recipes are found with their costs (tiny gallium 8,000 mB, tiny arsenic 7,000, small
+    brick 4,000, iron dust 2,000, charcoal 1,000). Full dust: 9 times for a tiny pile (gallium dust), 4 times for a
+    small one (brick dust), none for iron dust.
+  - **Crafting:** a ULV fluid tank and a diamond block make the crafter item (name and tooltip). Not the tank alone,
+    an LV tank, a crafter again, or with dirt as well. In a crafting table it is in the output slot, the one the
+    server sends to players.
+  - **Working:** placed as a player places it, it is a crafter. An empty hand shows its status; a tiny pile of gallium
+    chooses that (not without sneaking, not where protected); titanium dust is refused. 5,000 mB makes nothing yet,
+    3,000 more make one into the chest, 20,000 make two more and keep 4,000. An emerald block switches to gallium dust
+    from 72,000 mB, taken a tank at a time.
+  - **Item and edge cases:** broken, it drops as the item with its recipe, emerald block and 4,000 mB, and placed again
+    it carries on. A sneaking empty-hand hit gives the emerald block back. With nothing touching it no XP is taken;
+    with the chest full the one it made waits and goes in once there is room. Its record saves; removed without
+    drops, it is forgotten. A plain ULV tank only gets a hint.
+  - **Chain armour:** the macerator recipes give 1, 2, 1 and 2 steel dust for helmet, leggings, boots and chestplate,
+    also as a macerator looks them up.

@@ -8,8 +8,12 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.Mod;
+import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.event.FMLServerAboutToStartEvent;
+import cpw.mods.fml.common.event.FMLServerStartedEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
 import cpw.mods.fml.common.registry.GameRegistry;
 
@@ -17,8 +21,9 @@ import cpw.mods.fml.common.registry.GameRegistry;
  * Small server-side gameplay fixes for Valier: a Tinkers' Construct lumber axe fells the whole tree even when it breaks
  * partway ({@link TreeFinisher}), players can make their Personal Space dimension peaceful ({@link PeacefulDims},
  * {@code /pdim}), GregTech's solid fuel boilers make no ash ({@code mixin} package, loaded by
- * {@link LateMixinLoader}), and a spawner can become a loot spawner that makes its mobs' loot without the mobs
- * ({@link LootSpawners}).
+ * {@link LateMixinLoader}), a spawner can become a loot spawner that makes its mobs' loot without the mobs
+ * ({@link LootSpawners}), a GregTech tank can become an XP crafter that makes what the XP bucket recipes make from
+ * liquid XP ({@link XpCrafters}), and chain armour macerates into whole steel dust ({@link ChainArmour}).
  */
 @Mod(
     modid = ValierTweaks.MODID,
@@ -52,6 +57,25 @@ public class ValierTweaks {
             .bus()
             .register(loot); // the scan, on server ticks
         MinecraftForge.EVENT_BUS.register(new MobLoot.Guard()); // what a loot roll tries to add to the world
+    }
+
+    @Mod.EventHandler
+    public void init(FMLInitializationEvent event) {
+        if (Loader.isModLoaded("gregtech")) XpCrafters.register(); // GregTech tanks; its recipe and crafting
+    }
+
+    /** Every mod's recipes are in by now. */
+    @Mod.EventHandler
+    public void serverAboutToStart(FMLServerAboutToStartEvent event) {
+        if (!Loader.isModLoaded("gregtech")) return;
+        ChainArmour.apply();
+        XpCrafters.forget();
+    }
+
+    /** The liquid XP recipes are looked up now rather than at an XP crafter's first second. */
+    @Mod.EventHandler
+    public void serverStarted(FMLServerStartedEvent event) {
+        if (Loader.isModLoaded("gregtech")) XpCrafters.recipes();
     }
 
     @Mod.EventHandler

@@ -33,6 +33,14 @@ public final class TweaksConfig {
     public static boolean lootSpawnerWrench = true;
     public static boolean lootSpawnerHoverName = true;
     public static boolean lootSpawnerSpawnEggs = false;
+    public static boolean xpCrafter = true;
+    public static String xpCrafterTank = "gregtech:gt.blockmachines:817";
+    public static String xpCrafterItem = "minecraft:diamond_block";
+    public static String[] xpCrafterFluids = { "xpjuice" };
+    public static String xpCrafterFullItem = "minecraft:emerald_block";
+    public static int xpCrafterTinyTimes = 9;
+    public static int xpCrafterSmallTimes = 4;
+    public static boolean chainArmourFullDust = true;
 
     private TweaksConfig() {}
 
@@ -158,6 +166,40 @@ public final class TweaksConfig {
             "Sneak-right-click a loot spawner with a spawn egg and it makes that mob's loot from now on, the mobs dressed "
                 + "as a vanilla spawner dresses them. The egg is used up (not in creative). Claims apply, blocked mobs are "
                 + "refused, and what it was keeping and its emerald block stay. Plain spawners are left alone.");
+        cat = "xpcrafter";
+        c.setCategoryComment(cat, "XP crafters: craft the tank below with the item below to make a Valier XP Crafter. Placed, it "
+            + "fills with liquid XP like the tank it is, makes one of the things GTNH's XP bucket crafting recipes make (a "
+            + "tiny pile of gallium dust from 8 buckets' worth, and so on) whenever it has the XP for one, and puts it into "
+            + "the chests, inventories and pipes touching it. Sneak-right-click it with what it should make to choose, with "
+            + "an empty hand for its status. Clients need nothing.");
+        xpCrafter = c.getBoolean("xpCrafter", cat, true,
+            "XP crafters can be made and work. Off: none can be made, and existing ones stop (they keep what they know).");
+        xpCrafterTank = c.getString("xpCrafterTank", cat, "gregtech:gt.blockmachines:817",
+            "The GregTech tank that becomes an XP crafter: an item name with :meta. By default GT++'s Ultra Low Voltage "
+                + "Fluid Tank (32,000 mB). Any GregTech tank works.");
+        xpCrafterItem = c.getString("xpCrafterItem", cat, "minecraft:diamond_block",
+            "Crafted with the tank, this makes it an XP crafter. An item name, optionally with :meta. Empty, or a name "
+                + "that isn't an item: none can be made.");
+        xpCrafterFluids = c.getStringList("xpCrafterFluids", cat, new String[] { "xpjuice" },
+            "Fluid names that count as liquid XP (EnderIO's and OpenBlocks' are both xpjuice). Crafting recipes made only "
+                + "of containers of these (the XP buckets) are what XP crafters can make; a recipe's cost is the liquid XP "
+                + "in its containers.");
+        xpCrafterFullItem = c.getString("xpCrafterFullItem", cat, "minecraft:emerald_block",
+            "Sneak-right-click an XP crafter with this and it makes the whole dust instead of a tiny or small pile (a "
+                + "gallium dust instead of a tiny pile), for xpCrafterTinyTimes or xpCrafterSmallTimes the liquid XP. The "
+                + "item is kept in it (not in creative): doing it again, or a sneaking hit with an empty hand, switches that "
+                + "off and gives it back; breaking the crafter keeps it in the item. Empty, or a name that isn't an item: it "
+                + "can't be switched on or off.");
+        xpCrafterTinyTimes = c.getInt("xpCrafterTinyTimes", cat, 9, 1, 64,
+            "How many times the liquid XP the whole dust takes instead of a tiny pile. 9: GregTech makes a dust from 9 "
+                + "tiny piles.");
+        xpCrafterSmallTimes = c.getInt("xpCrafterSmallTimes", cat, 4, 1, 64,
+            "How many times the liquid XP the whole dust takes instead of a small pile. 4: GregTech makes a dust from 4 "
+                + "small piles.");
+        chainArmourFullDust = c.getBoolean("chainArmourFullDust", "macerator", true,
+            "Chain armour macerates into whole steel dust: a chain helmet gives 1 steel dust instead of 5 small piles, "
+                + "chain leggings 2 instead of 7 small piles (boots 1 and chestplates 2, as before), so a full set still "
+                + "gives 6. All GregTech macerators. Clients' NEI still shows the small piles.");
         if (c.hasChanged()) c.save();
     }
 }
