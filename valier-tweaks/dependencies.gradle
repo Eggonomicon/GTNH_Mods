@@ -4,6 +4,7 @@
 // - UniMixins (Mixin + GTNHMixins' @LateMixin) and GregTech: the boiler ash mixins, which only load with GregTech.
 //   GTNHLib and ModularUI 2 only because GregTech's machine interfaces extend theirs, and AE2 because its tanks do
 //   (the XP crafters read GregTech tanks).
+// - WAILA: XP crafters tell it what they are doing, for the optional Valier Client mod (only used when WAILA is there).
 // Point -PgtnhInstance=<folder> (or gtnhInstance in ~/.gradle/gradle.properties) at your server's folder; by default
 // it is ../../GTNH_Instance next to this repository.
 def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Instance"
@@ -15,5 +16,6 @@ dependencies {
         "${gtnh}/mods/gregtech-5.09.54.265.jar",
         "${gtnh}/mods/gtnhlib-0.11.54.jar",
         "${gtnh}/mods/modularui2-2.3.94-1.7.10.jar",
-        "${gtnh}/mods/appliedenergistics2-rv3-beta-1095-GTNH.jar"))
+        "${gtnh}/mods/appliedenergistics2-rv3-beta-1095-GTNH.jar",
+        "${gtnh}/mods/Waila-1.19.34.jar"))
 }

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.block.Block;
 import net.minecraft.entity.player.EntityPlayer;
@@ -49,6 +50,8 @@ import net.minecraftforge.oredict.ShapedOreRecipe;
 import net.minecraftforge.oredict.ShapelessOreRecipe;
 
 import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.Loader;
+import cpw.mods.fml.common.event.FMLInterModComms;
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
@@ -72,7 +75,9 @@ import gregtech.api.metatileentity.implementations.MTEBasicTank;
  * </ul>
  * Server side only: clients don't know the recipe, so the crafting grid's output is sent to them ({@link CraftSync}).
  * The crafters of a world are kept in its {@code data/valiertweaks_xpcrafters.dat}, by position; one removed without
- * dropping (a Matter Manipulator, a frame mover) is forgotten and stays a plain tank.
+ * dropping (a Matter Manipulator, a frame mover) is forgotten and stays a plain tank. With WAILA on the server, what a
+ * crafter makes and is doing goes along with the block data WAILA sends a player looking at it ({@link XpCrafterWaila});
+ * the optional Valier Client mod shows it, other clients ignore it.
  */
 public final class XpCrafters {
 
@@ -112,12 +117,15 @@ public final class XpCrafters {
         RecipeSorter.register(ValierTweaks.MODID + ":xpcrafter", Recipe.class, RecipeSorter.Category.SHAPELESS,
             "after:minecraft:shapeless");
         GameRegistry.addRecipe(new Recipe());
+        hud = Loader.isModLoaded("Waila");
+        if (hud) FMLInterModComms.sendMessage("Waila", "register", "com.valier.tweaks.XpCrafterWaila.callbackRegister");
     }
 
     /** At server start: the recipes are looked up again, and the saved crafters read again. */
     static void forget() {
         recipes = null;
         loaded.clear();
+        HUD.clear();
     }
 
     // ---- what a crafter knows ---------------------------------------------------------------------------------------
@@ -182,6 +190,8 @@ public final class XpCrafters {
 
         static final String NAME = "valiertweaks_xpcrafters";
         final Map<Long, Crafter> crafters = new LinkedHashMap<>();
+        /** The dimension it belongs to, once {@link #data} has it (for what WAILA is told). */
+        Integer dim;
 
         public Data(String name) {
             super(name);
@@ -199,6 +209,7 @@ public final class XpCrafters {
         void remove(Crafter c) {
             crafters.remove(key(c.x, c.y, c.z));
             markDirty();
+            if (dim != null) hudRemove(dim, c);
         }
 
         @Override
@@ -233,11 +244,13 @@ public final class XpCrafters {
         if (d == null) {
             d = (Data) world.perWorldStorage.loadData(Data.class, Data.NAME);
             if (d == null) d = NONE;
+            else d.dim = world.provider.dimensionId;
             loaded.put(world, d);
         }
         if (d != NONE) return d;
         if (!create) return null;
         d = new Data(Data.NAME);
+        d.dim = world.provider.dimensionId;
         world.perWorldStorage.setData(Data.NAME, d);
         loaded.put(world, d);
         return d;
@@ -557,6 +570,7 @@ public final class XpCrafters {
         }
         c.makes = LootSpawners.copyOne(r.output);
         d.markDirty();
+        hudUpdate(world, c);
         ValierTweaks.LOG.info("{} set the XP crafter at {} to make {}", player.getCommandSenderName(), c.where(),
             r.output.getDisplayName());
         IChatComponent msg = text(EnumChatFormatting.GREEN, "This XP crafter makes " + countName(product(c, r)) + " now, from "
@@ -586,6 +600,7 @@ public final class XpCrafters {
         }
         c.full = true;
         d.markDirty();
+        hudUpdate(world, c);
         ValierTweaks.LOG.info("{} switched full dust on for the XP crafter at {}", player.getCommandSenderName(), c.where());
         XpRecipe r = c.makes == null ? null : recipeFor(c.makes);
         Full f = r == null ? null : full(r.output);
@@ -615,6 +630,7 @@ public final class XpCrafters {
         ItemStack back = c.fullPaid;
         c.fullPaid = null;
         d.markDirty();
+        hudUpdate(player.worldObj, c);
         if (back != null) LootSpawners.give(player, back);
         ValierTweaks.LOG.info("{} switched full dust off for the XP crafter at {}", player.getCommandSenderName(), c.where());
         XpRecipe r = c.makes == null ? null : recipeFor(c.makes);
@@ -633,6 +649,7 @@ public final class XpCrafters {
         Crafter c = Crafter.read(event.x, event.y, event.z, event.itemInHand.getTagCompound()
             .getCompoundTag(ITEM_TAG));
         data(event.world, true).put(c);
+        hudUpdate(event.world, c);
         ValierTweaks.LOG.info("{} placed an XP crafter at {}", event.player == null ? "Something" : event.player.getCommandSenderName(),
             c.where());
     }
@@ -688,11 +705,9 @@ public final class XpCrafters {
             return;
         }
         if (state < 0) return;
-        if (!TweaksConfig.xpCrafter) {
-            c.status = Status.OFF;
-            return;
-        }
-        cycle(w, d, c, tankAt(w, c.x, c.y, c.z));
+        if (!TweaksConfig.xpCrafter) c.status = Status.OFF;
+        else cycle(w, d, c, tankAt(w, c.x, c.y, c.z));
+        hudUpdate(w, c);
     }
 
     /**
@@ -839,6 +854,68 @@ public final class XpCrafters {
             }
             return null;
         }
+    }
+
+    // ---- what WAILA is told ---------------------------------------------------------------------------------------
+
+    /**
+     * What each crafter tells a player looking at it with WAILA ({@link #hudInfo}), by dimension and position. WAILA asks
+     * on its network thread, so this is made ready on the server thread (every second, and whenever a crafter changes)
+     * and never changed once made: only replaced.
+     */
+    static final Map<Integer, Map<Long, NBTTagCompound>> HUD = new ConcurrentHashMap<>();
+    /** WAILA is there to ask. */
+    static boolean hud;
+
+    static void hudUpdate(World w, Crafter c) {
+        if (!hud || w == null) return;
+        HUD.computeIfAbsent(w.provider.dimensionId, k -> new ConcurrentHashMap<>())
+            .put(key(c.x, c.y, c.z), hudInfo(w, c));
+    }
+
+    static void hudRemove(int dim, Crafter c) {
+        Map<Long, NBTTagCompound> m = HUD.get(dim);
+        if (m != null) m.remove(key(c.x, c.y, c.z));
+    }
+
+    /** A copy of what the crafter there tells WAILA, or null if there is none. Any thread. */
+    static NBTTagCompound hudAt(int dim, int x, int y, int z) {
+        Map<Long, NBTTagCompound> m = HUD.get(dim);
+        NBTTagCompound t = m == null ? null : m.get(key(x, y, z));
+        return t == null ? null : (NBTTagCompound) t.copy();
+    }
+
+    /**
+     * What a crafter tells WAILA (format 1): {@code Makes} (the item one craft makes now, as an item stack) with
+     * {@code MakesName} (its English name, should the client not know the item), {@code Cost} (mB each) and
+     * {@code Whole} (full dust is on and changes it); {@code Full} (full dust is on); {@code Status} (a {@link Status}
+     * name) with {@code StatusText} (English); {@code Bank} (mB already taken), {@code Made}; {@code Tank} and
+     * {@code TankFluid} (what is in its tank, if anything).
+     */
+    static NBTTagCompound hudInfo(World w, Crafter c) {
+        NBTTagCompound t = new NBTTagCompound();
+        t.setInteger("Format", 1);
+        XpRecipe r = c.makes == null ? null : recipeFor(c.makes);
+        if (r != null) {
+            ItemStack made = product(c, r);
+            t.setTag("Makes", made.writeToNBT(new NBTTagCompound()));
+            t.setString("MakesName", countName(made));
+            t.setInteger("Cost", cost(c, r));
+            t.setBoolean("Whole", c.full && full(r.output) != null);
+        }
+        t.setBoolean("Full", c.full);
+        t.setString("Status", c.status.name());
+        t.setString("StatusText", c.status.words);
+        t.setInteger("Bank", c.bank);
+        t.setLong("Made", c.made);
+        MTEBasicTank tank = tankAt(w, c.x, c.y, c.z);
+        FluidStack f = tank == null ? null : tank.getFluid();
+        if (f != null && f.amount > 0 && f.getFluid() != null) {
+            t.setInteger("Tank", f.amount);
+            t.setString("TankFluid", f.getFluid()
+                .getName());
+        }
+        return t;
     }
 
     // ---- messages -------------------------------------------------------------------------------------------------

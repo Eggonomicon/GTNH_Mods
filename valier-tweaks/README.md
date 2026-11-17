@@ -1,6 +1,7 @@
 # Valier Tweaks
 
-Server-side. Clients need nothing. Small gameplay fixes for the Valier server.
+Server-side. Clients need nothing (the optional [Valier Client](../valier-client/README.md) mod adds WAILA lines for
+XP crafters). Small gameplay fixes for the Valier server.
 
 ## Lumber axes fell the whole tree
 
@@ -192,8 +193,14 @@ a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An 
   the XP it held; placed again, it carries on. Removed without drops (a Matter Manipulator, a frame mover, a
   command), it is forgotten and stays a plain tank there.
 - **What players see:** the crafting table shows the crafter in its output slot (the server sends it; clients don't
-  know the recipe, so NEI doesn't show it). WAILA shows the plain tank: GregTech tanks have no custom name. The item's
-  tooltip and the status say what it makes.
+  know the recipe, so NEI doesn't show it). The item's tooltip and the status say what it makes. WAILA shows the plain
+  tank: it works out names on the player's computer, and no tank in GTNH shows a name the server sends.
+- **WAILA with Valier Client (1.10.0):** with WAILA on the server, a crafter adds what it makes and is doing to the
+  block data WAILA sends a player looking at it (a `ValierXpCrafter` compound: the item, the cost, the status, its tank,
+  the XP held, the count). Players with the optional [Valier Client](../valier-client/README.md) mod see "Valier XP
+  Crafter" and those lines; everyone else's WAILA ignores it. WAILA asks on its network thread, so the server keeps
+  each crafter's info ready (refreshed every second and whenever a crafter changes) instead of reading the world
+  there.
 
 Stored in each world's `data/valiertweaks_xpcrafters.dat`, by position. Without the mod they are plain tanks.
 
@@ -246,7 +253,7 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 ## Build and test
 
 - **Build:** `gradlew --offline assemble` (JDK 25). It compiles against a GTNH 2.9 server's Tinkers' Construct,
-  UniMixins, GregTech, GTNHLib, ModularUI 2 and AE2 jars (see `dependencies.gradle`). Point it at your server folder with
+  UniMixins, GregTech, GTNHLib, ModularUI 2, AE2 and WAILA jars (see `dependencies.gradle`). Point it at your server folder with
   `-PgtnhInstance=<folder>`; by default it is `../../GTNH_Instance`.
 - **Self-test:** on a test server started with `-Dvaliertweaks.selftest=true`, run `valiertweaks selftest trees`. It
   builds four trees and a log wall, and fake players chop them with real Tinkers lumber axes:
@@ -342,5 +349,10 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
     it carries on. A sneaking empty-hand hit gives the emerald block back. With nothing touching it no XP is taken;
     with the chest full the one it made waits and goes in once there is room. Its record saves; removed without
     drops, it is forgotten. A plain ULV tank only gets a hint.
+  - **WAILA (1.10.0):** the data WAILA's server sends for the crafter (every provider registered for the tank, as
+    WAILA asks them) says what it makes and the cost as soon as it is chosen; working, the 4,000 mB held and 3 made;
+    gallium dust at 72,000 mB with full dust on; with nothing touching it, why, and the 8,000 mB in its tank; nothing
+    once it is forgotten, and nothing for a plain tank. With `valierclient` in the test server's `mods` too, Valier
+    Client's name and line providers are run on that data, and the lines a player reads are checked (see its README).
   - **Chain armour:** the macerator recipes give 1, 2, 1 and 2 steel dust for helmet, leggings, boots and chestplate,
     also as a macerator looks them up.

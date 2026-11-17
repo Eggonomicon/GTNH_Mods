@@ -1,0 +1,8 @@
+// WAILA, compile-time only (the client already has it at run time), from a GTNH 2.9 instance's own mods folder.
+// Point -PgtnhInstance=<folder> (or gtnhInstance in ~/.gradle/gradle.properties) at a GTNH 2.9 client or server folder;
+// by default it is ../../GTNH_Instance next to this repository.
+def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Instance"
+
+dependencies {
+    compileOnly(files("${gtnh}/mods/Waila-1.19.34.jar"))
+}

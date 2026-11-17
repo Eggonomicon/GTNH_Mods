@@ -34,6 +34,8 @@ import net.minecraftforge.fluids.FluidStack;
 
 import com.mojang.authlib.GameProfile;
 
+import cpw.mods.fml.common.Loader;
+
 import gregtech.api.GregTechAPI;
 import gregtech.api.enums.Materials;
 import gregtech.api.enums.OrePrefixes;
@@ -58,6 +60,8 @@ import gregtech.api.util.GTRecipe;
  * on; a sneaking empty-hand hit gives the emerald block back; with nothing touching it no XP is taken, with the chest
  * full the one it made waits; its record saves; removed without dropping, it is forgotten;</li>
  * <li>a plain ULV tank only gets a hint;</li>
+ * <li>with WAILA: what it makes and is doing goes along with WAILA's block data, and with Valier Client loaded too, a
+ * player reads it ({@link XpHudSelfTest});</li>
  * <li>chain armour: GregTech's macerator recipes give whole steel dust (helmet 1, leggings 2, boots 1, chestplate 2),
  * also as a macerator looks them up.</li>
  * </ul>
@@ -80,6 +84,8 @@ final class XpSelfTest {
     final ItemStack titaniumDust = GTOreDictUnificator.get(OrePrefixes.dust, Materials.Titanium, 1);
     final Fluid xp = FluidRegistry.getFluid("xpjuice");
     ItemStack crafterItem;
+    /** The WAILA checks, when WAILA is loaded. */
+    XpHudSelfTest hud;
 
     void start() {
         try {
@@ -94,6 +100,7 @@ final class XpSelfTest {
                 }
             };
             player.setPosition(bx + 8.5, y, bz + 0.5);
+            if (Loader.isModLoaded("Waila")) hud = new XpHudSelfTest(world, player);
             recipes();
             craftingRecipe();
             if (crafterItem != null) crafter();
@@ -200,6 +207,7 @@ final class XpSelfTest {
         SelfTest.check(ev.isCanceled() && c.makes != null && c.makes.isItemEqual(tinyGallium) && held() == 3 && said[0] != null
             && said[0].contains("8,000 mB"), "sneak-right-click with a tiny pile of gallium dust makes it make those, 8,000 mB "
                 + "each, and the pile isn't used (" + said[0] + ")");
+        if (hud != null) hud.chosen(p, tinyGallium);
 
         hold(copy(tinyArsenic, 1));
         SelfTest.DenyBreaks guard = new SelfTest.DenyBreaks();
@@ -228,12 +236,14 @@ final class XpSelfTest {
         XpCrafters.run(world, d, c);
         SelfTest.check(count(chest, tinyGallium) == 3 && c.bank == 4000 && amount(tank) == 0,
             "20,000 mB: two more at once, and 4,000 mB taken towards the next (" + state(c, tank, chest) + ")");
+        if (hud != null) hud.working(p, tinyGallium);
 
         hold(new ItemStack(Blocks.emerald_block, 2));
         ev = click(p);
         SelfTest.check(ev.isCanceled() && c.full && c.fullPaid != null && held() == 1 && said[0] != null
             && said[0].contains(galliumDust.getDisplayName()) && said[0].contains("72,000 mB"), "an emerald block switches full "
                 + "dust on (one used): gallium dust from 72,000 mB each (" + said[0] + ")");
+        if (hud != null) hud.full(p, galliumDust);
         tank.fill(new FluidStack(xp, 32000), true);
         XpCrafters.run(world, d, c);
         boolean waited = c.bank == 36000 && count(chest, galliumDust) == 0;
@@ -281,6 +291,7 @@ final class XpSelfTest {
         XpCrafters.run(world, d, c);
         SelfTest.check(c.status == XpCrafters.Status.NO_OUTPUT && amount(tank) == 8000 && c.bank == 4000,
             "with nothing touching it, it takes no liquid XP and says why (" + state(c, tank, null) + ")");
+        if (hud != null) hud.noOutput(p, xp);
         world.setBlock(out[0], out[1], out[2], Blocks.chest);
         chest = (IInventory) world.getTileEntity(out[0], out[1], out[2]);
         for (int i = 0; i < chest.getSizeInventory(); i++) chest.setInventorySlotContents(i, new ItemStack(Blocks.stone, 64));
@@ -302,6 +313,7 @@ final class XpSelfTest {
         world.setBlockToAir(p[0], p[1], p[2]); // no drops: a Matter Manipulator or a frame mover
         XpCrafters.run(world, d, c);
         SelfTest.check(XpCrafters.crafterAt(world, p[0], p[1], p[2]) == null, "removed without dropping, it is forgotten");
+        if (hud != null) hud.forgotten(p);
     }
 
     void plainTank() {
@@ -317,6 +329,7 @@ final class XpSelfTest {
         SelfTest.check(ok && XpCrafters.tankAt(world, q[0], q[1], q[2]) != null && ev.isCanceled()
             && XpCrafters.crafterAt(world, q[0], q[1], q[2]) == null && said[0] != null && said[0].contains("plain tank")
             && said[0].contains("Block of Diamond"), "on a plain ULV tank a tiny pile of gallium dust only gets a hint (" + said[0] + ")");
+        if (hud != null) hud.plainTank(q);
     }
 
     // ---- chain armour ------------------------------------------------------------------------------------------------
