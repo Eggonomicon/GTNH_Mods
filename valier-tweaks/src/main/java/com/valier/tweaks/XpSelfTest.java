@@ -17,6 +17,7 @@ import net.minecraft.inventory.Slot;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
+import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
@@ -31,12 +32,14 @@ import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.oredict.OreDictionary;
 
 import com.mojang.authlib.GameProfile;
 
 import cpw.mods.fml.common.Loader;
 
 import gregtech.api.GregTechAPI;
+import gregtech.api.enums.ItemList;
 import gregtech.api.enums.Materials;
 import gregtech.api.enums.OrePrefixes;
 import gregtech.api.metatileentity.implementations.MTEBasicTank;
@@ -50,15 +53,19 @@ import gregtech.api.util.GTRecipe;
  * <li>recipes: GTNH's XP bucket recipes are found, with their liquid XP costs (a tiny pile of gallium 8,000 mB, of
  * arsenic 7,000, a small pile of brick 4,000, iron dust 2,000, charcoal 1,000); the full dust of a tiny pile is 9
  * times the XP, of a small pile 4 times; whole dusts have none;</li>
- * <li>crafting: a ULV fluid tank and a block of diamond make a Valier XP Crafter (name and tooltip); not the tank
- * alone, an LV tank, a crafter again, or with anything extra; in a crafting table it is in the output slot, the slot
- * sent to players;</li>
+ * <li>crafting: three ULV fluid tanks, two LV pumps, an LV conveyor, an LV robot arm, a crafting table and an LV
+ * circuit make a Valier XP Crafter (name and tooltip), mirrored too; not with a conveyor for the arm, an LV tank, a
+ * crafter or a tank holding fluid among the tanks, nor the old tank and diamond block; in a crafting table it is in the
+ * output slot, the slot sent to players; with Valier Client loaded, its copy of the recipe (for NEI) matches the same
+ * grids;</li>
  * <li>the crafter: placed as a player places it, it is a crafter; sneak-right-click with an empty hand shows its status,
  * with a tiny pile of gallium chooses that (not without sneaking, not where protected; a dust no recipe makes is
  * refused); 5,000 mB makes nothing yet, 3,000 more make one into the chest, 20,000 make two more; an emerald block
  * makes gallium dust from 72,000 mB instead; broken, it drops as the item with all it knew and placed again carries
- * on; a sneaking empty-hand hit gives the emerald block back; with nothing touching it no XP is taken, with the chest
- * full the one it made waits; its record saves; removed without dropping, it is forgotten;</li>
+ * on; a sneaking empty-hand hit gives the emerald block back; with nothing touching it what it makes waits in its
+ * store, with its store full no XP is taken, with the chest full too it waits, with room the store goes in; its record
+ * saves; removed without dropping, it is forgotten and its store drops;</li>
+ * <li>its menu ({@link XpMenuSelfTest});</li>
  * <li>a plain ULV tank only gets a hint;</li>
  * <li>with WAILA: what it makes and is doing goes along with WAILA's block data, and with Valier Client loaded too, a
  * player reads it ({@link XpHudSelfTest});</li>
@@ -104,6 +111,7 @@ final class XpSelfTest {
             recipes();
             craftingRecipe();
             if (crafterItem != null) crafter();
+            if (crafterItem != null) new XpMenuSelfTest(this).run();
             plainTank();
             chainArmour();
         } catch (Throwable t) {
@@ -145,25 +153,68 @@ final class XpSelfTest {
     void craftingRecipe() {
         ItemStack tank = new ItemStack(GregTechAPI.sBlockMachines, 1, 817);
         ItemStack lv = new ItemStack(GregTechAPI.sBlockMachines, 1, 818);
-        ItemStack diamond = new ItemStack(Blocks.diamond_block);
-        ItemStack made = craft(tank, diamond);
+        ItemStack pump = ItemList.Electric_Pump_LV.get(1), conveyor = ItemList.Conveyor_Module_LV.get(1),
+            arm = ItemList.Robot_Arm_LV.get(1), table = new ItemStack(Blocks.crafting_table);
+        String circuitName = OrePrefixes.circuit.get(Materials.LV)
+            .toString();
+        ItemStack circuit = null;
+        for (ItemStack s : OreDictionary.getOres(circuitName)) {
+            if (s != null && s.getItemDamage() != OreDictionary.WILDCARD_VALUE) {
+                circuit = s.copy();
+                break;
+            }
+        }
+        SelfTest.check(circuit != null, "LV circuits are in the ore dictionary as " + circuitName + " ("
+            + (circuit == null ? null : circuit.getDisplayName()) + ")");
+        if (circuit == null) return;
+        ItemStack[] right = { tank, pump, conveyor, tank, table, circuit, tank, pump, arm };
+        ItemStack made = craft(right);
         crafterItem = XpCrafters.isCrafterItem(made) ? made : null;
-        SelfTest.check(crafterItem != null && made.getDisplayName()
-            .contains("Valier XP Crafter") && lore(made).contains("Makes: nothing yet"), "a ULV fluid tank and a block of "
-                + "diamond craft a Valier XP Crafter (" + (made == null ? null : made.getDisplayName() + ": " + lore(made)) + ")");
-        ItemStack alone = craft(tank), wrongTank = craft(lv, diamond), again = craft(made == null ? tank : made, diamond),
-            extra = craft(tank, diamond, new ItemStack(Blocks.dirt));
-        SelfTest.check(!XpCrafters.isCrafterItem(alone) && !XpCrafters.isCrafterItem(wrongTank) && !XpCrafters.isCrafterItem(again)
-            && !XpCrafters.isCrafterItem(extra), "not the tank alone, an LV tank, a crafter again, or with dirt as well");
+        SelfTest.check(crafterItem != null && made.stackSize == 1 && made.getDisplayName()
+            .contains("Valier XP Crafter") && lore(made).contains("Makes: nothing yet"), "three ULV fluid tanks, two LV pumps, "
+                + "an LV conveyor, an LV robot arm, a crafting table and an LV circuit craft a Valier XP Crafter ("
+                + (made == null ? null : made.getDisplayName() + ": " + lore(made)) + ")");
+        ItemStack mirrored = craft(conveyor, pump, tank, circuit, table, tank, arm, pump, tank);
+        ItemStack filled = tank.copy();
+        NBTTagCompound fluid = new NBTTagCompound();
+        fluid.setTag("mFluid", new FluidStack(xp, 1000).writeToNBT(new NBTTagCompound()));
+        filled.setTagCompound(fluid);
+        ItemStack noArm = craft(tank, pump, conveyor, tank, table, circuit, tank, pump, conveyor),
+            lvTank = craft(tank, pump, conveyor, lv, table, circuit, tank, pump, arm),
+            again = craft(made == null ? tank : made, pump, conveyor, tank, table, circuit, tank, pump, arm),
+            withFluid = craft(tank, pump, conveyor, filled, table, circuit, tank, pump, arm),
+            old = craft(tank, null, new ItemStack(Blocks.diamond_block));
+        SelfTest.check(XpCrafters.isCrafterItem(mirrored) && !XpCrafters.isCrafterItem(noArm) && !XpCrafters.isCrafterItem(lvTank)
+            && !XpCrafters.isCrafterItem(again) && !XpCrafters.isCrafterItem(withFluid) && !XpCrafters.isCrafterItem(old),
+            "mirrored too; not with a conveyor for the robot arm, an LV tank, a crafter or a tank holding fluid among the "
+                + "tanks, nor the old tank and diamond block");
         ContainerWorkbench bench = new ContainerWorkbench(player.inventory, world, bx, y, bz);
-        bench.craftMatrix.setInventorySlotContents(0, tank.copy());
-        bench.craftMatrix.setInventorySlotContents(4, diamond.copy());
+        for (int i = 0; i < 9; i++) bench.craftMatrix.setInventorySlotContents(i, right[i].copy());
         Slot slot = XpCrafters.CraftSync.resultSlot(bench);
         SelfTest.check(slot != null && slot.slotNumber == 0 && XpCrafters.isCrafterItem(slot.getStack()),
             "in a crafting table the crafter is in the output slot, the slot sent to the player (" + slot + ")");
+        if (Loader.isModLoaded("valierclient"))
+            clientRecipe(right, new ItemStack[] { tank, pump, conveyor, tank, table, circuit, tank, pump, conveyor });
     }
 
-    ItemStack craft(ItemStack... stacks) {
+    /** Valier Client's copy of the recipe (it shows it in NEI) takes the same grid, not one with a conveyor for the arm. */
+    void clientRecipe(ItemStack[] right, ItemStack[] wrong) {
+        IRecipe r = null;
+        try {
+            r = (IRecipe) Class.forName("com.valier.client.XpCrafterRecipe")
+                .getMethod("make")
+                .invoke(null);
+        } catch (Throwable e) {
+            ValierTweaks.LOG.warn("[ValierTweaks SelfTest] Valier Client's recipe", e);
+        }
+        ItemStack out = r == null ? null : r.getRecipeOutput();
+        SelfTest.check(r != null && r.matches(grid(right), world) && !r.matches(grid(wrong), world)
+            && out != null && XpCrafters.isTankItem(out) && out.getDisplayName()
+                .contains("Valier XP Crafter"),
+            "Valier Client: its copy of the recipe, for NEI, takes the same grid and shows a Valier XP Crafter (" + out + ")");
+    }
+
+    InventoryCrafting grid(ItemStack... stacks) {
         InventoryCrafting grid = new InventoryCrafting(new Container() {
 
             @Override
@@ -171,9 +222,13 @@ final class XpSelfTest {
                 return true;
             }
         }, 3, 3);
-        for (int i = 0; i < stacks.length; i++) grid.setInventorySlotContents(i * 2, stacks[i].copy());
+        for (int i = 0; i < stacks.length; i++) if (stacks[i] != null) grid.setInventorySlotContents(i, stacks[i].copy());
+        return grid;
+    }
+
+    ItemStack craft(ItemStack... stacks) {
         return CraftingManager.getInstance()
-            .findMatchingRecipe(grid, world);
+            .findMatchingRecipe(grid(stacks), world);
     }
 
     // ---- the crafter ------------------------------------------------------------------------------------------------
@@ -289,18 +344,25 @@ final class XpSelfTest {
         world.setBlockToAir(out[0], out[1], out[2]);
         tank.fill(new FluidStack(xp, 8000), true);
         XpCrafters.run(world, d, c);
-        SelfTest.check(c.status == XpCrafters.Status.NO_OUTPUT && amount(tank) == 8000 && c.bank == 4000,
-            "with nothing touching it, it takes no liquid XP and says why (" + state(c, tank, null) + ")");
+        SelfTest.check(c.status == XpCrafters.Status.WORKING && c.stored() == 1 && amount(tank) == 0 && c.bank == 4000,
+            "with nothing touching it, what it makes waits in its store (" + state(c, tank, null) + ", store " + c.stored() + ")");
+        for (int i = 0; i < XpCrafters.Crafter.STORE; i++) c.store[i] = copy(tinyGallium, 64);
+        tank.fill(new FluidStack(xp, 8000), true);
+        XpCrafters.run(world, d, c);
+        SelfTest.check(c.status == XpCrafters.Status.NO_OUTPUT && amount(tank) == 8000 && c.bank == 4000 && c.stored() == 576,
+            "with its store full and nothing touching it, it takes no liquid XP and says why (" + state(c, tank, null) + ")");
         if (hud != null) hud.noOutput(p, xp);
         world.setBlock(out[0], out[1], out[2], Blocks.chest);
         chest = (IInventory) world.getTileEntity(out[0], out[1], out[2]);
         for (int i = 0; i < chest.getSizeInventory(); i++) chest.setInventorySlotContents(i, new ItemStack(Blocks.stone, 64));
         XpCrafters.run(world, d, c);
-        SelfTest.check(c.status == XpCrafters.Status.FULL && c.pending != null && c.pending.isItemEqual(tinyGallium)
-            && amount(tank) == 4000 && c.bank == 0, "with the chest full, it keeps the one it made and waits (" + state(c, tank, chest) + ")");
+        SelfTest.check(c.status == XpCrafters.Status.FULL && c.stored() == 576 && amount(tank) == 8000 && c.bank == 4000,
+            "with its store and the chest full, it waits (" + state(c, tank, chest) + ")");
         chest.setInventorySlotContents(0, null);
         XpCrafters.run(world, d, c);
-        SelfTest.check(c.pending == null && count(chest, tinyGallium) == 1, "with room again, the waiting one goes in");
+        SelfTest.check(count(chest, tinyGallium) == 64 && c.stored() == 513 && amount(tank) == 0 && c.bank == 4000
+            && c.status == XpCrafters.Status.WORKING, "with room in the chest, a stack of its store goes in and it makes "
+                + "another (" + state(c, tank, chest) + ", store " + c.stored() + ")");
 
         NBTTagCompound saved = new NBTTagCompound();
         d.writeToNBT(saved);
@@ -308,11 +370,19 @@ final class XpSelfTest {
         loaded.readFromNBT(saved);
         XpCrafters.Crafter back = loaded.at(p[0], p[1], p[2]);
         SelfTest.check(back != null && back.makes != null && back.makes.isItemEqual(tinyGallium) && back.bank == c.bank
-            && back.made == c.made && !back.full, "its record saves and loads");
+            && back.made == c.made && !back.full && back.stored() == 513, "its record saves and loads, its store too");
 
+        for (EntityItem e : itemsNear(p)) e.setDead();
         world.setBlockToAir(p[0], p[1], p[2]); // no drops: a Matter Manipulator or a frame mover
         XpCrafters.run(world, d, c);
-        SelfTest.check(XpCrafters.crafterAt(world, p[0], p[1], p[2]) == null, "removed without dropping, it is forgotten");
+        int spilled = 0;
+        for (EntityItem e : itemsNear(p)) {
+            if (e.getEntityItem()
+                .isItemEqual(tinyGallium)) spilled += e.getEntityItem().stackSize;
+            e.setDead();
+        }
+        SelfTest.check(XpCrafters.crafterAt(world, p[0], p[1], p[2]) == null && spilled == 513, "removed without dropping, "
+            + "it is forgotten and its store drops where it was (" + spilled + ")");
         if (hud != null) hud.forgotten(p);
     }
 
@@ -328,7 +398,7 @@ final class XpSelfTest {
         PlayerInteractEvent ev = click(q);
         SelfTest.check(ok && XpCrafters.tankAt(world, q[0], q[1], q[2]) != null && ev.isCanceled()
             && XpCrafters.crafterAt(world, q[0], q[1], q[2]) == null && said[0] != null && said[0].contains("plain tank")
-            && said[0].contains("Block of Diamond"), "on a plain ULV tank a tiny pile of gallium dust only gets a hint (" + said[0] + ")");
+            && said[0].contains("LV robot arm"), "on a plain ULV tank a tiny pile of gallium dust only gets a hint (" + said[0] + ")");
         if (hud != null) hud.plainTank(q);
     }
 

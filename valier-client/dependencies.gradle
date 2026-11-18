@@ -1,8 +1,14 @@
-// WAILA, compile-time only (the client already has it at run time), from a GTNH 2.9 instance's own mods folder.
+// Compile-time only (the client already has them at run time), from a GTNH 2.9 instance's own mods folder: WAILA, and
+// GregTech for the XP crafter recipe's parts (GTNHLib, ModularUI 2 and AE2 only because GregTech's classes extend theirs).
 // Point -PgtnhInstance=<folder> (or gtnhInstance in ~/.gradle/gradle.properties) at a GTNH 2.9 client or server folder;
 // by default it is ../../GTNH_Instance next to this repository.
 def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Instance"
 
 dependencies {
-    compileOnly(files("${gtnh}/mods/Waila-1.19.34.jar"))
+    compileOnly(files(
+        "${gtnh}/mods/Waila-1.19.34.jar",
+        "${gtnh}/mods/gregtech-5.09.54.265.jar",
+        "${gtnh}/mods/gtnhlib-0.11.54.jar",
+        "${gtnh}/mods/modularui2-2.3.94-1.7.10.jar",
+        "${gtnh}/mods/appliedenergistics2-rv3-beta-1095-GTNH.jar"))
 }

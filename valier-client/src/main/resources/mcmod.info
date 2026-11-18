@@ -2,7 +2,7 @@
 {
   "modid": "${modId}",
   "name": "${modName}",
-  "description": "Optional client add-on for the Valier server's mods. WAILA shows a Valier XP Crafter as one: what it makes, the liquid XP each takes and what it is doing. Does nothing on servers without Valier Tweaks; the server never needs it.",
+  "description": "Optional client add-on for the Valier server's mods. WAILA shows a Valier XP Crafter as one: what it makes, the liquid XP each takes, what it is doing and its store; NEI shows its crafting recipe. Does nothing on servers without Valier Tweaks; the server never needs it.",
   "version": "${modVersion}",
   "mcversion": "${minecraftVersion}",
   "authorList": ["Valier"]

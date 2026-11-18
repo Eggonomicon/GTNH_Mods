@@ -10,6 +10,7 @@ import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.block.Block;
+import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
@@ -56,22 +57,29 @@ import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.common.registry.GameRegistry;
+import gregtech.api.enums.ItemList;
+import gregtech.api.enums.Materials;
+import gregtech.api.enums.OrePrefixes;
 import gregtech.api.interfaces.metatileentity.IMetaTileEntity;
 import gregtech.api.interfaces.tileentity.IGregTechTileEntity;
 import gregtech.api.metatileentity.implementations.MTEBasicTank;
 
 /**
- * XP crafters: a GregTech tank (GT++'s Ultra Low Voltage Fluid Tank by default) crafted with a block of diamond becomes
- * a "Valier XP Crafter". Placed, it is still that tank to clients and pipes: it fills with liquid XP the usual way. Once
- * a second it takes the liquid XP it needs and makes one of the things GTNH's XP bucket crafting recipes make (a tiny
- * pile of gallium dust from 8 buckets, and so on), as many as it has XP for, and puts them into the chests,
- * inventories and pipes touching it.
+ * XP crafters: three GregTech tanks (GT++'s Ultra Low Voltage Fluid Tank by default), two LV pumps, an LV conveyor, an
+ * LV robot arm, a crafting table and an LV circuit craft a "Valier XP Crafter" ({@link Recipe}). Placed, it is still
+ * the tank to clients and pipes: it fills with liquid XP the usual way. Once a second it takes the liquid XP it needs and
+ * makes one of the things GTNH's XP bucket crafting recipes make (a tiny pile of gallium dust from 8 buckets, and so
+ * on), as many as it has XP for, into its store of 9 stacks, and hands its store to the chests, inventories and pipes
+ * touching it.
  * <ul>
+ * <li>Right-click it with an empty hand: its menu ({@link XpMenu}), a chest window any client shows: its liquid XP,
+ * everything it can make (click one), its store (take from it), full dust.</li>
  * <li>Sneak-right-click it with what it should make to choose (the item isn't used up); with an empty hand for its
- * status.</li>
- * <li>Sneak-right-click it with a block of emerald: it makes the whole dust instead of a tiny or small pile, for 9 or 4
- * times the XP (the emerald block stays in it; again, or a sneaking empty-hand hit, gives it back).</li>
- * <li>Broken, it drops as the XP crafter item again, with its recipe, emerald block and the XP it was holding.</li>
+ * status in chat.</li>
+ * <li>Sneak-right-click it with a block of emerald (or use its menu): it makes the whole dust instead of a tiny or small
+ * pile, for 9 or 4 times the XP (the emerald block stays in it; again, or a sneaking empty-hand hit, gives it back).</li>
+ * <li>Broken, it drops as the XP crafter item again, with its recipe, emerald block and the XP it was holding; its
+ * store drops as items.</li>
  * </ul>
  * Server side only: clients don't know the recipe, so the crafting grid's output is sent to them ({@link CraftSync}).
  * The crafters of a world are kept in its {@code data/valiertweaks_xpcrafters.dat}, by position; one removed without
@@ -92,8 +100,8 @@ public final class XpCrafters {
         WORKING("working"),
         NEEDS_XP("waiting for liquid XP"),
         WRONG_FLUID("waiting: its tank holds something other than liquid XP"),
-        NO_OUTPUT("waiting: no chest, inventory or pipe touches it"),
-        FULL("waiting: everything touching it is full"),
+        NO_OUTPUT("waiting: its store is full, and nothing touching it takes items"),
+        FULL("waiting: its store and everything touching it are full"),
         OFF("XP crafters are switched off on this server");
 
         final String words;
@@ -114,9 +122,10 @@ public final class XpCrafters {
         FMLCommonHandler.instance()
             .bus()
             .register(new CraftSync());
-        RecipeSorter.register(ValierTweaks.MODID + ":xpcrafter", Recipe.class, RecipeSorter.Category.SHAPELESS,
-            "after:minecraft:shapeless");
-        GameRegistry.addRecipe(new Recipe());
+        RecipeSorter.register(ValierTweaks.MODID + ":xpcrafter", Recipe.class, RecipeSorter.Category.SHAPED,
+            "after:forge:shapedore");
+        Recipe recipe = Recipe.make();
+        if (recipe != null) GameRegistry.addRecipe(recipe);
         hud = Loader.isModLoaded("Waila");
         if (hud) FMLInterModComms.sendMessage("Waila", "register", "com.valier.tweaks.XpCrafterWaila.callbackRegister");
     }
@@ -132,6 +141,8 @@ public final class XpCrafters {
 
     static final class Crafter {
 
+        /** Stacks its store holds. */
+        static final int STORE = 9;
         final int x, y, z;
         /** One of the XP recipes' outputs (a single item), or null. */
         ItemStack makes;
@@ -141,8 +152,8 @@ public final class XpCrafters {
         ItemStack fullPaid;
         /** Liquid XP (mB) already taken out of its tank towards the next craft. */
         int bank;
-        /** Made but not taken by anything yet. */
-        ItemStack pending;
+        /** Made but not taken by anything touching it yet: a player takes these in its menu. */
+        final ItemStack[] store = new ItemStack[STORE];
         long made;
         Status status = Status.NO_RECIPE;
 
@@ -152,14 +163,21 @@ public final class XpCrafters {
             this.z = z;
         }
 
-        /** For the world's save, or (forItem) for the item it drops as: no position, nothing pending. */
+        /** For the world's save, or (forItem) for the item it drops as: no position, no store (that drops). */
         NBTTagCompound write(boolean forItem) {
             NBTTagCompound t = new NBTTagCompound();
             if (!forItem) {
                 t.setInteger("x", x);
                 t.setInteger("y", y);
                 t.setInteger("z", z);
-                if (pending != null) t.setTag("Pending", pending.writeToNBT(new NBTTagCompound()));
+                NBTTagList list = new NBTTagList();
+                for (int i = 0; i < STORE; i++) {
+                    if (store[i] == null) continue;
+                    NBTTagCompound s = store[i].writeToNBT(new NBTTagCompound());
+                    s.setByte("Slot", (byte) i);
+                    list.appendTag(s);
+                }
+                if (list.tagCount() > 0) t.setTag("Store", list);
             }
             if (makes != null) t.setTag("Makes", makes.writeToNBT(new NBTTagCompound()));
             t.setBoolean("Full", full);
@@ -175,9 +193,25 @@ public final class XpCrafters {
             c.full = t.getBoolean("Full");
             c.fullPaid = t.hasKey("FullPaid", 10) ? ItemStack.loadItemStackFromNBT(t.getCompoundTag("FullPaid")) : null;
             c.bank = Math.max(0, t.getInteger("Bank"));
-            c.pending = t.hasKey("Pending", 10) ? ItemStack.loadItemStackFromNBT(t.getCompoundTag("Pending")) : null;
+            NBTTagList list = t.getTagList("Store", 10);
+            for (int i = 0; i < list.tagCount(); i++) {
+                NBTTagCompound s = list.getCompoundTagAt(i);
+                int slot = s.getByte("Slot");
+                if (slot >= 0 && slot < STORE) c.store[slot] = ItemStack.loadItemStackFromNBT(s);
+            }
+            if (t.hasKey("Pending", 10)) { // 1.10.0 and before: one made but not handed over
+                ItemStack pending = ItemStack.loadItemStackFromNBT(t.getCompoundTag("Pending"));
+                if (pending != null && c.store[0] == null) c.store[0] = pending;
+            }
             c.made = t.getLong("Made");
             return c;
+        }
+
+        /** How many items its store holds. */
+        int stored() {
+            int n = 0;
+            for (ItemStack s : store) if (s != null) n += s.stackSize;
+            return n;
         }
 
         String where() {
@@ -495,8 +529,8 @@ public final class XpCrafters {
         XpRecipe r = c.makes == null ? null : recipeFor(c.makes);
         if (r == null) {
             lines.add("Makes: nothing yet");
-            lines.add("Place it, then sneak-right-click it");
-            lines.add("with what it should make");
+            lines.add("Place it, then right-click it");
+            lines.add("to choose what it makes");
         } else {
             lines.add("Makes: " + countName(product(c, r)));
             lines.add("Uses " + mb(cost(c, r)) + " mB of liquid XP each");
@@ -504,16 +538,18 @@ public final class XpCrafters {
         if (c.full) lines.add("Full dust: on (" + (c.fullPaid != null ? c.fullPaid.getDisplayName() + " in it" : "creative") + ")");
         if (c.bank > 0) lines.add("Holding " + mb(c.bank) + " mB of liquid XP");
         lines.add("Fill it with liquid XP; what it makes");
-        lines.add("goes into chests and pipes touching it");
+        lines.add("goes into chests and pipes touching it,");
+        lines.add("or waits in its store");
         return lines;
     }
 
     // ---- clicks, placing and breaking --------------------------------------------------------------------------------
 
     /**
-     * Sneak-right-click on an XP crafter: with an empty hand its status, with the full-dust item that switched on or
-     * off, with something an XP recipe makes that becomes what it makes. A sneaking empty-hand hit gives the full-dust
-     * item back. Low priority, and not for cancelled clicks, so claim protection that stops the click wins.
+     * A right-click with an empty hand on an XP crafter opens its menu. Sneak-right-click: with an empty hand its status,
+     * with the full-dust item that switched on or off, with something an XP recipe makes that becomes what it makes. A
+     * sneaking empty-hand hit gives the full-dust item back. Low priority, and not for cancelled clicks, so claim
+     * protection that stops the click wins.
      */
     @SubscribeEvent(priority = EventPriority.LOW)
     public void onClick(PlayerInteractEvent event) {
@@ -521,22 +557,29 @@ public final class XpCrafters {
         if (!hit && event.action != PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK) return;
         EntityPlayer player = event.entityPlayer;
         World world = event.world;
-        if (world.isRemote || !player.isSneaking()) return;
+        ItemStack held = player.getHeldItem();
+        boolean menu = !hit && !player.isSneaking() && held == null && opensMenus(player);
+        if (world.isRemote || !(player.isSneaking() || menu)) return;
         int x = event.x, y = event.y, z = event.z;
         Data d = data(world, false);
         Crafter c = d == null ? null : d.at(x, y, z);
         if (c != null && tankState(world, x, y, z) == 0) {
-            d.remove(c); // removed without dropping: it's forgotten
+            forget(world, d, c); // removed without dropping
             c = null;
         }
-        ItemStack held = player.getHeldItem();
+        if (menu) {
+            if (c != null) {
+                event.setCanceled(true);
+                XpMenu.open(player, world, d, c);
+            }
+            return;
+        }
         if (c == null) {
             if (!hit && held != null && recipeFor(held) != null && tankAt(world, x, y, z) != null) {
                 event.setCanceled(true);
-                tell(player, text(EnumChatFormatting.GRAY, "This is a plain tank. Craft it with ")
-                    .appendSibling(LootSpawners.costText(TweaksConfig.xpCrafterItem, 1))
-                    .appendSibling(new ChatComponentText(" to make a " + NAME + ", place that, then sneak-right-click it "
-                        + "with what it should make.")));
+                tell(player, text(EnumChatFormatting.GRAY, "This is a plain tank. A " + NAME + " is crafted from three of "
+                    + "these, two LV pumps, an LV conveyor, an LV robot arm, a crafting table and an LV circuit. Place "
+                    + "that and right-click it to choose what it makes."));
             }
             return;
         }
@@ -563,6 +606,11 @@ public final class XpCrafters {
         }
     }
 
+    /** Players open menus; other fake players (machines that click) don't, except the self-test's. */
+    static boolean opensMenus(EntityPlayer player) {
+        return player instanceof EntityPlayerMP && (!(player instanceof FakePlayer) || player == XpMenu.testPlayer);
+    }
+
     static void choose(EntityPlayer player, World world, Data d, Crafter c, XpRecipe r) {
         if (!LootSpawners.mayChange(player, world, c.x, c.y, c.z)) {
             tell(player, text(EnumChatFormatting.RED, "You can't change this XP crafter: it's protected."));
@@ -577,11 +625,23 @@ public final class XpCrafters {
             + mb(cost(c, r)) + " mB of liquid XP each.");
         Full f = full(r.output);
         if (f != null && !c.full && LootSpawners.itemOf(TweaksConfig.xpCrafterFullItem) != null)
-            msg.appendSibling(new ChatComponentText(" Sneak-right-click it with "))
+            msg.appendSibling(new ChatComponentText(" With "))
                 .appendSibling(LootSpawners.costText(TweaksConfig.xpCrafterFullItem, 1))
-                .appendSibling(new ChatComponentText(" to make " + countName(f.dust) + " instead (" + mb(r.cost * f.times)
-                    + " mB each)."));
+                .appendSibling(new ChatComponentText(" in it (full dust, in its menu) it makes " + countName(f.dust)
+                    + " instead (" + mb(r.cost * f.times) + " mB each)."));
         tell(player, msg);
+    }
+
+    /** It stops making anything (its menu: the chosen one clicked again). */
+    static void stop(EntityPlayer player, World world, Data d, Crafter c) {
+        XpRecipe r = c.makes == null ? null : recipeFor(c.makes);
+        c.makes = null;
+        c.status = Status.NO_RECIPE;
+        d.markDirty();
+        hudUpdate(world, c);
+        ValierTweaks.LOG.info("{} stopped the XP crafter at {}", player.getCommandSenderName(), c.where());
+        tell(player, text(EnumChatFormatting.YELLOW, "This XP crafter stopped making " + (r == null ? "anything" : countName(r.output))
+            + ". Its liquid XP stays in it."));
     }
 
     static void toggleFull(EntityPlayer player, World world, Data d, Crafter c, ItemStack held) {
@@ -593,11 +653,18 @@ public final class XpCrafters {
             switchFullOff(player, d, c, "Full dust off");
             return;
         }
+        ItemStack paid = null;
         if (!player.capabilities.isCreativeMode) {
-            c.fullPaid = held.splitStack(1);
+            paid = held.splitStack(1);
             if (held.stackSize <= 0) player.inventory.setInventorySlotContents(player.inventory.currentItem, null);
             player.inventoryContainer.detectAndSendChanges();
         }
+        fullOn(player, world, d, c, paid);
+    }
+
+    /** Full dust on, the item paid for it kept in it (none in creative). */
+    static void fullOn(EntityPlayer player, World world, Data d, Crafter c, ItemStack paid) {
+        c.fullPaid = paid;
         c.full = true;
         d.markDirty();
         hudUpdate(world, c);
@@ -609,7 +676,8 @@ public final class XpCrafters {
             : f == null ? countName(r.output) + " is already whole, so nothing changes until it makes a tiny or small pile."
                 : "It makes " + countName(f.dust) + " now, from " + mb(cost(c, r)) + " mB of liquid XP each.";
         tell(player, text(EnumChatFormatting.GREEN, "Full dust on. " + what
-            + " Do it again, or sneak and hit it with an empty hand, to switch that off and get the block back."));
+            + " Do it again, click it in its menu, or sneak and hit it with an empty hand, to switch that off and get the "
+            + "block back."));
     }
 
     /** A sneaking empty-hand hit: the full-dust item comes back out. */
@@ -625,7 +693,7 @@ public final class XpCrafters {
         switchFullOff(player, d, c, "Taken back: full dust is off");
     }
 
-    private static void switchFullOff(EntityPlayer player, Data d, Crafter c, String said) {
+    static void switchFullOff(EntityPlayer player, Data d, Crafter c, String said) {
         c.full = false;
         ItemStack back = c.fullPaid;
         c.fullPaid = null;
@@ -656,7 +724,7 @@ public final class XpCrafters {
 
     /**
      * An XP crafter broken with drops (by a player, an explosion, a mod that breaks blocks with drops): the tank it drops
-     * becomes the XP crafter item, knowing what it knew; what it had made but not handed over drops too.
+     * becomes the XP crafter item, knowing what it knew; its store drops too.
      */
     @SubscribeEvent(priority = EventPriority.LOW)
     public void onHarvest(BlockEvent.HarvestDropsEvent event) {
@@ -674,12 +742,13 @@ public final class XpCrafters {
         }
         if (tank != null) {
             event.drops.set(event.drops.indexOf(tank), toItem(tank, c));
-        } else { // the tank itself didn't drop: what was paid into it does
-            Item diamond = LootSpawners.itemOf(TweaksConfig.xpCrafterItem);
-            if (diamond != null) event.drops.add(new ItemStack(diamond, 1, Math.max(0, LootSpawners.metaOf(TweaksConfig.xpCrafterItem))));
-            if (c.fullPaid != null) event.drops.add(c.fullPaid);
+        } else if (c.fullPaid != null) { // the tank itself didn't drop: the full-dust item paid into it does
+            event.drops.add(c.fullPaid);
         }
-        if (c.pending != null) event.drops.add(c.pending);
+        for (int i = 0; i < Crafter.STORE; i++) {
+            if (c.store[i] != null) event.drops.add(c.store[i]);
+            c.store[i] = null;
+        }
         ValierTweaks.LOG.info("The XP crafter at {} was broken{}", c.where(), tank != null ? " and dropped as an item" : "");
     }
 
@@ -700,8 +769,7 @@ public final class XpCrafters {
         if (!w.blockExists(c.x, c.y, c.z)) return; // never load a chunk
         int state = tankState(w, c.x, c.y, c.z);
         if (state == 0) {
-            d.remove(c);
-            ValierTweaks.LOG.info("The XP crafter at {} is gone (removed without dropping); forgotten", c.where());
+            forget(w, d, c);
             return;
         }
         if (state < 0) return;
@@ -710,35 +778,44 @@ public final class XpCrafters {
         hudUpdate(w, c);
     }
 
+    /** Removed without dropping (a Matter Manipulator, a frame mover): its store drops where it was, and it's forgotten. */
+    static void forget(World w, Data d, Crafter c) {
+        for (int i = 0; i < Crafter.STORE; i++) {
+            if (c.store[i] == null) continue;
+            EntityItem e = new EntityItem(w, c.x + 0.5, c.y + 0.5, c.z + 0.5, c.store[i]);
+            e.delayBeforeCanPickup = 10;
+            w.spawnEntityInWorld(e);
+            c.store[i] = null;
+        }
+        d.remove(c);
+        ValierTweaks.LOG.info("The XP crafter at {} is gone (removed without dropping); forgotten", c.where());
+    }
+
     /**
-     * Hands over what is waiting, then crafts as long as there is liquid XP for it and something takes the result. XP is
-     * taken from the tank only as needed, so with nothing to craft (or nowhere to put it) it stays in the tank.
+     * Hands its store to what touches it, crafts into its store as long as there is liquid XP for it and room, then hands
+     * that over too. XP is taken from the tank only as needed, so with nothing to craft (or no room) it stays in the tank.
      */
     static void cycle(World w, Data d, Crafter c, MTEBasicTank tank) {
-        if (c.pending != null) {
-            c.pending = LootSpawners.insertAround(w, c.x, c.y, c.z, c.pending);
-            d.markDirty();
-            if (c.pending != null) {
-                c.status = anyOutput(w, c) ? Status.FULL : Status.NO_OUTPUT;
-                return;
-            }
-        }
+        handOver(w, d, c);
         XpRecipe r = c.makes == null ? null : recipeFor(c.makes);
         if (r == null) {
             c.status = Status.NO_RECIPE;
             return;
         }
-        if (!anyOutput(w, c)) {
-            c.status = Status.NO_OUTPUT;
-            return;
-        }
         int cost = cost(c, r);
+        ItemStack each = product(c, r);
+        int made = 0;
+        Status waiting = Status.NEEDS_XP;
         for (int i = 0; i < MAX_PER_SECOND; i++) {
+            if (!fits(c.store, each)) {
+                waiting = anyOutput(w, c) ? Status.FULL : Status.NO_OUTPUT;
+                break;
+            }
             if (c.bank < cost) {
                 FluidStack f = tank.getDrainableStack();
                 if (f != null && f.amount > 0 && !isXp(f.getFluid())) {
-                    if (i == 0) c.status = Status.WRONG_FLUID;
-                    return;
+                    waiting = Status.WRONG_FLUID;
+                    break;
                 }
                 int take = Math.min(cost - c.bank, f == null ? 0 : f.amount);
                 if (take > 0) {
@@ -750,20 +827,59 @@ public final class XpCrafters {
                 }
             }
             if (c.bank < cost) {
-                if (i == 0) c.status = Status.NEEDS_XP;
-                return;
+                waiting = Status.NEEDS_XP;
+                break;
             }
             c.bank -= cost;
             c.made++;
-            c.status = Status.WORKING;
+            made++;
+            add(c.store, each.copy());
             d.markDirty();
-            ItemStack left = LootSpawners.insertAround(w, c.x, c.y, c.z, product(c, r));
-            if (left != null) {
-                c.pending = left;
-                c.status = Status.FULL;
-                return;
-            }
         }
+        c.status = made > 0 ? Status.WORKING : waiting;
+        if (made > 0) handOver(w, d, c);
+    }
+
+    /** Its store into the chests, inventories and pipes touching it. */
+    static void handOver(World w, Data d, Crafter c) {
+        for (int i = 0; i < Crafter.STORE; i++) {
+            if (c.store[i] == null) continue;
+            int before = c.store[i].stackSize; // what takes it may shrink this very stack
+            ItemStack left = LootSpawners.insertAround(w, c.x, c.y, c.z, c.store[i]);
+            if (left == null || left.stackSize != before) d.markDirty();
+            c.store[i] = left;
+        }
+    }
+
+    /** All of {@code s} fits in the store. */
+    static boolean fits(ItemStack[] store, ItemStack s) {
+        int room = 0, max = Math.min(64, s.getMaxStackSize());
+        for (ItemStack in : store) {
+            if (in == null) room += max;
+            else if (stackable(in, s)) room += Math.max(0, max - in.stackSize);
+            if (room >= s.stackSize) return true;
+        }
+        return false;
+    }
+
+    /** Into the store, onto stacks of the same item first; call only when it {@link #fits}. */
+    static void add(ItemStack[] store, ItemStack s) {
+        int max = Math.min(64, s.getMaxStackSize());
+        for (int i = 0; i < store.length && s.stackSize > 0; i++) {
+            if (store[i] == null || !stackable(store[i], s)) continue;
+            int move = Math.min(s.stackSize, max - store[i].stackSize);
+            if (move <= 0) continue;
+            store[i].stackSize += move;
+            s.stackSize -= move;
+        }
+        for (int i = 0; i < store.length && s.stackSize > 0; i++) {
+            if (store[i] != null) continue;
+            store[i] = s.splitStack(Math.min(s.stackSize, max));
+        }
+    }
+
+    static boolean stackable(ItemStack a, ItemStack b) {
+        return a.isItemEqual(b) && ItemStack.areItemStackTagsEqual(a, b);
     }
 
     static boolean anyOutput(World w, Crafter c) {
@@ -775,12 +891,40 @@ public final class XpCrafters {
 
     // ---- the crafting recipe -------------------------------------------------------------------------------------
 
-    /** The tank and a block of diamond in a crafting grid, nothing else: a Valier XP Crafter (the tank's fluid kept). */
-    public static final class Recipe implements IRecipe {
+    /**
+     * The Valier XP Crafter's crafting recipe (mirrored works too):
+     *
+     * <pre>
+     * tank  LV pump         LV conveyor
+     * tank  crafting table  LV circuit
+     * tank  LV pump         LV robot arm
+     * </pre>
+     *
+     * The tanks must be empty and not crafters already; the crafter is the first of them, made one.
+     */
+    public static final class Recipe extends ShapedOreRecipe {
+
+        Recipe(ItemStack output, Object... shape) {
+            super(output, shape);
+        }
+
+        /** The recipe, or null if the tank setting names no item. */
+        static Recipe make() {
+            Item tank = LootSpawners.itemOf(TweaksConfig.xpCrafterTank);
+            if (tank == null) {
+                ValierTweaks.LOG.warn("XP crafters: xpCrafterTank names no item; none can be crafted");
+                return null;
+            }
+            ItemStack t = new ItemStack(tank, 1, Math.max(0, LootSpawners.metaOf(TweaksConfig.xpCrafterTank)));
+            return new Recipe(toItem(t, new Crafter(0, 0, 0)), "TPC", "TWc", "TPA", 'T', t, 'P',
+                ItemList.Electric_Pump_LV.get(1), 'C', ItemList.Conveyor_Module_LV.get(1), 'A', ItemList.Robot_Arm_LV.get(1),
+                'W', new ItemStack(Blocks.crafting_table), 'c', OrePrefixes.circuit.get(Materials.LV)
+                    .toString());
+        }
 
         @Override
         public boolean matches(InventoryCrafting grid, World world) {
-            return tank(grid) != null;
+            return TweaksConfig.xpCrafter && super.matches(grid, world) && tank(grid) != null;
         }
 
         @Override
@@ -789,31 +933,22 @@ public final class XpCrafters {
             return tank == null ? null : toItem(tank, new Crafter(0, 0, 0));
         }
 
-        /** The grid's tank, if it holds just that tank (not already a crafter) and the item that makes it one. */
+        /** The grid's first tank, if none of its tanks is a crafter already or holds fluid; else null. */
         static ItemStack tank(InventoryCrafting grid) {
-            if (!TweaksConfig.xpCrafter || LootSpawners.itemOf(TweaksConfig.xpCrafterItem) == null) return null;
-            ItemStack tank = null;
-            boolean item = false;
+            ItemStack first = null;
             for (int i = 0; i < grid.getSizeInventory(); i++) {
                 ItemStack s = grid.getStackInSlot(i);
-                if (s == null) continue;
-                if (tank == null && isTankItem(s) && !isCrafterItem(s)) tank = s;
-                else if (!item && LootSpawners.matches(TweaksConfig.xpCrafterItem, s)) item = true;
-                else return null;
+                if (s == null || !isTankItem(s)) continue;
+                if (isCrafterItem(s) || holdsFluid(s)) return null;
+                if (first == null) first = s;
             }
-            return item ? tank : null;
+            return first;
         }
 
-        @Override
-        public int getRecipeSize() {
-            return 2;
-        }
-
-        @Override
-        public ItemStack getRecipeOutput() {
-            Item tank = LootSpawners.itemOf(TweaksConfig.xpCrafterTank);
-            return tank == null ? null
-                : toItem(new ItemStack(tank, 1, Math.max(0, LootSpawners.metaOf(TweaksConfig.xpCrafterTank))), new Crafter(0, 0, 0));
+        /** A GregTech tank item with fluid in it (its "mFluid"). */
+        static boolean holdsFluid(ItemStack s) {
+            return s.hasTagCompound() && s.getTagCompound()
+                .hasKey("mFluid");
         }
     }
 
@@ -889,8 +1024,8 @@ public final class XpCrafters {
      * What a crafter tells WAILA (format 1): {@code Makes} (the item one craft makes now, as an item stack) with
      * {@code MakesName} (its English name, should the client not know the item), {@code Cost} (mB each) and
      * {@code Whole} (full dust is on and changes it); {@code Full} (full dust is on); {@code Status} (a {@link Status}
-     * name) with {@code StatusText} (English); {@code Bank} (mB already taken), {@code Made}; {@code Tank} and
-     * {@code TankFluid} (what is in its tank, if anything).
+     * name) with {@code StatusText} (English); {@code Bank} (mB already taken), {@code Made}, {@code Stored} (items in
+     * its store, 1.11.0 on); {@code Tank} and {@code TankFluid} (what is in its tank, if anything).
      */
     static NBTTagCompound hudInfo(World w, Crafter c) {
         NBTTagCompound t = new NBTTagCompound();
@@ -908,6 +1043,7 @@ public final class XpCrafters {
         t.setString("StatusText", c.status.words);
         t.setInteger("Bank", c.bank);
         t.setLong("Made", c.made);
+        t.setInteger("Stored", c.stored());
         MTEBasicTank tank = tankAt(w, c.x, c.y, c.z);
         FluidStack f = tank == null ? null : tank.getFluid();
         if (f != null && f.amount > 0 && f.getFluid() != null) {
@@ -923,10 +1059,11 @@ public final class XpCrafters {
     static IChatComponent status(World w, Crafter c) {
         IChatComponent msg = text(EnumChatFormatting.GOLD, "XP crafter: ");
         XpRecipe r = c.makes == null ? null : recipeFor(c.makes);
-        if (r == null) msg.appendSibling(new ChatComponentText("makes nothing yet. Sneak-right-click it with what it "
-            + "should make: " + canMake() + "."));
+        if (r == null) msg.appendSibling(new ChatComponentText("makes nothing yet. Right-click it with an empty hand to "
+            + "choose in its menu, or sneak-right-click it with what it should make: " + canMake() + "."));
         else msg.appendSibling(new ChatComponentText("makes " + countName(product(c, r)) + " from " + mb(cost(c, r))
-            + " mB of liquid XP each, into the chests, inventories and pipes touching it. Now: " + c.status.words + "."));
+            + " mB of liquid XP each, into the chests, inventories and pipes touching it, or its store. Now: "
+            + c.status.words + "."));
         MTEBasicTank tank = tankAt(w, c.x, c.y, c.z);
         FluidStack f = tank == null ? null : tank.getFluid();
         msg.appendSibling(new ChatComponentText(" Its tank: " + (f == null || f.amount <= 0 ? "empty"
@@ -934,10 +1071,12 @@ public final class XpCrafters {
                 .getLocalizedName(f))
             + (c.bank > 0 ? ", and " + mb(c.bank) + " mB already taken towards the next" : "") + "."));
         if (c.made > 0) msg.appendSibling(new ChatComponentText(" Made " + c.made + " so far."));
+        if (c.stored() > 0) msg.appendSibling(new ChatComponentText(" Its store holds " + mb(c.stored()) + " (right-click "
+            + "it with an empty hand to take them)."));
         Full full = r == null ? null : full(r.output);
         if (c.full) msg.appendSibling(new ChatComponentText(full != null ? " Full dust is on." : " Full dust is on (for tiny and small piles)."));
         else if (full != null && LootSpawners.itemOf(TweaksConfig.xpCrafterFullItem) != null)
-            msg.appendSibling(new ChatComponentText(" Sneak-right-click it with "))
+            msg.appendSibling(new ChatComponentText(" Sneak-right-click it (or click full dust in its menu) with "))
                 .appendSibling(LootSpawners.costText(TweaksConfig.xpCrafterFullItem, 1))
                 .appendSibling(new ChatComponentText(" to make " + countName(full.dust) + " instead (" + mb(r.cost * full.times)
                     + " mB each)."));

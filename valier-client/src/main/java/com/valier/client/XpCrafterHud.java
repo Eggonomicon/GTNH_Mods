@@ -95,6 +95,7 @@ public final class XpCrafterHud implements IWailaDataProvider {
             fluidName(t.getString("TankFluid"))));
         if (t.getInteger("Bank") > 0) out.add(grey + tr("valierclient.xpcrafter.bank", number(t.getInteger("Bank"))));
         if (t.getLong("Made") > 0) out.add(grey + tr("valierclient.xpcrafter.made", number(t.getLong("Made"))));
+        if (t.getInteger("Stored") > 0) out.add(grey + tr("valierclient.xpcrafter.stored", number(t.getInteger("Stored"))));
         return out;
     }
 

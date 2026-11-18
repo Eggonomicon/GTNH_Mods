@@ -163,23 +163,45 @@ How it is stored: in the world save it is an ordinary spawner of the same mob, m
 mod turns a marked spawner back into a loot spawner as its chunk loads, or within 2 seconds if it turns up some other
 way. Without the mod, it is simply an ordinary spawner of the same mob again.
 
-## XP crafters (1.9.0)
+## XP crafters (1.9.0, menu and store 1.11.0)
 
 GTNH has crafting recipes made only of XP buckets: a tiny pile of gallium dust from 8, a tiny pile of arsenic from 7,
 a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An XP crafter makes them from liquid XP.
 
-- **Making one:** craft GT++'s **Ultra Low Voltage Fluid Tank** with a **block of diamond** (`xpCrafterTank`,
-  `xpCrafterItem`). The result is a "Valier XP Crafter": the same tank item, with its fluid kept, renamed, with a
-  tooltip saying what it makes.
+- **Making one (1.11.0):** a shaped recipe (mirrored works too; `xpCrafterTank` sets the tank):
+
+  | | | |
+  |---|---|---|
+  | ULV fluid tank | LV pump | LV conveyor |
+  | ULV fluid tank | crafting table | any LV circuit |
+  | ULV fluid tank | LV pump | LV robot arm |
+
+  The tanks are GT++'s **Ultra Low Voltage Fluid Tank**, empty (one holding fluid doesn't fit, so none is lost) and not
+  crafters already. The result is a "Valier XP Crafter": one of the tanks, renamed, with a tooltip saying what it makes.
+  1.9.0 and 1.10.0 made it from one tank and a block of diamond; crafters made that way keep working.
 - **Placed, it is still that tank:** clients and pipes see a ULV fluid tank (32,000 mB). Fill it with liquid XP the
-  usual way (EnderIO, OpenBlocks; both call it `xpjuice`). Its GUI works as before (right-click without sneaking).
-- **Choosing what it makes:** sneak-right-click it with that item, such as a tiny pile of gallium dust. The item isn't
-  used up. A dust no XP recipe makes is refused, with the list of what it can make. Claims apply.
-- **What it does:** once a second it takes the liquid XP it needs from its tank and makes the item, as many as it has
-  XP for (at most 64 a second), and puts each into the chests, inventories and pipes touching it, the same way loot
-  spawners do. A recipe's cost is the liquid XP in its buckets: 1,000 mB a bucket, so a tiny pile of gallium dust takes
-  8,000 mB. It takes XP only as it needs it, so with nothing to make, or nowhere to put it, the XP stays in the tank.
-  When everything touching it is full it keeps the one it made and waits.
+  usual way (EnderIO, OpenBlocks; both call it `xpjuice`).
+- **Its menu (1.11.0):** right-click it with an empty hand. It is a chest window the server fills, so every player sees
+  it without a mod:
+  - **Top row:** liquid XP (click it holding a bucket or cell of liquid XP to pour it in; shift-click pours the whole
+    stack), a gauge of its tank, and its status (green working, yellow waiting, red stuck).
+  - **The next three rows:** everything it can make (27), cheapest first, with the liquid XP each takes and what full
+    dust would make. Click one to make it (it shines, "Making this now"); click it again to stop.
+  - **The fifth row is its store:** what it made that nothing touching it took yet, up to 9 stacks. These are real
+    items: take them (click, shift-click, a number key). Nothing can be put in.
+  - **Bottom row:** full dust (click it holding a block of emerald to switch it on; click again to get the block back),
+    pages if there are ever more than 27 things it can make, how many it has made, and how it works.
+  - Clicks on the icons are buttons: nothing can be taken out of them, and the window is sent again after every click,
+    so what the client guessed is put right. Where claims stop a player breaking it, they can look but not change it or
+    take from its store.
+- **Choosing what it makes** also works without the menu: sneak-right-click it with that item, such as a tiny pile of
+  gallium dust. The item isn't used up. A dust no XP recipe makes is refused, with the list of what it can make.
+  Claims apply.
+- **What it does:** once a second it hands its store to the chests, inventories and pipes touching it (the same way
+  loot spawners do), takes the liquid XP it needs from its tank and makes the item, as many as it has XP for (at most
+  64 a second) and room in its store, and hands those over too. A recipe's cost is the liquid XP in its buckets: 1,000
+  mB a bucket, so a tiny pile of gallium dust takes 8,000 mB. It takes XP only as it needs it, so with nothing to make,
+  or its store full, the XP stays in the tank. Before 1.11.0 it had no store and made nothing with nowhere to put it.
 - **Bigger than the tank:** XP it has taken towards the next craft is held by the crafter itself, so a craft can cost
   more than the tank holds (72,000 mB for full gallium dust).
 - **Full dust:** sneak-right-click it with a **block of emerald** (`xpCrafterFullItem`, kept in it; not in creative)
@@ -188,16 +210,17 @@ a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An 
   makes a dust from 9 tiny or 4 small piles). Recipes that already make a whole item don't change. Sneak-right-click
   with the emerald block again, or sneak and hit it with an empty hand, to switch it off and get the block back.
 - **Status:** sneak-right-click it with an empty hand: what it makes, the XP each takes, whether it is working or
-  waiting and why, its tank and the XP it holds, and how many it has made.
+  waiting and why, its tank and the XP it holds, how many it has made and what its store holds.
 - **Breaking it** (with drops: a player, an explosion) drops the XP crafter item with its recipe, emerald block and
-  the XP it held; placed again, it carries on. Removed without drops (a Matter Manipulator, a frame mover, a
-  command), it is forgotten and stays a plain tank there.
+  the XP it held, and its store as items; placed again, it carries on. Removed without drops (a Matter Manipulator, a
+  frame mover, a command), it is forgotten and stays a plain tank there, and its store drops where it was.
 - **What players see:** the crafting table shows the crafter in its output slot (the server sends it; clients don't
-  know the recipe, so NEI doesn't show it). The item's tooltip and the status say what it makes. WAILA shows the plain
-  tank: it works out names on the player's computer, and no tank in GTNH shows a name the server sends.
+  know the recipe, so NEI shows it only with [Valier Client](../valier-client/README.md) 1.1.0). The item's tooltip, the
+  menu and the status say what it makes. WAILA shows the plain tank: it works out names on the player's computer, and
+  no tank in GTNH shows a name the server sends.
 - **WAILA with Valier Client (1.10.0):** with WAILA on the server, a crafter adds what it makes and is doing to the
   block data WAILA sends a player looking at it (a `ValierXpCrafter` compound: the item, the cost, the status, its tank,
-  the XP held, the count). Players with the optional [Valier Client](../valier-client/README.md) mod see "Valier XP
+  the XP held, the count, and from 1.11.0 how many items its store holds). Players with the optional [Valier Client](../valier-client/README.md) mod see "Valier XP
   Crafter" and those lines; everyone else's WAILA ignores it. WAILA asks on its network thread, so the server keeps
   each crafter's info ready (refreshed every second and whenever a crafter changes) instead of reading the world
   there.
@@ -242,10 +265,9 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `lootSpawnerSpawnEggs` | `false` | Sneak-right-click with a spawn egg changes a loot spawner's mob (egg used up). |
 | `lootSpawnerHoverName` | `true` | The WAILA hover says "Valier Loot Spawner: Zombie" (and no mob is drawn in the cage). Off: the mob is drawn and the hover names only the mob. |
 | `xpcrafter` / `xpCrafter` | `true` | XP crafters can be made and work. Off: none can be made, and existing ones stop (keeping what they know). |
-| `xpCrafterTank` | `gregtech:gt.blockmachines:817` | The GregTech tank that becomes one (GT++'s ULV fluid tank). Any GregTech tank works. |
-| `xpCrafterItem` | `minecraft:diamond_block` | Crafted with the tank, makes it an XP crafter. Empty or not an item: none can be made. |
+| `xpCrafterTank` | `gregtech:gt.blockmachines:817` | The GregTech tank three of which (with two LV pumps, an LV conveyor, an LV robot arm, a crafting table and an LV circuit) craft one (GT++'s ULV fluid tank). Any GregTech tank works. Not an item: none can be made. (1.11.0 removed `xpCrafterItem`, the diamond block of the old recipe.) |
 | `xpCrafterFluids` | `xpjuice` | Fluids that count as liquid XP. Recipes made only of containers of these are what it can make. |
-| `xpCrafterFullItem` | `minecraft:emerald_block` | Switches full dust on (kept in it, given back when switched off). |
+| `xpCrafterFullItem` | `minecraft:emerald_block` | Switches full dust on (sneak-right-click, or its menu; kept in it, given back when switched off). |
 | `xpCrafterTinyTimes` | `9` | Times the XP for a whole dust instead of a tiny pile. |
 | `xpCrafterSmallTimes` | `4` | Times the XP for a whole dust instead of a small pile. |
 | `macerator` / `chainArmourFullDust` | `true` | Chain helmets macerate into 1 steel dust, chain leggings into 2. |
@@ -338,20 +360,33 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
   - **Recipes:** GTNH's XP bucket recipes are found with their costs (tiny gallium 8,000 mB, tiny arsenic 7,000, small
     brick 4,000, iron dust 2,000, charcoal 1,000). Full dust: 9 times for a tiny pile (gallium dust), 4 times for a
     small one (brick dust), none for iron dust.
-  - **Crafting:** a ULV fluid tank and a diamond block make the crafter item (name and tooltip). Not the tank alone,
-    an LV tank, a crafter again, or with dirt as well. In a crafting table it is in the output slot, the one the
-    server sends to players.
+  - **Crafting:** LV circuits are in the ore dictionary; three ULV fluid tanks, two LV pumps, an LV conveyor, an LV
+    robot arm, a crafting table and an LV circuit make the crafter item (name and tooltip), mirrored too. Not with a
+    conveyor for the arm, an LV tank, a crafter or a tank holding fluid among the tanks, nor the old tank and diamond
+    block. In a crafting table it is in the output slot, the one the server sends to players. With Valier Client
+    loaded, its copy of the recipe (for NEI) takes the same grid and not the wrong one.
   - **Working:** placed as a player places it, it is a crafter. An empty hand shows its status; a tiny pile of gallium
     chooses that (not without sneaking, not where protected); titanium dust is refused. 5,000 mB makes nothing yet,
     3,000 more make one into the chest, 20,000 make two more and keep 4,000. An emerald block switches to gallium dust
     from 72,000 mB, taken a tank at a time.
   - **Item and edge cases:** broken, it drops as the item with its recipe, emerald block and 4,000 mB, and placed again
-    it carries on. A sneaking empty-hand hit gives the emerald block back. With nothing touching it no XP is taken;
-    with the chest full the one it made waits and goes in once there is room. Its record saves; removed without
-    drops, it is forgotten. A plain ULV tank only gets a hint.
+    it carries on. A sneaking empty-hand hit gives the emerald block back. With nothing touching it what it makes waits
+    in its store; with its store full no XP is taken (and it says why); with the chest full too it waits; with room in
+    the chest a stack of its store goes in and it makes another. Its record saves, store too; removed without drops,
+    it is forgotten and its 513 stored items drop where it was. A plain ULV tank only gets a hint.
+  - **Menu (1.11.0), on a crafter of its own:** an empty-hand right-click opens it (not with something in hand). It
+    shows the 27 things it can make, cheapest first, with costs, its empty tank and its status, and no pages.
+    Clicking tiny gallium dust chooses it (it shines), again stops it, a shift-click chooses too. Icons can't be taken
+    (click, number key, Q) or covered. A liquid XP bucket poured in fills the tank, the gauge shows it and the empty
+    bucket stays on the cursor; dirt is refused. The 2 it makes from 16,000 mB wait in its store and show in the menu;
+    with its store full it takes no XP and says why in red. Its store can be taken from (shift-click, click, number
+    key) but not filled. Full dust from emerald blocks on the cursor (the gallium icon becomes gallium dust at 72,000
+    mB) and back. Where protected it can be looked at but not changed or taken from. Further than 8 blocks it closes.
+    Broken, its store drops with the crafter item.
   - **WAILA (1.10.0):** the data WAILA's server sends for the crafter (every provider registered for the tank, as
     WAILA asks them) says what it makes and the cost as soon as it is chosen; working, the 4,000 mB held and 3 made;
-    gallium dust at 72,000 mB with full dust on; with nothing touching it, why, and the 8,000 mB in its tank; nothing
+    gallium dust at 72,000 mB with full dust on; with its store full and nothing touching it, why, the 8,000 mB in its
+    tank and the 576 stored items; nothing
     once it is forgotten, and nothing for a plain tank. With `valierclient` in the test server's `mods` too, Valier
     Client's name and line providers are run on that data, and the lines a player reads are checked (see its README).
   - **Chain armour:** the macerator recipes give 1, 2, 1 and 2 steel dust for helmet, leggings, boots and chestplate,

@@ -35,7 +35,6 @@ public final class TweaksConfig {
     public static boolean lootSpawnerSpawnEggs = false;
     public static boolean xpCrafter = true;
     public static String xpCrafterTank = "gregtech:gt.blockmachines:817";
-    public static String xpCrafterItem = "minecraft:diamond_block";
     public static String[] xpCrafterFluids = { "xpjuice" };
     public static String xpCrafterFullItem = "minecraft:emerald_block";
     public static int xpCrafterTinyTimes = 9;
@@ -167,25 +166,27 @@ public final class TweaksConfig {
                 + "as a vanilla spawner dresses them. The egg is used up (not in creative). Claims apply, blocked mobs are "
                 + "refused, and what it was keeping and its emerald block stay. Plain spawners are left alone.");
         cat = "xpcrafter";
-        c.setCategoryComment(cat, "XP crafters: craft the tank below with the item below to make a Valier XP Crafter. Placed, it "
-            + "fills with liquid XP like the tank it is, makes one of the things GTNH's XP bucket crafting recipes make (a "
-            + "tiny pile of gallium dust from 8 buckets' worth, and so on) whenever it has the XP for one, and puts it into "
-            + "the chests, inventories and pipes touching it. Sneak-right-click it with what it should make to choose, with "
+        c.setCategoryComment(cat, "XP crafters: three of the tank below, two LV pumps, an LV conveyor, an LV robot arm, a "
+            + "crafting table and an LV circuit craft a Valier XP Crafter. Placed, it fills with liquid XP like the tank it "
+            + "is, makes one of the things GTNH's XP bucket crafting recipes make (a tiny pile of gallium dust from 8 "
+            + "buckets' worth, and so on) whenever it has the XP for one, into its store, and hands its store to the "
+            + "chests, inventories and pipes touching it. Right-click it with an empty hand for its menu (a chest window: "
+            + "its liquid XP, what it can make, its store); sneak-right-click it with what it should make to choose, with "
             + "an empty hand for its status. Clients need nothing.");
         xpCrafter = c.getBoolean("xpCrafter", cat, true,
             "XP crafters can be made and work. Off: none can be made, and existing ones stop (they keep what they know).");
         xpCrafterTank = c.getString("xpCrafterTank", cat, "gregtech:gt.blockmachines:817",
             "The GregTech tank that becomes an XP crafter: an item name with :meta. By default GT++'s Ultra Low Voltage "
                 + "Fluid Tank (32,000 mB). Any GregTech tank works.");
-        xpCrafterItem = c.getString("xpCrafterItem", cat, "minecraft:diamond_block",
-            "Crafted with the tank, this makes it an XP crafter. An item name, optionally with :meta. Empty, or a name "
-                + "that isn't an item: none can be made.");
+        c.getCategory(cat)
+            .remove("xpCrafterItem"); // 1.10.0 and before: the tank and this crafted one
         xpCrafterFluids = c.getStringList("xpCrafterFluids", cat, new String[] { "xpjuice" },
             "Fluid names that count as liquid XP (EnderIO's and OpenBlocks' are both xpjuice). Crafting recipes made only "
                 + "of containers of these (the XP buckets) are what XP crafters can make; a recipe's cost is the liquid XP "
                 + "in its containers.");
         xpCrafterFullItem = c.getString("xpCrafterFullItem", cat, "minecraft:emerald_block",
-            "Sneak-right-click an XP crafter with this and it makes the whole dust instead of a tiny or small pile (a "
+            "Sneak-right-click an XP crafter with this (or click full dust in its menu holding it) and it makes the whole "
+                + "dust instead of a tiny or small pile (a "
                 + "gallium dust instead of a tiny pile), for xpCrafterTinyTimes or xpCrafterSmallTimes the liquid XP. The "
                 + "item is kept in it (not in creative): doing it again, or a sneaking hit with an empty hand, switches that "
                 + "off and gives it back; breaking the crafter keeps it in the item. Empty, or a name that isn't an item: it "

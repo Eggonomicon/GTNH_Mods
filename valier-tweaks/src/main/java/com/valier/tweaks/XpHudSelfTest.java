@@ -91,7 +91,7 @@ final class XpHudSelfTest {
             "WAILA: with full dust on at once it says gallium dust, 72,000 mB each (full dust) (" + t + " / " + body + ")");
     }
 
-    /** Nothing touching it, 8,000 mB in its tank. */
+    /** Its store full, nothing touching it, 8,000 mB in its tank. */
     void noOutput(int[] p, Fluid xp) {
         NBTTagCompound data = data(p);
         NBTTagCompound t = data.getCompoundTag(XpCrafterWaila.TAG);
@@ -100,9 +100,11 @@ final class XpHudSelfTest {
         SelfTest.check("NO_OUTPUT".equals(t.getString("Status")) && t.getInteger("Tank") == 8000
             && xp.getName()
                 .equals(t.getString("TankFluid"))
-            && (!client || body != null && body.contains("§cWaiting: nothing touching it takes items")
-                && plain(body).contains("Tank: 8,000 mB of " + xpName)),
-            "WAILA: with nothing touching it, it says why (red) and what is in its tank (" + t + " / " + body + ")");
+            && t.getInteger("Stored") == 576
+            && (!client || body != null && body.contains("§cWaiting: its store is full, and nothing touching it takes items")
+                && plain(body).contains("Tank: 8,000 mB of " + xpName) && plain(body).contains("In its store: 576")),
+            "WAILA: with its store full and nothing touching it, it says why (red), what is in its tank and its store (" + t
+                + " / " + body + ")");
     }
 
     void forgotten(int[] p) {
