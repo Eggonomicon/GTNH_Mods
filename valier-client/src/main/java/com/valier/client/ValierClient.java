@@ -1,5 +1,6 @@
 package com.valier.client;
 
+import net.minecraft.item.Item;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraftforge.common.MinecraftForge;
 
@@ -12,8 +13,9 @@ import cpw.mods.fml.common.registry.GameRegistry;
 
 /**
  * Optional client add-on for the Valier server's mods: WAILA shows a Valier XP Crafter as one ({@link XpCrafterHud}),
- * NEI shows its crafting recipe ({@link XpCrafterRecipe}) and lists it ({@link NeiCompat}), and its tooltip's mod name
- * says Valier Tweaks ({@link ModNameLine}). The server never needs it, and on a server without Valier
+ * NEI shows its crafting recipe ({@link XpCrafterRecipe}), lists it ({@link NeiCompat}) and finds it with "@Valier"
+ * ({@link ModSearch}), its tooltip's mod name says Valier Tweaks ({@link ModNameLine}), and a Valier creative tab
+ * holds one ({@link ValierTab}). The server never needs it, and on a server without Valier
  * Tweaks it does nothing. It uses no client-only classes, so it is also harmless on a server.
  */
 @Mod(
@@ -45,6 +47,8 @@ public class ValierClient {
         if (!event.getSide()
             .isClient()) return;
         MinecraftForge.EVENT_BUS.register(new ModNameLine());
+        Item tank = Loader.isModLoaded("gregtech") ? GameRegistry.findItem("gregtech", "gt.blockmachines") : null;
+        if (tank != null) new ValierTab(tank);
         if (Loader.isModLoaded("NotEnoughItems") && Loader.isModLoaded("gregtech")) NeiCompat.register();
     }
 }

@@ -1,4 +1,5 @@
 valierclient.xpcrafter.name=Valier XP Crafter
+itemGroup.valier=Valier
 valierclient.xpcrafter.mod=Valier Tweaks
 valierclient.xpcrafter.makes=Makes: %s
 valierclient.xpcrafter.nothing=Makes nothing yet

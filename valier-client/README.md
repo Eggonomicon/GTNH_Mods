@@ -40,7 +40,7 @@ compound to that data for XP crafters (made ready on the server thread, at most 
 changes WAILA's name and lines. Any other block, or a server without Valier Tweaks 1.10.0, sends no such compound, so
 nothing changes. It uses no network channel of its own.
 
-## NEI shows the XP crafter and its recipe (1.1.0, listed 1.3.0)
+## NEI shows the XP crafter and its recipe (1.1.0, listed 1.3.0, "@Valier" 1.4.0)
 
 Servers don't send crafting recipes to players, and Valier Tweaks' recipe for the crafter is only on the server, so NEI
 can't show it. This mod adds the same recipe on the player's computer:
@@ -55,8 +55,19 @@ The server still decides what crafting makes (empty tanks only, not crafters alr
 Tweaks is loaded too (single player), since its own recipe is there.
 
 From 1.3.0 NEI also lists a Valier XP Crafter (next to the ULV fluid tank), so searching "Valier" or "crafter" finds it,
-and R on it shows the recipe. "@valier" still finds nothing: NEI files items under the mod whose item they are, and the
-crafter is GT++'s tank item.
+and R on it shows the recipe. In creative (or NEI's cheat mode, where the server lets you), clicking it gives you one.
+
+From 1.4.0 **"@Valier"** finds it too. NEI's "@" search goes by the mod an item belongs to, and the crafter is a
+GregTech tank item, so it used to find nothing. NEI uses one search provider per prefix, so this mod wraps NEI's own
+"@" provider (at NEI's first world load, as an NEI plugin): whatever "@" found before it still finds, and the crafter
+is found as well when the text matches "Valier Tweaks". "@GregTech" still finds it as well.
+
+## Valier creative tab (1.4.0)
+
+A **Valier** tab in the creative inventory holds a Valier XP Crafter, so you can take one in creative without NEI
+(the creative search finds it too). The server's Valier Tweaks treats any ULV fluid tank carrying the crafter's data as
+a crafter, so the one you take places as a real, empty crafter. The tab only exists on your computer; the server needs
+nothing.
 
 ## Tooltips say Valier Tweaks (1.3.0)
 
@@ -66,7 +77,7 @@ and renames it. Without NEI, a tooltip event after WAILA's does the same.)
 
 ## Installing
 
-1. Download `valierclient-1.3.0.jar` from the [latest release](https://github.com/Eggonomicon/GTNH_Mods/releases/latest)
+1. Download `valierclient-1.4.0.jar` from the [latest release](https://github.com/Eggonomicon/GTNH_Mods/releases/latest)
    (or build it, below).
 2. Put it in your GTNH 2.9.0 client's `mods` folder (the instance's `.minecraft/mods`) and restart the game.
 
@@ -84,5 +95,5 @@ Harmless on a server too (no client-only code), though it does nothing useful th
   the status and its colour, the XP held and the count, the mod name, the full dust cost, a crafter with its store full and nothing
   touching it (and the store line), the option switched off, and a plain tank left alone. It also checks this mod's
   copy of the crafting recipe takes the same grid as the server's, and that a crafter item's tooltip mod name line
-  becomes Valier Tweaks (a plain tank's stays). NEI's item list and tooltip hooks use client classes, so they are only
-  seen in game, as is what WAILA and NEI draw.
+  becomes Valier Tweaks (a plain tank's stays). NEI's item list, search and tooltip hooks and the creative tab use
+  client classes, so they are only seen in game, as is what WAILA and NEI draw.

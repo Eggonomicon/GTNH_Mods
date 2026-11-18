@@ -44,7 +44,10 @@ public final class XpCrafterRecipe {
                 .toString());
     }
 
-    /** The tank as a new Valier XP Crafter item looks (the server's crafted one has the same name and tooltip). */
+    /**
+     * The tank as a new Valier XP Crafter item looks (the server's crafted one has the same name and tooltip, Valier
+     * Tweaks 1.12.0's wording). Also what NEI's list and the Valier creative tab give.
+     */
     static ItemStack crafter(ItemStack tank) {
         ItemStack s = tank.copy();
         NBTTagCompound tag = new NBTTagCompound();
@@ -57,7 +60,8 @@ public final class XpCrafterRecipe {
         display.setString("Name", EnumChatFormatting.RESET + "Valier XP Crafter");
         NBTTagList lore = new NBTTagList();
         for (String line : new String[] { "Makes: nothing yet", "Place it, then right-click it", "to choose what it makes",
-            "Fill it with liquid XP; what it makes", "goes into chests and pipes touching it,", "or waits in its store" })
+            "Fill it with liquid XP (or essence berries", "in a chest touching it); what it makes",
+            "goes into chests and pipes touching it,", "or waits in its store" })
             lore.appendTag(new NBTTagString(EnumChatFormatting.GRAY + line));
         display.setTag("Lore", lore);
         tag.setTag("display", display);
