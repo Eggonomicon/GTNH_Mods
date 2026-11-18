@@ -37,6 +37,7 @@ public final class TweaksConfig {
     public static String xpCrafterTank = "gregtech:gt.blockmachines:817";
     public static String[] xpCrafterFluids = { "xpjuice" };
     public static String xpCrafterFullItem = "minecraft:emerald_block";
+    public static String[] xpCrafterSolidXp = { "TConstruct:oreBerries:5=250" };
     public static int xpCrafterTinyTimes = 9;
     public static int xpCrafterSmallTimes = 4;
     public static boolean chainArmourFullDust = true;
@@ -184,6 +185,11 @@ public final class TweaksConfig {
             "Fluid names that count as liquid XP (EnderIO's and OpenBlocks' are both xpjuice). Crafting recipes made only "
                 + "of containers of these (the XP buckets) are what XP crafters can make; a recipe's cost is the liquid XP "
                 + "in its containers.");
+        xpCrafterSolidXp = c.getStringList("xpCrafterSolidXp", cat, new String[] { "TConstruct:oreBerries:5=250" },
+            "Items an XP crafter takes as liquid XP, as item=mB (mod:item:meta=mB). It takes them, as it needs them, "
+                + "from the chests and inventories touching it, and players can put them in through its menu. By "
+                + "default Tinkers' Concentrated Essence Berry (what CropsNH's essence berry crop drops), 250 mB: eating "
+                + "one gives 6 to 19 XP, 12.5 on average, and EnderIO and OpenBlocks count 20 mB of liquid XP a point.");
         xpCrafterFullItem = c.getString("xpCrafterFullItem", cat, "minecraft:emerald_block",
             "Sneak-right-click an XP crafter with this (or click full dust in its menu holding it) and it makes the whole "
                 + "dust instead of a tiny or small pile (a "

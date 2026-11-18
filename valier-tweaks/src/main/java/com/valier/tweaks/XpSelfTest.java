@@ -66,6 +66,8 @@ import gregtech.api.util.GTRecipe;
  * store, with its store full no XP is taken, with the chest full too it waits, with room the store goes in; its record
  * saves; removed without dropping, it is forgotten and its store drops;</li>
  * <li>its menu ({@link XpMenuSelfTest});</li>
+ * <li>solid XP: an essence berry counts as 250 mB; a crafter takes as few as it needs from a chest touching it (the
+ * tank's liquid XP first), also with another fluid in its tank, and they can be put in through its menu;</li>
  * <li>a plain ULV tank only gets a hint;</li>
  * <li>with WAILA: what it makes and is doing goes along with WAILA's block data, and with Valier Client loaded too, a
  * player reads it ({@link XpHudSelfTest});</li>
@@ -112,6 +114,7 @@ final class XpSelfTest {
             craftingRecipe();
             if (crafterItem != null) crafter();
             if (crafterItem != null) new XpMenuSelfTest(this).run();
+            if (crafterItem != null) solid();
             plainTank();
             chainArmour();
         } catch (Throwable t) {
@@ -405,6 +408,82 @@ final class XpSelfTest {
         SelfTest.check(XpCrafters.crafterAt(world, p[0], p[1], p[2]) == null && spilled == 513, "removed without dropping, "
             + "it is forgotten and its store drops where it was (" + spilled + ")");
         if (hud != null) hud.forgotten(p);
+    }
+
+    // ---- solid XP ---------------------------------------------------------------------------------------------------
+
+    void solid() {
+        Item berries = (Item) Item.itemRegistry.getObject("TConstruct:oreBerries");
+        ItemStack berry = berries == null ? null : new ItemStack(berries, 1, 5);
+        SelfTest.check(berry != null && XpCrafters.solidXp(berry) == 250 && berry.getDisplayName()
+            .contains("Essence") && XpCrafters.solidXp(new ItemStack(berries, 1, 0)) == 0,
+            "solid XP: Tinkers' " + (berry == null ? null : berry.getDisplayName()) + " counts as 250 mB of liquid XP, "
+                + "another ore berry doesn't");
+        if (berry == null) return;
+        gtBerryRecipes(berry);
+        int[] p = { bx + 12, y, bz + 10 }, q = { bx + 13, y, bz + 10 };
+        XpCrafters.Crafter c = place(crafterItem.copy(), p);
+        MTEBasicTank tank = XpCrafters.tankAt(world, p[0], p[1], p[2]);
+        if (c == null || tank == null) {
+            SelfTest.check(false, "solid XP: a third crafter could be placed");
+            return;
+        }
+        XpCrafters.Data d = XpCrafters.data(world, false);
+        c.makes = LootSpawners.copyOne(tinyGallium);
+        world.setBlock(q[0], q[1], q[2], Blocks.chest);
+        placed.add(q);
+        IInventory chest = (IInventory) world.getTileEntity(q[0], q[1], q[2]);
+        chest.setInventorySlotContents(0, copy(berry, 40));
+        chest.setInventorySlotContents(1, new ItemStack(Blocks.dirt, 5));
+        XpCrafters.run(world, d, c);
+        SelfTest.check(count(chest, berry) == 0 && count(chest, tinyGallium) == 1 && c.bank == 2000 && c.made == 1
+            && count(chest, new ItemStack(Blocks.dirt)) == 5 && c.status == XpCrafters.Status.WORKING, "solid XP: from a chest "
+                + "of 40 essence berries it takes 32 for a tiny pile of gallium dust (into the same chest), then the other 8 "
+                + "towards the next, and leaves the dirt (" + state(c, tank, chest) + ", berries " + count(chest, berry) + ")");
+
+        tank.fill(new FluidStack(xp, 6000), true);
+        chest.setInventorySlotContents(0, copy(berry, 10));
+        XpCrafters.run(world, d, c);
+        SelfTest.check(amount(tank) == 0 && count(chest, berry) == 0 && c.bank == 2500 && c.made == 2, "solid XP: the "
+            + "tank's liquid XP goes first (6,000 mB), then berries (" + state(c, tank, chest) + ")");
+
+        tank.fill(new FluidStack(FluidRegistry.WATER, 1000), true);
+        chest.setInventorySlotContents(0, copy(berry, 30));
+        XpCrafters.run(world, d, c);
+        boolean fromBerries = c.made == 3 && count(chest, berry) == 0 && c.bank == 2000 && amount(tank) == 1000;
+        XpCrafters.run(world, d, c);
+        SelfTest.check(fromBerries && c.status == XpCrafters.Status.WRONG_FLUID, "solid XP: with water in its tank it still "
+            + "crafts from berries, then says its tank holds something else (" + state(c, tank, chest) + ")");
+        tank.drain(1000, true);
+
+        XpMenu m = new XpMenu(player, world, d, c);
+        player.inventory.setItemStack(copy(berry, 3));
+        m.slotClick(XpMenu.XP_SLOT, 0, 0, player);
+        boolean one = c.bank == 2250 && player.inventory.getItemStack() != null && player.inventory.getItemStack().stackSize == 2;
+        m.slotClick(XpMenu.XP_SLOT, 0, 1, player);
+        SelfTest.check(one && c.bank == 2750 && player.inventory.getItemStack() == null, "solid XP: clicking the menu's "
+            + "liquid XP holding essence berries puts one in (250 mB), a shift-click the rest (" + c.bank + " mB held)");
+        player.inventory.setItemStack(null);
+    }
+
+    static String fluids(FluidStack[] fs) {
+        StringBuilder sb = new StringBuilder("[");
+        if (fs != null) for (FluidStack f : fs) if (f != null && f.getFluid() != null)
+            sb.append(sb.length() > 1 ? ", " : "").append(f.amount).append(" mB ").append(f.getFluid().getName());
+        return sb.append("]").toString();
+    }
+
+    /** What GTNH itself turns essence berries into (logged, for the 250 mB default). */
+    void gtBerryRecipes(ItemStack berry) {
+        for (gregtech.api.recipe.RecipeMap<?> map : new gregtech.api.recipe.RecipeMap<?>[] { RecipeMaps.fluidExtractionRecipes,
+            RecipeMaps.centrifugeRecipes, RecipeMaps.maceratorRecipes }) {
+            GTRecipe r = map.findRecipeQuery()
+                .items(berry)
+                .voltage(Integer.MAX_VALUE)
+                .find();
+            ValierTweaks.LOG.info("[ValierTweaks SelfTest] {} for {}: {}", map.unlocalizedName, berry.getDisplayName(),
+                r == null ? "none" : java.util.Arrays.toString(r.mOutputs) + " " + fluids(r.mFluidOutputs));
+        }
     }
 
     void plainTank() {

@@ -33,7 +33,8 @@ import gregtech.api.metatileentity.implementations.MTEBasicTank;
  * mod. Clicks on the icons are buttons; nothing can be taken out of or put into them, and after every click the whole
  * window is sent again, so what a client guessed a click would do is put right.
  * <ul>
- * <li>Top row: liquid XP (click holding a bucket or cell of it to pour it in), a gauge of its tank, its status.</li>
+ * <li>Top row: liquid XP (click holding a bucket or cell of it to pour it in, or solid XP such as essence berries to put
+ * them in), a gauge of its tank, its status.</li>
  * <li>Three rows: everything it can make, cheapest first, with the liquid XP each takes. Click one to make it; click
  * the one it makes to stop.</li>
  * <li>One row: its store, what it has made that nothing touching it took yet. These are real items: take them.</li>
@@ -123,8 +124,9 @@ final class XpMenu extends Container {
         else lore.add(EnumChatFormatting.RED + "Its tank holds " + XpCrafters.mb(amount) + " mB of " + f.getLocalizedName()
             + ", not liquid XP");
         if (c.bank > 0) lore.add(EnumChatFormatting.GRAY + "Taken towards the next: " + XpCrafters.mb(c.bank) + " mB");
-        lore.add(EnumChatFormatting.YELLOW + "Click holding a bucket or cell");
-        lore.add(EnumChatFormatting.YELLOW + "of liquid XP to pour it in");
+        lore.add(EnumChatFormatting.YELLOW + "Click holding a bucket or cell of");
+        lore.add(EnumChatFormatting.YELLOW + "liquid XP, or essence berries,");
+        lore.add(EnumChatFormatting.YELLOW + "to put it in (shift: the stack)");
         icons.setInventorySlotContents(XP_SLOT, icon(new ItemStack(Items.experience_bottle), EnumChatFormatting.GREEN + "Liquid XP", lore));
         int lit = amount <= 0 || capacity <= 0 ? 0 : Math.max(1, Math.min(GAUGE, Math.round((float) GAUGE * amount / capacity)));
         String gauge = (xp ? EnumChatFormatting.GREEN + "Liquid XP: " : EnumChatFormatting.RED + "Not liquid XP: ") + XpCrafters.mb(amount)
@@ -176,6 +178,7 @@ final class XpMenu extends Container {
         icons.setInventorySlotContents(MADE_SLOT, icon(new ItemStack(Items.paper), EnumChatFormatting.WHITE + "Made: " + XpCrafters.mb(c.made), lore));
         lore = new ArrayList<>();
         for (String line : new String[] { "Fill it with liquid XP: pipes, or pour", "a bucket or cell into it here.",
+            "Essence berries count too: in a chest", "touching it, or put in here.",
             "Click what it should make. What it makes", "goes into the chests, inventories and",
             "pipes touching it, or waits in its", "store (the row above) for you.",
             "Broken, it keeps its settings and liquid", "XP in the item; its store drops." })
@@ -318,13 +321,28 @@ final class XpMenu extends Container {
         }
     }
 
-    /** Pours the liquid XP container held on the cursor into the tank (shift: all of them), the empties to the player. */
+    /**
+     * Pours the liquid XP container held on the cursor into the tank (shift: all of them), the empties to the player; solid
+     * XP on the cursor goes into the XP it holds towards the next craft (shift: the whole stack).
+     */
     void pour(EntityPlayer p, boolean all) {
         MTEBasicTank tank = XpCrafters.tankAt(world, crafter.x, crafter.y, crafter.z);
         ItemStack cursor = p.inventory.getItemStack();
         if (tank == null) return;
+        int solid = XpCrafters.solidXp(cursor);
+        if (solid > 0) {
+            int n = all ? cursor.stackSize : 1;
+            crafter.bank = (int) Math.min(Integer.MAX_VALUE, crafter.bank + (long) n * solid);
+            cursor.stackSize -= n;
+            if (cursor.stackSize <= 0) p.inventory.setItemStack(null);
+            data.markDirty();
+            XpCrafters.hudUpdate(world, crafter);
+            ValierTweaks.LOG.info("{} put {} solid XP ({} mB) into the XP crafter at {}", p.getCommandSenderName(), n, n * solid,
+                crafter.where());
+            return;
+        }
         if (cursor == null || XpCrafters.xpAmount(cursor) <= 0) {
-            if (cursor != null) tell(p, EnumChatFormatting.RED, cursor.getDisplayName() + " holds no liquid XP.");
+            if (cursor != null) tell(p, EnumChatFormatting.RED, cursor.getDisplayName() + " holds no liquid XP and isn't solid XP.");
             return;
         }
         int poured = 0;

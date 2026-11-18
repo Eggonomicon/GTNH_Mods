@@ -15,6 +15,8 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
 import net.minecraft.inventory.Container;
+import net.minecraft.inventory.IInventory;
+import net.minecraft.inventory.ISidedInventory;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.inventory.Slot;
 import net.minecraft.inventory.SlotCrafting;
@@ -73,7 +75,8 @@ import gregtech.api.util.GTUtility;
  * the tank to clients and pipes: it fills with liquid XP the usual way. Once a second it takes the liquid XP it needs and
  * makes one of the things GTNH's XP bucket crafting recipes make (a tiny pile of gallium dust from 8 buckets, and so
  * on), as many as it has XP for, into its store of 9 stacks, and hands its store to the chests, inventories and pipes
- * touching it.
+ * touching it. When its tank hasn't enough, it takes solid XP (Tinkers' essence berries, from CropsNH's berry farms;
+ * {@link #solidXp}) from the chests and inventories touching it.
  * <ul>
  * <li>Right-click it (with an empty hand, or anything but a GregTech tool or cover, which GregTech uses on its
  * machines): its menu ({@link XpMenu}), a chest window any client shows: its liquid XP, everything it can make (click
@@ -102,7 +105,7 @@ public final class XpCrafters {
     enum Status {
         NO_RECIPE("nothing to make yet"),
         WORKING("working"),
-        NEEDS_XP("waiting for liquid XP"),
+        NEEDS_XP("waiting for liquid XP (or essence berries touching it)"),
         WRONG_FLUID("waiting: its tank holds something other than liquid XP"),
         NO_OUTPUT("waiting: its store is full, and nothing touching it takes items"),
         FULL("waiting: its store and everything touching it are full"),
@@ -467,6 +470,61 @@ public final class XpCrafters {
         return f != null ? (int) Math.min(Integer.MAX_VALUE, (long) r.cost * Math.max(1, f.times)) : r.cost;
     }
 
+    // ---- solid XP -------------------------------------------------------------------------------------------------
+
+    /** The liquid XP (mB) one of this item counts as ({@link TweaksConfig#xpCrafterSolidXp}), or 0 if it isn't solid XP. */
+    static int solidXp(ItemStack s) {
+        if (s == null || s.getItem() == null) return 0;
+        for (String entry : TweaksConfig.xpCrafterSolidXp) {
+            int eq = entry.lastIndexOf('=');
+            if (eq <= 0) continue;
+            try {
+                int mb = Integer.parseInt(entry.substring(eq + 1)
+                    .trim());
+                if (mb > 0 && LootSpawners.matches(entry.substring(0, eq)
+                    .trim(), s)) return mb;
+            } catch (NumberFormatException e) {
+                // not a number: not an entry
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Takes solid XP from the chests and inventories touching the crafter (by their rules for that side, like a hopper),
+     * as few as make {@code need} mB, or all there are. Returns the mB taken.
+     */
+    static int takeSolidXp(World w, Crafter c, int need) {
+        int got = 0;
+        for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
+            if (got >= need) break;
+            int x = c.x + dir.offsetX, y = c.y + dir.offsetY, z = c.z + dir.offsetZ;
+            if (y < 0 || y >= w.getHeight() || !w.blockExists(x, y, z)) continue; // never load a chunk
+            TileEntity te = w.getTileEntity(x, y, z);
+            if (!(te instanceof IInventory) || te.isInvalid()) continue;
+            IInventory inv = (IInventory) te;
+            int side = dir.getOpposite()
+                .ordinal();
+            int[] slots = inv instanceof ISidedInventory ? ((ISidedInventory) inv).getAccessibleSlotsFromSide(side) : null;
+            int n = slots == null ? inv.getSizeInventory() : slots.length;
+            boolean changed = false;
+            for (int k = 0; k < n && got < need; k++) {
+                int slot = slots == null ? k : slots[k];
+                ItemStack s = inv.getStackInSlot(slot);
+                int mb = solidXp(s);
+                if (mb <= 0 || (inv instanceof ISidedInventory && !((ISidedInventory) inv).canExtractItem(slot, s, side))) continue;
+                int take = Math.min(s.stackSize, (need - got + mb - 1) / mb);
+                if (take <= 0) continue;
+                ItemStack out = inv.decrStackSize(slot, take);
+                if (out == null || out.stackSize <= 0) continue;
+                got += out.stackSize * mb;
+                changed = true;
+            }
+            if (changed) inv.markDirty();
+        }
+        return got;
+    }
+
     // ---- the tank ---------------------------------------------------------------------------------------------------
 
     static boolean isTankItem(ItemStack s) {
@@ -541,7 +599,8 @@ public final class XpCrafters {
         }
         if (c.full) lines.add("Full dust: on (" + (c.fullPaid != null ? c.fullPaid.getDisplayName() + " in it" : "creative") + ")");
         if (c.bank > 0) lines.add("Holding " + mb(c.bank) + " mB of liquid XP");
-        lines.add("Fill it with liquid XP; what it makes");
+        lines.add("Fill it with liquid XP (or essence berries");
+        lines.add("in a chest touching it); what it makes");
         lines.add("goes into chests and pipes touching it,");
         lines.add("or waits in its store");
         return lines;
@@ -819,7 +878,8 @@ public final class XpCrafters {
 
     /**
      * Hands its store to what touches it, crafts into its store as long as there is liquid XP for it and room, then hands
-     * that over too. XP is taken from the tank only as needed, so with nothing to craft (or no room) it stays in the tank.
+     * that over too. XP is taken from the tank only as needed, so with nothing to craft (or no room) it stays in the tank;
+     * when the tank hasn't enough (or holds another fluid), solid XP touching it makes up the rest.
      */
     static void cycle(World w, Data d, Crafter c, MTEBasicTank tank) {
         handOver(w, d, c);
@@ -839,11 +899,8 @@ public final class XpCrafters {
             }
             if (c.bank < cost) {
                 FluidStack f = tank.getDrainableStack();
-                if (f != null && f.amount > 0 && !isXp(f.getFluid())) {
-                    waiting = Status.WRONG_FLUID;
-                    break;
-                }
-                int take = Math.min(cost - c.bank, f == null ? 0 : f.amount);
+                boolean wrong = f != null && f.amount > 0 && !isXp(f.getFluid());
+                int take = wrong ? 0 : Math.min(cost - c.bank, f == null ? 0 : f.amount);
                 if (take > 0) {
                     FluidStack got = tank.drain(take, true);
                     if (got != null && got.amount > 0) {
@@ -851,10 +908,17 @@ public final class XpCrafters {
                         d.markDirty();
                     }
                 }
-            }
-            if (c.bank < cost) {
-                waiting = Status.NEEDS_XP;
-                break;
+                if (c.bank < cost) {
+                    int solid = takeSolidXp(w, c, cost - c.bank);
+                    if (solid > 0) {
+                        c.bank += solid;
+                        d.markDirty();
+                    }
+                }
+                if (c.bank < cost) {
+                    waiting = wrong ? Status.WRONG_FLUID : Status.NEEDS_XP;
+                    break;
+                }
             }
             c.bank -= cost;
             c.made++;

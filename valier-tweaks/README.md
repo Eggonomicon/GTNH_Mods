@@ -163,7 +163,7 @@ How it is stored: in the world save it is an ordinary spawner of the same mob, m
 mod turns a marked spawner back into a loot spawner as its chunk loads, or within 2 seconds if it turns up some other
 way. Without the mod, it is simply an ordinary spawner of the same mob again.
 
-## XP crafters (1.9.0, menu and store 1.11.0)
+## XP crafters (1.9.0, menu and store 1.11.0, essence berries 1.12.0)
 
 GTNH has crafting recipes made only of XP buckets: a tiny pile of gallium dust from 8, a tiny pile of arsenic from 7,
 a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An XP crafter makes them from liquid XP.
@@ -204,6 +204,12 @@ a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An 
   64 a second) and room in its store, and hands those over too. A recipe's cost is the liquid XP in its buckets: 1,000
   mB a bucket, so a tiny pile of gallium dust takes 8,000 mB. It takes XP only as it needs it, so with nothing to make,
   or its store full, the XP stays in the tank. Before 1.11.0 it had no store and made nothing with nowhere to put it.
+- **Solid XP (1.12.0):** when its tank hasn't enough liquid XP (or holds another fluid), it takes **essence berries**
+  (Tinkers' Concentrated Essence Berry, what CropsNH's essence berry crop drops) from the chests and inventories
+  touching it, as few as it needs, 250 mB each (`xpCrafterSolidXp`): the same as GTNH's fluid extractor makes from
+  one, and what eating one gives on average (6 to 19 XP, at the 20 mB a point EnderIO and OpenBlocks count). Pipe a berry farm into a chest next to the crafter, or let the farm
+  output into one. GregTech tanks don't take items from pipes, so the berries can't be piped into the crafter itself.
+  In its menu, click liquid XP holding berries to put one in (shift: the stack).
 - **Bigger than the tank:** XP it has taken towards the next craft is held by the crafter itself, so a craft can cost
   more than the tank holds (72,000 mB for full gallium dust).
 - **Full dust:** sneak-right-click it with a **block of emerald** (`xpCrafterFullItem`, kept in it; not in creative)
@@ -269,6 +275,7 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `xpcrafter` / `xpCrafter` | `true` | XP crafters can be made and work. Off: none can be made, and existing ones stop (keeping what they know). |
 | `xpCrafterTank` | `gregtech:gt.blockmachines:817` | The GregTech tank three of which (with two LV pumps, an LV conveyor, an LV robot arm, a crafting table and an LV circuit) craft one (GT++'s ULV fluid tank). Any GregTech tank works. Not an item: none can be made. (1.11.0 removed `xpCrafterItem`, the diamond block of the old recipe.) |
 | `xpCrafterFluids` | `xpjuice` | Fluids that count as liquid XP. Recipes made only of containers of these are what it can make. |
+| `xpCrafterSolidXp` | `TConstruct:oreBerries:5=250` | Items it takes as liquid XP (`mod:item:meta=mB`), from inventories touching it or its menu. By default Tinkers' Concentrated Essence Berry, 250 mB. |
 | `xpCrafterFullItem` | `minecraft:emerald_block` | Switches full dust on (sneak-right-click, or its menu; kept in it, given back when switched off). |
 | `xpCrafterTinyTimes` | `9` | Times the XP for a whole dust instead of a tiny pile. |
 | `xpCrafterSmallTimes` | `4` | Times the XP for a whole dust instead of a small pile. |
@@ -386,6 +393,12 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
     key) but not filled. Full dust from emerald blocks on the cursor (the gallium icon becomes gallium dust at 72,000
     mB) and back. Where protected it can be looked at but not changed or taken from. Further than 8 blocks it closes.
     Broken, its store drops with the crafter item.
+  - **Essence berries (1.12.0):** a Concentrated Essence Berry counts as 250 mB, another ore berry doesn't. From a chest
+    of 40 berries a crafter takes 32 for a tiny pile of gallium dust (which goes into the same chest), then the other 8
+    towards the next, leaving the dirt in it. The tank's liquid XP goes first, then berries. With water in its tank it
+    still crafts from berries, then says its tank holds something else. Clicking the menu's liquid XP holding berries
+    puts one in, a shift-click the rest. The test also logs what GTNH's fluid extractor, centrifuge and macerator make
+    of a berry (17 Nov: the fluid extractor 250 mB of liquid XP, the others nothing).
   - **WAILA (1.10.0):** the data WAILA's server sends for the crafter (every provider registered for the tank, as
     WAILA asks them) says what it makes and the cost as soon as it is chosen; working, the 4,000 mB held and 3 made;
     gallium dust at 72,000 mB with full dust on; with its store full and nothing touching it, why, the 8,000 mB in its
