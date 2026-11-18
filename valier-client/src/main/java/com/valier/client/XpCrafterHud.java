@@ -19,12 +19,14 @@ import mcp.mobius.waila.api.IWailaConfigHandler;
 import mcp.mobius.waila.api.IWailaDataAccessor;
 import mcp.mobius.waila.api.IWailaDataProvider;
 import mcp.mobius.waila.api.IWailaRegistrar;
+import mcp.mobius.waila.api.SpecialChars;
 
 /**
  * WAILA for Valier XP Crafters. A crafter is a plain GregTech tank to the client; the server's Valier Tweaks adds a
  * {@value #TAG} compound to the block data WAILA fetches for a player looking at one. When it is there, the hover name
- * becomes "Valier XP Crafter" and lines saying what it makes, the liquid XP each takes and what it is doing go first in
- * the body. Without it (any other block, or a server without Valier Tweaks) nothing changes.
+ * becomes "Valier XP Crafter", lines saying what it makes, the liquid XP each takes and what it is doing go first in
+ * the body, and the mod name at the bottom says Valier Tweaks instead of GregTech. Without it (any other block, or a
+ * server without Valier Tweaks) nothing changes.
  * <p>
  * WAILA option "Valier XP crafters" (in WAILA's settings, under Valier) turns it off.
  */
@@ -48,6 +50,7 @@ public final class XpCrafterHud implements IWailaDataProvider {
         XpCrafterHud hud = new XpCrafterHud();
         registrar.registerHeadProvider(hud, tiles);
         registrar.registerBodyProvider(hud, tiles);
+        registrar.registerTailProvider(hud, tiles);
     }
 
     /** What the server says about the crafter being looked at, or null (not one, or switched off). */
@@ -153,7 +156,7 @@ public final class XpCrafterHud implements IWailaDataProvider {
         return args.length == 0 ? StatCollector.translateToLocal(key) : StatCollector.translateToLocalFormatted(key, args);
     }
 
-    // ---- not used: the server sends the data, the stack and tail are WAILA's own -------------------------------------
+    // ---- not used: the server sends the data, the stack is WAILA's own -----------------------------------------------
 
     @Override
     public NBTTagCompound getNBTData(EntityPlayerMP player, TileEntity te, NBTTagCompound tag, World world, int x, int y,
@@ -166,9 +169,19 @@ public final class XpCrafterHud implements IWailaDataProvider {
         return null;
     }
 
+    /** The mod name line WAILA adds at the bottom (blue, italic: "GregTech") says Valier Tweaks, if it is shown. */
     @Override
     public List<String> getWailaTail(ItemStack stack, List<String> tip, IWailaDataAccessor accessor,
         IWailaConfigHandler config) {
+        if (tip == null || info(accessor, config) == null) return tip;
+        String mod = SpecialChars.BLUE + SpecialChars.ITALIC;
+        for (int i = tip.size() - 1; i >= 0; i--) {
+            if (tip.get(i) != null && tip.get(i)
+                .startsWith(mod)) {
+                tip.set(i, mod + tr("valierclient.xpcrafter.mod"));
+                break;
+            }
+        }
         return tip;
     }
 }

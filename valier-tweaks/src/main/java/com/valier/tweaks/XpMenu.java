@@ -28,7 +28,8 @@ import net.minecraftforge.fluids.IFluidContainerItem;
 import gregtech.api.metatileentity.implementations.MTEBasicTank;
 
 /**
- * An XP crafter's menu: a six-row chest window the server fills with icons, so every client can show it without a
+ * An XP crafter's menu (a right-click on it, see {@link XpCrafters#menuItem}): a six-row chest window the server fills
+ * with icons, so every client can show it without a
  * mod. Clicks on the icons are buttons; nothing can be taken out of or put into them, and after every click the whole
  * window is sent again, so what a client guessed a click would do is put right.
  * <ul>

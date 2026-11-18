@@ -256,7 +256,8 @@ final class XpSelfTest {
         hold(copy(tinyGallium, 3));
         player.setSneaking(false);
         ev = click(p);
-        SelfTest.check(!ev.isCanceled() && c.makes == null, "without sneaking, a tiny pile of gallium dust chooses nothing");
+        SelfTest.check(!ev.isCanceled() && c.makes == null, "without sneaking, a tiny pile of gallium dust chooses nothing "
+            + "(a player gets the menu)");
         player.setSneaking(true);
         ev = click(p);
         SelfTest.check(ev.isCanceled() && c.makes != null && c.makes.isItemEqual(tinyGallium) && held() == 3 && said[0] != null

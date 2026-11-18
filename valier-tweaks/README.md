@@ -181,8 +181,10 @@ a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An 
   1.9.0 and 1.10.0 made it from one tank and a block of diamond; crafters made that way keep working.
 - **Placed, it is still that tank:** clients and pipes see a ULV fluid tank (32,000 mB). Fill it with liquid XP the
   usual way (EnderIO, OpenBlocks; both call it `xpjuice`).
-- **Its menu (1.11.0):** right-click it with an empty hand. It is a chest window the server fills, so every player sees
-  it without a mod:
+- **Its menu (1.11.0):** right-click it, with an empty hand or holding anything except a GregTech tool (wrench,
+  screwdriver, mallet, hammer, crowbar, wire cutter, soldering iron, jackhammer) or a cover, which go to the tank as
+  GregTech has them (1.11.0 needed an empty hand). It is a chest window the server fills, so every player sees it
+  without a mod:
   - **Top row:** liquid XP (click it holding a bucket or cell of liquid XP to pour it in; shift-click pours the whole
     stack), a gauge of its tank, and its status (green working, yellow waiting, red stuck).
   - **The next three rows:** everything it can make (27), cheapest first, with the liquid XP each takes and what full
@@ -374,7 +376,8 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
     in its store; with its store full no XP is taken (and it says why); with the chest full too it waits; with room in
     the chest a stack of its store goes in and it makes another. Its record saves, store too; removed without drops,
     it is forgotten and its 513 stored items drop where it was. A plain ULV tank only gets a hint.
-  - **Menu (1.11.0), on a crafter of its own:** an empty-hand right-click opens it (not with something in hand). It
+  - **Menu (1.11.0), on a crafter of its own:** a right-click opens it with an empty hand or holding dirt (1.11.1),
+    not holding a GregTech wrench or a cover (an LV pump). It
     shows the 27 things it can make, cheapest first, with costs, its empty tank and its status, and no pages.
     Clicking tiny gallium dust chooses it (it shines), again stops it, a shift-click chooses too. Icons can't be taken
     (click, number key, Q) or covered. A liquid XP bucket poured in fills the tank, the gauge shows it and the empty

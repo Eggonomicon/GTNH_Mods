@@ -41,6 +41,7 @@ final class XpHudSelfTest {
     static final String OPTION = "valierclient.xpcrafter";
     static final List<String> HEAD = Collections.singletonList("§fUltra Low Voltage Fluid Tank");
     static final List<String> BODY = Collections.singletonList("Facing: North");
+    static final List<String> TAIL = Collections.singletonList("§9§oGregTech");
 
     final WorldServer world;
     final EntityPlayerMP player;
@@ -76,8 +77,12 @@ final class XpHudSelfTest {
                 .startsWith("§a"),
             "Valier Client: WAILA names it Valier XP Crafter and says what it makes, the cost, Working (green), the XP it "
                 + "holds and how many it made, before the tank's own lines (" + head + " / " + body + ")");
-        List<String> off = run(true, p, data, HEAD, false);
-        SelfTest.check(HEAD.equals(off), "Valier Client: with its WAILA option off, the name stays the tank's (" + off + ")");
+        List<String> tail = run(2, p, data, TAIL, true);
+        SelfTest.check(tail != null && tail.equals(Collections.singletonList("§9§oValier Tweaks")),
+            "Valier Client: WAILA's mod name line says Valier Tweaks, not GregTech (" + tail + ")");
+        List<String> off = run(true, p, data, HEAD, false), tailOff = run(2, p, data, TAIL, false);
+        SelfTest.check(HEAD.equals(off) && TAIL.equals(tailOff), "Valier Client: with its WAILA option off, the name and "
+            + "mod name stay the tank's (" + off + " / " + tailOff + ")");
     }
 
     /** Full dust just switched on. */
@@ -116,9 +121,10 @@ final class XpHudSelfTest {
     void plainTank(int[] q) {
         NBTTagCompound data = data(q);
         List<String> head = client ? run(true, q, data, HEAD, true) : HEAD,
-            body = client ? run(false, q, data, BODY, true) : BODY;
-        SelfTest.check(!data.hasKey(XpCrafterWaila.TAG) && HEAD.equals(head) && BODY.equals(body),
-            "WAILA: a plain ULV tank gets nothing extra, and Valier Client changes nothing (" + head + " / " + body + ")");
+            body = client ? run(false, q, data, BODY, true) : BODY, tail = client ? run(2, q, data, TAIL, true) : TAIL;
+        SelfTest.check(!data.hasKey(XpCrafterWaila.TAG) && HEAD.equals(head) && BODY.equals(body) && TAIL.equals(tail),
+            "WAILA: a plain ULV tank gets nothing extra, and Valier Client changes nothing (" + head + " / " + body + " / "
+                + tail + ")");
     }
 
     // ---- helpers ----------------------------------------------------------------------------------------------------
@@ -153,13 +159,19 @@ final class XpHudSelfTest {
         return tag;
     }
 
-    /** What Valier Client's name (head) or line (body) providers make of WAILA's lines; null if it registered none. */
     List<String> run(boolean head, int[] p, NBTTagCompound data, List<String> start, boolean option) {
+        return run(head ? 0 : 1, p, data, start, option);
+    }
+
+    /**
+     * What Valier Client's name (part 0, head), line (1, body) or mod name (2, tail) providers make of WAILA's lines;
+     * null if it registered none.
+     */
+    List<String> run(int part, int[] p, NBTTagCompound data, List<String> start, boolean option) {
         TileEntity te = world.getTileEntity(p[0], p[1], p[2]);
-        Map<Integer, List<IWailaDataProvider>> all = head ? ModuleRegistrar.instance()
-            .getHeadProviders(te)
-            : ModuleRegistrar.instance()
-                .getBodyProviders(te);
+        ModuleRegistrar r = ModuleRegistrar.instance();
+        Map<Integer, List<IWailaDataProvider>> all = part == 0 ? r.getHeadProviders(te)
+            : part == 1 ? r.getBodyProviders(te) : r.getTailProviders(te);
         IWailaDataAccessor accessor = accessor(te, data);
         IWailaConfigHandler config = config(option);
         List<String> tip = new ArrayList<>(start);
@@ -170,7 +182,8 @@ final class XpHudSelfTest {
                     .getName()
                     .startsWith(CLIENT)) continue;
                 found++;
-                tip = head ? pr.getWailaHead(null, tip, accessor, config) : pr.getWailaBody(null, tip, accessor, config);
+                tip = part == 0 ? pr.getWailaHead(null, tip, accessor, config)
+                    : part == 1 ? pr.getWailaBody(null, tip, accessor, config) : pr.getWailaTail(null, tip, accessor, config);
             }
         }
         return found == 0 ? null : tip;

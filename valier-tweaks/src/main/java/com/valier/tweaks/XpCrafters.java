@@ -57,12 +57,15 @@ import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.common.registry.GameRegistry;
+import gregtech.api.GregTechAPI;
+import gregtech.api.covers.CoverRegistry;
 import gregtech.api.enums.ItemList;
 import gregtech.api.enums.Materials;
 import gregtech.api.enums.OrePrefixes;
 import gregtech.api.interfaces.metatileentity.IMetaTileEntity;
 import gregtech.api.interfaces.tileentity.IGregTechTileEntity;
 import gregtech.api.metatileentity.implementations.MTEBasicTank;
+import gregtech.api.util.GTUtility;
 
 /**
  * XP crafters: three GregTech tanks (GT++'s Ultra Low Voltage Fluid Tank by default), two LV pumps, an LV conveyor, an
@@ -72,8 +75,9 @@ import gregtech.api.metatileentity.implementations.MTEBasicTank;
  * on), as many as it has XP for, into its store of 9 stacks, and hands its store to the chests, inventories and pipes
  * touching it.
  * <ul>
- * <li>Right-click it with an empty hand: its menu ({@link XpMenu}), a chest window any client shows: its liquid XP,
- * everything it can make (click one), its store (take from it), full dust.</li>
+ * <li>Right-click it (with an empty hand, or anything but a GregTech tool or cover, which GregTech uses on its
+ * machines): its menu ({@link XpMenu}), a chest window any client shows: its liquid XP, everything it can make (click
+ * one), its store (take from it), full dust.</li>
  * <li>Sneak-right-click it with what it should make to choose (the item isn't used up); with an empty hand for its
  * status in chat.</li>
  * <li>Sneak-right-click it with a block of emerald (or use its menu): it makes the whole dust instead of a tiny or small
@@ -546,7 +550,8 @@ public final class XpCrafters {
     // ---- clicks, placing and breaking --------------------------------------------------------------------------------
 
     /**
-     * A right-click with an empty hand on an XP crafter opens its menu. Sneak-right-click: with an empty hand its status,
+     * A right-click on an XP crafter opens its menu, unless the hand holds a GregTech tool or cover ({@link #menuItem}).
+     * Sneak-right-click: with an empty hand its status,
      * with the full-dust item that switched on or off, with something an XP recipe makes that becomes what it makes. A
      * sneaking empty-hand hit gives the full-dust item back. Low priority, and not for cancelled clicks, so claim
      * protection that stops the click wins.
@@ -558,7 +563,7 @@ public final class XpCrafters {
         EntityPlayer player = event.entityPlayer;
         World world = event.world;
         ItemStack held = player.getHeldItem();
-        boolean menu = !hit && !player.isSneaking() && held == null && opensMenus(player);
+        boolean menu = !hit && !player.isSneaking() && menuItem(held) && opensMenus(player);
         if (world.isRemote || !(player.isSneaking() || menu)) return;
         int x = event.x, y = event.y, z = event.z;
         Data d = data(world, false);
@@ -603,6 +608,27 @@ public final class XpCrafters {
             event.setCanceled(true);
             tell(player, text(EnumChatFormatting.RED, "No liquid XP recipe makes " + held.getDisplayName() + ". It can make: "
                 + canMake() + "."));
+        }
+    }
+
+    /**
+     * Whether a right-click holding this opens the menu: an empty hand or anything at all, except what GregTech uses on
+     * its machines (its wrenches, screwdrivers, mallets, hammers, crowbars, wire cutters, soldering irons, jackhammers,
+     * and covers), which go to the tank as before.
+     */
+    static boolean menuItem(ItemStack held) {
+        if (held == null) return true;
+        try {
+            return !(GTUtility.isStackInList(held, GregTechAPI.sWrenchList)
+                || GTUtility.isStackInList(held, GregTechAPI.sScrewdriverList)
+                || GTUtility.isStackInList(held, GregTechAPI.sSoftMalletList)
+                || GTUtility.isStackInList(held, GregTechAPI.sHardHammerList)
+                || GTUtility.isStackInList(held, GregTechAPI.sCrowbarList)
+                || GTUtility.isStackInList(held, GregTechAPI.sWireCutterList)
+                || GTUtility.isStackInList(held, GregTechAPI.sSolderingToolList)
+                || GTUtility.isStackInList(held, GregTechAPI.sJackhammerList) || CoverRegistry.isCover(held));
+        } catch (Throwable e) {
+            return false;
         }
     }
 
@@ -1059,8 +1085,8 @@ public final class XpCrafters {
     static IChatComponent status(World w, Crafter c) {
         IChatComponent msg = text(EnumChatFormatting.GOLD, "XP crafter: ");
         XpRecipe r = c.makes == null ? null : recipeFor(c.makes);
-        if (r == null) msg.appendSibling(new ChatComponentText("makes nothing yet. Right-click it with an empty hand to "
-            + "choose in its menu, or sneak-right-click it with what it should make: " + canMake() + "."));
+        if (r == null) msg.appendSibling(new ChatComponentText("makes nothing yet. Right-click it to choose in its menu, "
+            + "or sneak-right-click it with what it should make: " + canMake() + "."));
         else msg.appendSibling(new ChatComponentText("makes " + countName(product(c, r)) + " from " + mb(cost(c, r))
             + " mB of liquid XP each, into the chests, inventories and pipes touching it, or its store. Now: "
             + c.status.words + "."));
@@ -1072,7 +1098,7 @@ public final class XpCrafters {
             + (c.bank > 0 ? ", and " + mb(c.bank) + " mB already taken towards the next" : "") + "."));
         if (c.made > 0) msg.appendSibling(new ChatComponentText(" Made " + c.made + " so far."));
         if (c.stored() > 0) msg.appendSibling(new ChatComponentText(" Its store holds " + mb(c.stored()) + " (right-click "
-            + "it with an empty hand to take them)."));
+            + "it to take them)."));
         Full full = r == null ? null : full(r.output);
         if (c.full) msg.appendSibling(new ChatComponentText(full != null ? " Full dust is on." : " Full dust is on (for tiny and small piles)."));
         else if (full != null && LootSpawners.itemOf(TweaksConfig.xpCrafterFullItem) != null)

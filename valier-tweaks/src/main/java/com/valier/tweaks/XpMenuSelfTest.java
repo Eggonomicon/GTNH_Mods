@@ -10,11 +10,14 @@ import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.fluids.FluidContainerRegistry;
 import net.minecraftforge.fluids.FluidStack;
 
+import gregtech.api.GregTechAPI;
+import gregtech.api.enums.ItemList;
 import gregtech.api.metatileentity.implementations.MTEBasicTank;
+import gregtech.api.objects.GTItemStack;
 
 /**
- * The menu part of {@code valiertweaks selftest xpcrafter}, on a crafter of its own with nothing touching it: an
- * empty-hand right-click opens it; the icons show everything it can make, its tank and status; clicking one chooses it,
+ * The menu part of {@code valiertweaks selftest xpcrafter}, on a crafter of its own with nothing touching it: a
+ * right-click opens it, with an empty hand or holding dirt, not holding a GregTech wrench or a cover; the icons show everything it can make, its tank and status; clicking one chooses it,
  * again stops it; icons can't be taken or covered; a liquid XP bucket poured in fills the tank; what it makes waits in its
  * store, which shows in the menu and can be taken (shift-click, click, number key) but not filled; full dust from the
  * cursor and back; where protected nothing changes and nothing is taken; too far away it closes; broken, the store
@@ -66,15 +69,30 @@ final class XpMenuSelfTest {
     }
 
     void open(int[] p, XpCrafters.Crafter c) {
-        t.hold(new ItemStack(Blocks.dirt));
         t.player.setSneaking(false);
-        PlayerInteractEvent held = t.click(p);
-        boolean noMenu = !held.isCanceled() && !(t.player.openContainer instanceof XpMenu);
+        ItemStack wrench = null;
+        for (GTItemStack s : GregTechAPI.sWrenchList) {
+            wrench = s.toStack();
+            if (wrench != null) break;
+        }
+        boolean tools = true;
+        for (ItemStack tool : new ItemStack[] { wrench, ItemList.Electric_Pump_LV.get(1) }) {
+            if (tool == null) continue;
+            t.hold(tool);
+            PlayerInteractEvent ev = t.click(p);
+            tools &= !ev.isCanceled() && !(t.player.openContainer instanceof XpMenu);
+            t.player.openContainer = t.player.inventoryContainer;
+        }
+        t.hold(new ItemStack(Blocks.dirt));
+        PlayerInteractEvent dirt = t.click(p);
+        boolean withDirt = dirt.isCanceled() && t.player.openContainer instanceof XpMenu;
+        t.player.openContainer = t.player.inventoryContainer;
         t.hold(null);
         PlayerInteractEvent ev = t.click(p);
-        SelfTest.check(noMenu && ev.isCanceled() && t.player.openContainer instanceof XpMenu
-            && ((XpMenu) t.player.openContainer).crafter == c, "menu: a right-click with an empty hand opens its menu (not "
-                + "with something in hand)");
+        SelfTest.check(wrench != null && tools && withDirt && ev.isCanceled() && t.player.openContainer instanceof XpMenu
+            && ((XpMenu) t.player.openContainer).crafter == c, "menu: a right-click opens its menu, with an empty hand or "
+                + "holding dirt; not holding a GregTech wrench (" + (wrench == null ? null : wrench.getDisplayName())
+                + ") or a cover (an LV pump), which go to the tank as before");
     }
 
     void icons(XpMenu m, XpCrafters.Crafter c, MTEBasicTank tank) {

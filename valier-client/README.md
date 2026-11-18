@@ -30,6 +30,7 @@ In its store: 64
 - **Its tank, the XP it already took towards the next craft, how many it has made and what its store holds**, when
   there are any.
 - **The tank's own WAILA lines** (facing and so on) follow as before.
+- **The mod name** at the bottom (blue) says Valier Tweaks instead of GregTech (1.2.0).
 - **Turning it off:** WAILA's settings, module "Valier", option "Valier XP crafters".
 
 ### How it works
@@ -55,7 +56,7 @@ Tweaks is loaded too (single player), since its own recipe is there.
 
 ## Installing
 
-1. Download `valierclient-1.1.0.jar` from the [latest release](https://github.com/Eggonomicon/GTNH_Mods/releases/latest)
+1. Download `valierclient-1.2.0.jar` from the [latest release](https://github.com/Eggonomicon/GTNH_Mods/releases/latest)
    (or build it, below).
 2. Put it in your GTNH 2.9.0 client's `mods` folder (the instance's `.minecraft/mods`) and restart the game.
 
@@ -70,7 +71,7 @@ Harmless on a server too (no client-only code), though it does nothing useful th
 - **Test:** Valier Tweaks' `valiertweaks selftest xpcrafter` checks it when this jar is in the test server's `mods`
   too. WAILA registers this mod's name and line providers on the server as well, so the test hands them the data
   WAILA's server sends for a real crafter and checks the lines a player would read: the name, what it makes, the cost,
-  the status and its colour, the XP held and the count, the full dust cost, a crafter with its store full and nothing
+  the status and its colour, the XP held and the count, the mod name, the full dust cost, a crafter with its store full and nothing
   touching it (and the store line), the option switched off, and a plain tank left alone. It also checks this mod's
   copy of the crafting recipe takes the same grid as the server's. What WAILA and NEI draw on screen is only seen in
   game.

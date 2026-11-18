@@ -170,7 +170,7 @@ public final class TweaksConfig {
             + "crafting table and an LV circuit craft a Valier XP Crafter. Placed, it fills with liquid XP like the tank it "
             + "is, makes one of the things GTNH's XP bucket crafting recipes make (a tiny pile of gallium dust from 8 "
             + "buckets' worth, and so on) whenever it has the XP for one, into its store, and hands its store to the "
-            + "chests, inventories and pipes touching it. Right-click it with an empty hand for its menu (a chest window: "
+            + "chests, inventories and pipes touching it. Right-click it (not holding a GregTech tool or cover) for its menu (a chest window: "
             + "its liquid XP, what it can make, its store); sneak-right-click it with what it should make to choose, with "
             + "an empty hand for its status. Clients need nothing.");
         xpCrafter = c.getBoolean("xpCrafter", cat, true,
