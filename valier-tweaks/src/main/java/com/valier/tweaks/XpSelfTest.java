@@ -193,8 +193,10 @@ final class XpSelfTest {
         Slot slot = XpCrafters.CraftSync.resultSlot(bench);
         SelfTest.check(slot != null && slot.slotNumber == 0 && XpCrafters.isCrafterItem(slot.getStack()),
             "in a crafting table the crafter is in the output slot, the slot sent to the player (" + slot + ")");
-        if (Loader.isModLoaded("valierclient"))
+        if (Loader.isModLoaded("valierclient")) {
             clientRecipe(right, new ItemStack[] { tank, pump, conveyor, tank, table, circuit, tank, pump, conveyor });
+            if (crafterItem != null) clientModName(crafterItem, tank);
+        }
     }
 
     /** Valier Client's copy of the recipe (it shows it in NEI) takes the same grid, not one with a conveyor for the arm. */
@@ -212,6 +214,24 @@ final class XpSelfTest {
             && out != null && XpCrafters.isTankItem(out) && out.getDisplayName()
                 .contains("Valier XP Crafter"),
             "Valier Client: its copy of the recipe, for NEI, takes the same grid and shows a Valier XP Crafter (" + out + ")");
+    }
+
+    /** Valier Client turns WAILA's mod name line at the end of a crafter item's tooltip into Valier Tweaks. */
+    @SuppressWarnings("unchecked")
+    void clientModName(ItemStack crafter, ItemStack tank) {
+        List<String> a = null, b = null;
+        String gt = "§9§o" + mcp.mobius.waila.utils.ModIdentification.nameFromStack(crafter);
+        try {
+            java.lang.reflect.Method fix = Class.forName("com.valier.client.ModNameLine")
+                .getMethod("fix", ItemStack.class, List.class);
+            a = (List<String>) fix.invoke(null, crafter, new ArrayList<>(java.util.Arrays.asList("Valier XP Crafter", gt)));
+            b = (List<String>) fix.invoke(null, tank, new ArrayList<>(java.util.Arrays.asList("Ultra Low Voltage Fluid Tank", gt)));
+        } catch (Throwable e) {
+            ValierTweaks.LOG.warn("[ValierTweaks SelfTest] Valier Client's tooltip mod name", e);
+        }
+        SelfTest.check(a != null && "§9§oValier Tweaks".equals(a.get(1)) && b != null && gt.equals(b.get(1)),
+            "Valier Client: a crafter item's tooltip mod name line (" + gt.substring(4) + ") says Valier Tweaks, a plain tank's "
+                + "stays (" + a + " / " + b + ")");
     }
 
     InventoryCrafting grid(ItemStack... stacks) {
