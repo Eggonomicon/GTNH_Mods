@@ -77,9 +77,10 @@ and renames it. Without NEI, a tooltip event after WAILA's does the same.)
 
 ## Installing
 
-1. Download `valierclient-1.4.0.jar` from the [latest release](https://github.com/Eggonomicon/GTNH_Mods/releases/latest)
+1. Download `valierclient-1.4.1.jar` from the [latest release](https://github.com/Eggonomicon/GTNH_Mods/releases/latest)
    (or build it, below).
-2. Put it in your GTNH 2.9.0 client's `mods` folder (the instance's `.minecraft/mods`) and restart the game.
+2. Put it in your GTNH 2.9.0 client's `mods` folder (the instance's `.minecraft/mods`) and restart the game. Remove an older
+   valierclient jar. (1.4.1 only fixes its description in the game's mod list; it works the same as 1.4.0.)
 
 Needs WAILA and GregTech (both part of GTNH). Without WAILA there are no WAILA lines; without GregTech it does
 nothing. It connects to any server, with or without it.
