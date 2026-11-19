@@ -105,7 +105,7 @@ public final class XpCrafters {
     enum Status {
         NO_RECIPE("nothing to make yet"),
         WORKING("working"),
-        NEEDS_XP("waiting for liquid XP (or essence berries touching it)"),
+        NEEDS_XP("waiting for liquid XP (or essence berries)"),
         WRONG_FLUID("waiting: its tank holds something other than liquid XP"),
         NO_OUTPUT("waiting: its store is full, and nothing touching it takes items"),
         FULL("waiting: its store and everything touching it are full"),
@@ -496,32 +496,45 @@ public final class XpCrafters {
      */
     static int takeSolidXp(World w, Crafter c, int need) {
         int got = 0;
+        // Its own tank first (1.13.1): pipes and conveyors put berries straight into a GregTech tank's input slot.
+        TileEntity own = w.blockExists(c.x, c.y, c.z) ? w.getTileEntity(c.x, c.y, c.z) : null;
+        if (own instanceof IInventory && !own.isInvalid()) got += takeSolidXp((IInventory) own, -1, need);
         for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
             if (got >= need) break;
             int x = c.x + dir.offsetX, y = c.y + dir.offsetY, z = c.z + dir.offsetZ;
             if (y < 0 || y >= w.getHeight() || !w.blockExists(x, y, z)) continue; // never load a chunk
             TileEntity te = w.getTileEntity(x, y, z);
             if (!(te instanceof IInventory) || te.isInvalid()) continue;
-            IInventory inv = (IInventory) te;
-            int side = dir.getOpposite()
-                .ordinal();
-            int[] slots = inv instanceof ISidedInventory ? ((ISidedInventory) inv).getAccessibleSlotsFromSide(side) : null;
-            int n = slots == null ? inv.getSizeInventory() : slots.length;
-            boolean changed = false;
-            for (int k = 0; k < n && got < need; k++) {
-                int slot = slots == null ? k : slots[k];
-                ItemStack s = inv.getStackInSlot(slot);
-                int mb = solidXp(s);
-                if (mb <= 0 || (inv instanceof ISidedInventory && !((ISidedInventory) inv).canExtractItem(slot, s, side))) continue;
-                int take = Math.min(s.stackSize, (need - got + mb - 1) / mb);
-                if (take <= 0) continue;
-                ItemStack out = inv.decrStackSize(slot, take);
-                if (out == null || out.stackSize <= 0) continue;
-                got += out.stackSize * mb;
-                changed = true;
-            }
-            if (changed) inv.markDirty();
+            got += takeSolidXp((IInventory) te, dir.getOpposite()
+                .ordinal(), need - got);
         }
+        return got;
+    }
+
+    /**
+     * Solid XP items worth at least {@code need} mB (whole items, as few as that takes, or all there are) out of one
+     * inventory; what they were worth. {@code side}: the side it is reached from, whose slot rules apply; -1 (the
+     * crafter's own tank): every slot.
+     */
+    static int takeSolidXp(IInventory inv, int side, int need) {
+        int got = 0;
+        boolean sided = side >= 0 && inv instanceof ISidedInventory;
+        int[] slots = sided ? ((ISidedInventory) inv).getAccessibleSlotsFromSide(side) : null;
+        int n = slots == null ? inv.getSizeInventory() : slots.length;
+        boolean changed = false;
+        for (int k = 0; k < n && got < need; k++) {
+            int slot = slots == null ? k : slots[k];
+            ItemStack s = inv.getStackInSlot(slot);
+            int mb = solidXp(s);
+            if (mb <= 0 || (sided && !((ISidedInventory) inv).canExtractItem(slot, s, side))) continue;
+            int take = Math.min(s.stackSize, (need - got + mb - 1) / mb);
+            if (take <= 0) continue;
+            ItemStack out = inv.decrStackSize(slot, take);
+            if (out == null || out.stackSize <= 0) continue;
+            got += out.stackSize * mb;
+            changed = true;
+        }
+        if (changed) inv.markDirty();
         return got;
     }
 

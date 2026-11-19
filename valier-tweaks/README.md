@@ -222,9 +222,10 @@ a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An 
 - **Solid XP (1.12.0):** when its tank hasn't enough liquid XP (or holds another fluid), it takes **essence berries**
   (Tinkers' Concentrated Essence Berry, what CropsNH's essence berry crop drops) from the chests and inventories
   touching it, as few as it needs, 250 mB each (`xpCrafterSolidXp`): the same as GTNH's fluid extractor makes from
-  one, and what eating one gives on average (6 to 19 XP, at the 20 mB a point EnderIO and OpenBlocks count). Pipe a berry farm into a chest next to the crafter, or let the farm
-  output into one. GregTech tanks don't take items from pipes, so the berries can't be piped into the crafter itself.
-  In its menu, click liquid XP holding berries to put one in (shift: the stack).
+  one, and what eating one gives on average (6 to 19 XP, at the 20 mB a point EnderIO and OpenBlocks count). Pipe a
+  berry farm straight into the crafter (a GregTech tank takes items into its input slot; from 1.13.1 the crafter uses
+  berries there, first), or into a chest next to it. In its menu, click liquid XP holding berries to put one in
+  (shift: the stack).
 - **Bigger than the tank:** XP it has taken towards the next craft is held by the crafter itself, so a craft can cost
   more than the tank holds (72,000 mB for full gallium dust).
 - **Full dust:** sneak-right-click it with a **block of emerald** (`xpCrafterFullItem`, kept in it; not in creative)
@@ -424,6 +425,8 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
     still crafts from berries, then says its tank holds something else. Clicking the menu's liquid XP holding berries
     puts one in, a shift-click the rest. The test also logs what GTNH's fluid extractor, centrifuge and macerator make
     of a berry (17 Nov: the fluid extractor 250 mB of liquid XP, the others nothing).
+    From 1.13.1: the tank accepts berries from below as a pipe offers them, and 40 berries in the crafter's own tank
+    are used, 21 to finish a tiny pile it held 2,750 mB towards, the other 19 towards the next.
   - **WAILA (1.10.0):** the data WAILA's server sends for the crafter (every provider registered for the tank, as
     WAILA asks them) says what it makes and the cost as soon as it is chosen; working, the 4,000 mB held and 3 made;
     gallium dust at 72,000 mB with full dust on; with its store full and nothing touching it, why, the 8,000 mB in its

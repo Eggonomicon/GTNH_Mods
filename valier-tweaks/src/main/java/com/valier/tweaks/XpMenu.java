@@ -178,7 +178,7 @@ final class XpMenu extends Container {
         icons.setInventorySlotContents(MADE_SLOT, icon(new ItemStack(Items.paper), EnumChatFormatting.WHITE + "Made: " + XpCrafters.mb(c.made), lore));
         lore = new ArrayList<>();
         for (String line : new String[] { "Fill it with liquid XP: pipes, or pour", "a bucket or cell into it here.",
-            "Essence berries count too: in a chest", "touching it, or put in here.",
+            "Essence berries count too: piped into", "it, in a chest touching it, or put in here.",
             "Click what it should make. What it makes", "goes into the chests, inventories and",
             "pipes touching it, or waits in its", "store (the row above) for you.",
             "Broken, it keeps its settings and liquid", "XP in the item; its store drops." })

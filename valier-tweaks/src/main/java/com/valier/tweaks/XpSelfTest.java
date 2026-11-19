@@ -464,6 +464,22 @@ final class XpSelfTest {
         SelfTest.check(one && c.bank == 2750 && player.inventory.getItemStack() == null, "solid XP: clicking the menu's "
             + "liquid XP holding essence berries puts one in (250 mB), a shift-click the rest (" + c.bank + " mB held)");
         player.inventory.setItemStack(null);
+
+        // Piped in (1.13.1): a GregTech tank takes items from a pipe below into its own input slot, and the crafter uses them.
+        net.minecraft.inventory.ISidedInventory te = (net.minecraft.inventory.ISidedInventory) world.getTileEntity(p[0], p[1], p[2]);
+        int slot = -1;
+        for (int s : te.getAccessibleSlotsFromSide(0))
+            if (te.getStackInSlot(s) == null && te.canInsertItem(s, copy(berry, 40), 0) && te.isItemValidForSlot(s, copy(berry, 40))) {
+                slot = s;
+                break;
+            }
+        if (slot >= 0) te.setInventorySlotContents(slot, copy(berry, 40));
+        XpCrafters.run(world, d, c);
+        ItemStack left = slot < 0 ? null : te.getStackInSlot(slot);
+        SelfTest.check(slot >= 0 && c.made == 4 && c.bank == 4750 && left == null && count(chest, berry) == 0,
+            "solid XP: berries piped into the crafter's own tank (a pipe below may put them in slot " + slot + ") are used: 21 "
+                + "finish the tiny pile it held 2,750 mB towards, the other 19 go towards the next (" + state(c, tank, chest)
+                + ", left in the tank " + left + ")");
     }
 
     static String fluids(FluidStack[] fs) {
