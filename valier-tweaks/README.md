@@ -98,6 +98,8 @@ hostile spawners do nothing at all. A loot spawner skips the mobs and makes just
   pipes, EnderIO item conduits and BuildCraft pipes.
 - **Every side:** each stack is offered to all six neighbours in turn (below, above, north, south, west, east), and
   what doesn't fit in one goes on to the next. So with the chest below full, the loot goes into the chest beside it.
+  From 1.14.0 storage (chests, barrels, drawers, machines) is offered everything first, and pipes and conduits only get
+  what storage won't take.
 - **When everything is full** it keeps that batch itself (up to 27 stacks) and makes no more until the loot has gone.
   Nothing is ever dropped on the ground. Hoppers under it, EnderIO conduits set to extract and AE2 import buses can
   also pull from what it keeps. With nothing touching it, it makes nothing.
@@ -178,7 +180,7 @@ How it is stored: in the world save it is an ordinary spawner of the same mob, m
 mod turns a marked spawner back into a loot spawner as its chunk loads, or within 2 seconds if it turns up some other
 way. Without the mod, it is simply an ordinary spawner of the same mob again.
 
-## XP crafters (1.9.0, menu and store 1.11.0, essence berries 1.12.0)
+## XP crafters (1.9.0, menu and store 1.11.0, essence berries 1.12.0, cost settings 1.14.0)
 
 GTNH has crafting recipes made only of XP buckets: a tiny pile of gallium dust from 8, a tiny pile of arsenic from 7,
 a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An XP crafter makes them from liquid XP.
@@ -215,7 +217,8 @@ a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An 
   gallium dust. The item isn't used up. A dust no XP recipe makes is refused, with the list of what it can make.
   Claims apply.
 - **What it does:** once a second it hands its store to the chests, inventories and pipes touching it (the same way
-  loot spawners do), takes the liquid XP it needs from its tank and makes the item, as many as it has XP for (at most
+  loot spawners do: storage first, pipes only what storage won't take, from 1.14.0, so a pipe bringing it berries
+  doesn't carry its output off into other crafters' tanks), takes the liquid XP it needs from its tank and makes the item, as many as it has XP for (at most
   64 a second) and room in its store, and hands those over too. A recipe's cost is the liquid XP in its buckets: 1,000
   mB a bucket, so a tiny pile of gallium dust takes 8,000 mB. It takes XP only as it needs it, so with nothing to make,
   or its store full, the XP stays in the tank. Before 1.11.0 it had no store and made nothing with nowhere to put it.
@@ -224,14 +227,20 @@ a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An 
   touching it, as few as it needs, 250 mB each (`xpCrafterSolidXp`): the same as GTNH's fluid extractor makes from
   one, and what eating one gives on average (6 to 19 XP, at the 20 mB a point EnderIO and OpenBlocks count). Pipe a
   berry farm straight into the crafter (a GregTech tank takes items into its input slot; from 1.13.1 the crafter uses
-  berries there, first), or into a chest next to it. In its menu, click liquid XP holding berries to put one in
+  berries there, first), or into a chest next to it. From 1.14.0 a crafter's tank takes only liquid XP containers and
+  essence berries from pipes, hoppers and other crafters, so nothing else can block its input slot (plain tanks still
+  take anything, as GregTech has it). In its menu, click liquid XP holding berries to put one in
   (shift: the stack).
 - **Bigger than the tank:** XP it has taken towards the next craft is held by the crafter itself, so a craft can cost
   more than the tank holds (72,000 mB for full gallium dust).
 - **Full dust:** sneak-right-click it with a **block of emerald** (`xpCrafterFullItem`, kept in it; not in creative)
   and it makes the whole dust instead of a tiny or small pile, for 9 or 4 times the liquid XP: gallium dust from
   72,000 mB, arsenic dust from 63,000, brick dust from 16,000 (`xpCrafterTinyTimes`, `xpCrafterSmallTimes`; GregTech
-  makes a dust from 9 tiny or 4 small piles). Recipes that already make a whole item don't change. Sneak-right-click
+  makes a dust from 9 tiny or 4 small piles). Recipes that already make a whole item don't change.
+- **Cheaper (or dearer) crafts (1.14.0):** `xpCrafterCostPercent` scales every recipe's cost (25: a quarter, so a tiny
+  pile of gallium dust takes 2,000 mB), and `xpCrafterCosts` sets single items, by ore dictionary name or item name,
+  e.g. `dustTinyGallium=2000`. Full dust still takes 9 or 4 times the cost. The menu, the item's tooltip and WAILA show
+  the cost the server uses. Changed in the config, they take effect at the next restart. Sneak-right-click
   with the emerald block again, or sneak and hit it with an empty hand, to switch it off and get the block back.
 - **Status:** sneak-right-click it with an empty hand: what it makes, the XP each takes, whether it is working or
   waiting and why, its tank and the XP it holds, how many it has made and what its store holds.
@@ -296,6 +305,8 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `xpCrafterFullItem` | `minecraft:emerald_block` | Switches full dust on (sneak-right-click, or its menu; kept in it, given back when switched off). |
 | `xpCrafterTinyTimes` | `9` | Times the XP for a whole dust instead of a tiny pile. |
 | `xpCrafterSmallTimes` | `4` | Times the XP for a whole dust instead of a small pile. |
+| `xpCrafterCostPercent` | `100` | Every XP recipe's liquid XP, in percent of GTNH's XP bucket recipe (1 to 1000). |
+| `xpCrafterCosts` | (empty) | Items whose craft costs a set amount instead, as `item=mB`: an ore dictionary name (`dustTinyGallium=2000`) or `mod:item[:meta]`. Entries that set nothing are named in the server log. |
 | `macerator` / `chainArmourFullDust` | `true` | Chain helmets macerate into 1 steel dust, chain leggings into 2. |
 
 ## Build and test
@@ -394,7 +405,9 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 - **XP crafter self-test:** `valiertweaks selftest xpcrafter` (same flag), in an empty chunk of the test world.
   - **Recipes:** GTNH's XP bucket recipes are found with their costs (tiny gallium 8,000 mB, tiny arsenic 7,000, small
     brick 4,000, iron dust 2,000, charcoal 1,000). Full dust: 9 times for a tiny pile (gallium dust), 4 times for a
-    small one (brick dust), none for iron dust.
+    small one (brick dust), none for iron dust. Cost settings (1.14.0): with `dustTinyGallium=2000` and charcoal at 300
+    set, and the rest at 50%, tiny gallium takes 2,000 (full gallium dust 18,000), charcoal 300, tiny arsenic 3,500 and
+    iron dust 1,000; entries that set nothing are ignored, and with the settings put back the costs are GTNH's again.
   - **Crafting:** LV circuits are in the ore dictionary; three ULV fluid tanks, two LV pumps, an LV conveyor, an LV
     robot arm, a crafting table and an LV circuit make the crafter item (name and tooltip), mirrored too. Not with a
     conveyor for the arm, an LV tank, a crafter or a tank holding fluid among the tanks, nor the old tank and diamond

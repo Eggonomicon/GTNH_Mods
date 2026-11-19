@@ -8,7 +8,10 @@ import java.util.Set;
 import com.gtnewhorizon.gtnhmixins.ILateMixinLoader;
 import com.gtnewhorizon.gtnhmixins.LateMixin;
 
-/** The boiler ash mixins ({@code mixins.valiertweaks.json}), only when GregTech is there to change. */
+/**
+ * The boiler ash mixins and the XP crafter tank mixin ({@code mixins.valiertweaks.json}), only when GregTech is there
+ * to change.
+ */
 @LateMixin
 public class LateMixinLoader implements ILateMixinLoader {
 
@@ -20,6 +23,6 @@ public class LateMixinLoader implements ILateMixinLoader {
     @Override
     public List<String> getMixins(Set<String> loadedMods) {
         if (!loadedMods.contains("gregtech")) return Collections.emptyList();
-        return Arrays.asList("MixinBoilerBronze", "MixinAdvancedBoiler");
+        return Arrays.asList("MixinBoilerBronze", "MixinAdvancedBoiler", "MixinBasicTank");
     }
 }

@@ -358,12 +358,58 @@ public final class XpCrafters {
             if (old == null || (double) cost / out.stackSize < (double) old.cost / old.output.stackSize)
                 map.put(key, new XpRecipe(out.copy(), cost));
         }
-        List<XpRecipe> sorted = new ArrayList<>(map.values());
+        List<XpRecipe> sorted = new ArrayList<>();
+        for (XpRecipe r : map.values()) sorted.add(new XpRecipe(r.output, configuredCost(r.output, r.cost)));
         sorted.sort((a, b) -> Integer.compare(a.cost, b.cost));
         recipes = new LinkedHashMap<>();
         for (XpRecipe r : sorted) recipes.put(itemKey(r.output), r);
-        ValierTweaks.LOG.info("XP crafters: {} liquid XP recipes", recipes.size());
+        ValierTweaks.LOG.info("XP crafters: {} liquid XP recipes (costs at {}%, {} set by item)", recipes.size(),
+            TweaksConfig.xpCrafterCostPercent, TweaksConfig.xpCrafterCosts.length);
+        for (String entry : TweaksConfig.xpCrafterCosts) {
+            boolean used = false;
+            for (XpRecipe r : recipes.values()) used |= costEntry(entry, r.output) > 0;
+            if (!used) ValierTweaks.LOG.warn("XP crafters: xpCrafterCosts entry \"{}\" sets no recipe's cost (it should be "
+                + "item=mB, the item a liquid XP recipe makes, by name or ore dictionary name)", entry);
+        }
         return recipes;
+    }
+
+    /** Built again on next use (the self-test, after changing the cost settings). */
+    static void forgetRecipes() {
+        recipes = null;
+    }
+
+    /**
+     * The liquid XP one craft takes on this server: an {@code xpCrafterCosts} entry for what it makes, else GTNH's cost
+     * at {@code xpCrafterCostPercent} (at least 1 mB).
+     */
+    static int configuredCost(ItemStack out, int gtnh) {
+        for (String entry : TweaksConfig.xpCrafterCosts) {
+            int mb = costEntry(entry, out);
+            if (mb > 0) return mb;
+        }
+        long c = Math.round(gtnh * (TweaksConfig.xpCrafterCostPercent / 100.0));
+        return (int) Math.max(1, Math.min(Integer.MAX_VALUE, c));
+    }
+
+    /** An {@code xpCrafterCosts} entry's mB if it is for this item (mod:item[:meta] or an ore dictionary name), else 0. */
+    static int costEntry(String entry, ItemStack out) {
+        int eq = entry.lastIndexOf('=');
+        if (eq <= 0 || out == null || out.getItem() == null) return 0;
+        int mb;
+        try {
+            mb = Integer.parseInt(entry.substring(eq + 1)
+                .trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+        if (mb <= 0) return 0;
+        String key = entry.substring(0, eq)
+            .trim();
+        if (key.indexOf(':') >= 0) return LootSpawners.matches(key, out) ? mb : 0;
+        for (int id : OreDictionary.getOreIDs(out)) if (OreDictionary.getOreName(id)
+            .equalsIgnoreCase(key)) return mb;
+        return 0;
     }
 
     static XpRecipe recipeFor(ItemStack stack) {
@@ -539,6 +585,20 @@ public final class XpCrafters {
     }
 
     // ---- the tank ---------------------------------------------------------------------------------------------------
+
+    /**
+     * Whether a GregTech tank may take this item into its slots (1.14.0, from {@code MixinBasicTank}): an XP crafter's
+     * tank only takes liquid XP containers and solid XP, so pipes, hoppers and other crafters can't block its input slot
+     * with dust. Other tanks, and every tank with XP crafters off, are left to GregTech.
+     */
+    public static boolean tankMayTake(gregtech.api.interfaces.tileentity.IGregTechTileEntity base, ItemStack stack) {
+        if (!TweaksConfig.xpCrafter || base == null || stack == null) return true;
+        World w = base.getWorld();
+        if (w == null || w.isRemote) return true;
+        Data d = data(w, false);
+        if (d == null || d.at(base.getXCoord(), base.getYCoord(), base.getZCoord()) == null) return true;
+        return xpAmount(stack) > 0 || solidXp(stack) > 0;
+    }
 
     static boolean isTankItem(ItemStack s) {
         return LootSpawners.matches(TweaksConfig.xpCrafterTank, s);

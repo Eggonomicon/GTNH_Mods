@@ -68,6 +68,8 @@ public final class LootSpawners {
 
     // Optional pipe APIs, found by name: EnderIO conduits (CoFH IItemDuct) and BuildCraft pipes (IInjectable).
     private static final Class<?> ITEM_DUCT = find("cofh.api.transport.IItemDuct");
+    /** GregTech's pipe tile (item pipes are inventories that pass on what they get). */
+    private static final Class<?> GT_PIPE = find("gregtech.api.metatileentity.BaseMetaPipeEntity");
     private static final Method DUCT_INSERT = method(ITEM_DUCT, "insertItem", ForgeDirection.class, ItemStack.class);
     private static final Class<?> INJECTABLE = find("buildcraft.api.transport.IInjectable");
     private static final Class<?> BC_COLOR = find("buildcraft.api.core.EnumColor");
@@ -1202,11 +1204,23 @@ public final class LootSpawners {
 
     /** Offers a stack to the six neighbours in turn (down, up, north, south, west, east). Returns what is left. */
     static ItemStack insertAround(World world, int x, int y, int z, ItemStack stack) {
-        for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
-            if (stack == null || stack.stackSize <= 0) return null;
-            stack = insertInto(world, x + d.offsetX, y + d.offsetY, z + d.offsetZ, d.getOpposite(), stack);
+        // Storage first (chests, barrels, drawers, machines), then pipes and conduits (1.14.0): a GregTech item pipe
+        // takes items from any side, so one that brings berries to an XP crafter would otherwise get its output first
+        // and carry it into other crafters' tanks.
+        for (int pass = 0; pass < 2; pass++) {
+            for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+                if (stack == null || stack.stackSize <= 0) return null;
+                TileEntity te = neighbour(world, x + d.offsetX, y + d.offsetY, z + d.offsetZ);
+                if (te == null || isPipe(te) != (pass == 1)) continue;
+                stack = insertInto(world, x + d.offsetX, y + d.offsetY, z + d.offsetZ, d.getOpposite(), stack);
+            }
         }
         return stack == null || stack.stackSize <= 0 ? null : stack;
+    }
+
+    /** Something that carries items on (a GregTech pipe, a conduit or pipe that isn't an inventory), not storage. */
+    static boolean isPipe(TileEntity te) {
+        return !(te instanceof IInventory) || (GT_PIPE != null && GT_PIPE.isInstance(te));
     }
 
     /**

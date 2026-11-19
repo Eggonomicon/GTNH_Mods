@@ -144,6 +144,35 @@ final class XpSelfTest {
                 + (fb == null ? null : fb.dust.getDisplayName() + " x" + fb.times) + ", " + fi + ")");
         SelfTest.check(XpCrafters.recipeFor(new ItemStack(Blocks.dirt)) == null && XpCrafters.recipeFor(titaniumDust) == null,
             "dirt and titanium dust have no liquid XP recipe");
+        costSettings();
+    }
+
+    /** 1.14.0: xpCrafterCostPercent and xpCrafterCosts change what crafts cost; the settings are put back after. */
+    void costSettings() {
+        int percent = TweaksConfig.xpCrafterCostPercent;
+        String[] costs = TweaksConfig.xpCrafterCosts;
+        ItemStack charcoal = new ItemStack(Items.coal, 1, 1);
+        try {
+            TweaksConfig.xpCrafterCostPercent = 50;
+            TweaksConfig.xpCrafterCosts = new String[] { "dustTinyGallium=2000",
+                Item.itemRegistry.getNameForObject(Items.coal) + ":1=300", "nonsense", "dustTinyNothing=5" };
+            XpCrafters.forgetRecipes();
+            int g = cost(tinyGallium), a = cost(tinyArsenic), ch = cost(charcoal), i = cost(ironDust);
+            XpCrafters.Crafter c = new XpCrafters.Crafter(0, 0, 0);
+            c.full = true;
+            XpCrafters.XpRecipe r = XpCrafters.recipeFor(tinyGallium);
+            int full = r == null ? -1 : XpCrafters.cost(c, r);
+            SelfTest.check(g == 2000 && full == 18000 && ch == 300 && a == 3500 && i == 1000, "cost settings: with "
+                + "dustTinyGallium=2000 and minecraft:coal:1=300 set and the rest at 50%, a tiny pile of gallium dust takes "
+                + "2,000 mB (full gallium dust 18,000), charcoal 300, tiny arsenic 3,500, iron dust 1,000 (" + g + ", " + full
+                + ", " + ch + ", " + a + ", " + i + "); entries that set nothing are ignored");
+        } finally {
+            TweaksConfig.xpCrafterCostPercent = percent;
+            TweaksConfig.xpCrafterCosts = costs;
+            XpCrafters.forgetRecipes();
+        }
+        SelfTest.check(cost(tinyGallium) == 8000 && cost(charcoal) == 1000, "cost settings put back: GTNH's costs again ("
+            + cost(tinyGallium) + ", " + cost(charcoal) + ")");
     }
 
     int cost(ItemStack s) {
@@ -480,6 +509,72 @@ final class XpSelfTest {
             "solid XP: berries piped into the crafter's own tank (a pipe below may put them in slot " + slot + ") are used: 21 "
                 + "finish the tiny pile it held 2,750 mB towards, the other 19 go towards the next (" + state(c, tank, chest)
                 + ", left in the tank " + left + ")");
+
+        pipeLast(p, q, c, d, chest);
+        onlyXp(p, berry);
+    }
+
+    /**
+     * 1.14.0: a GregTech item pipe on one side (west, offered before the chest on the east, like the berry pipes on
+     * Valier) gets what the crafter makes only when the chest won't take it.
+     */
+    void pipeLast(int[] p, int[] q, XpCrafters.Crafter c, XpCrafters.Data d, IInventory chest) {
+        int[] w = { p[0] - 1, p[1], p[2] };
+        ItemStack pipeStack = GTOreDictUnificator.get(OrePrefixes.pipeMedium, Materials.Tin, 1);
+        boolean ok = pipeStack != null && pipeStack.getItem() instanceof net.minecraft.item.ItemBlock
+            && ((net.minecraft.item.ItemBlock) pipeStack.getItem()).placeBlockAt(pipeStack, player, world, w[0], w[1], w[2], 5,
+                1F, 0.5F, 0.5F, pipeStack.getItemDamage());
+        if (ok) placed.add(w);
+        net.minecraft.tileentity.TileEntity te = world.getTileEntity(w[0], w[1], w[2]);
+        gregtech.api.interfaces.tileentity.IGregTechTileEntity gt = te instanceof gregtech.api.interfaces.tileentity.IGregTechTileEntity
+            ? (gregtech.api.interfaces.tileentity.IGregTechTileEntity) te
+            : null;
+        if (gt == null || !(gt.getMetaTileEntity() instanceof gregtech.api.metatileentity.implementations.MTEItemPipe)) {
+            SelfTest.check(false, "pipes last: placed a GregTech tin item pipe beside the crafter (" + te + ")");
+            return;
+        }
+        gregtech.api.metatileentity.implementations.MTEItemPipe pipe = (gregtech.api.metatileentity.implementations.MTEItemPipe) gt
+            .getMetaTileEntity();
+        pipe.connect(net.minecraftforge.common.util.ForgeDirection.EAST); // towards the crafter
+        int inChest = count(chest, tinyGallium);
+        for (int i = 0; i < XpCrafters.Crafter.STORE; i++) c.store[i] = null;
+        c.store[0] = copy(tinyGallium, 3);
+        XpCrafters.handOver(world, d, c);
+        boolean toChest = count(chest, tinyGallium) == inChest + 3 && count(gt, tinyGallium) == 0 && c.stored() == 0;
+        ItemStack[] keep = new ItemStack[chest.getSizeInventory()];
+        for (int i = 0; i < keep.length; i++) {
+            keep[i] = chest.getStackInSlot(i);
+            chest.setInventorySlotContents(i, new ItemStack(Blocks.stone, 64));
+        }
+        c.store[0] = copy(tinyGallium, 2);
+        XpCrafters.handOver(world, d, c);
+        boolean toPipe = count(gt, tinyGallium) == 2 && c.stored() == 0;
+        for (int i = 0; i < keep.length; i++) chest.setInventorySlotContents(i, keep[i]);
+        for (int i = 0; i < gt.getSizeInventory(); i++) gt.setInventorySlotContents(i, null);
+        SelfTest.check(pipe.isConnectedAtSide(net.minecraftforge.common.util.ForgeDirection.EAST) && toChest && toPipe,
+            "pipes last: with a GregTech item pipe on its west and a chest on its east, what it makes goes into the chest; "
+                + "only with the chest full does the pipe get it (to chest " + toChest + ", to pipe " + toPipe + ")");
+    }
+
+    /** 1.14.0: an XP crafter's tank takes only liquid XP containers and solid XP, from pipes, hoppers or other crafters. */
+    void onlyXp(int[] p, ItemStack berry) {
+        net.minecraft.inventory.ISidedInventory te = (net.minecraft.inventory.ISidedInventory) world.getTileEntity(p[0], p[1], p[2]);
+        for (int i = 0; i < te.getSizeInventory(); i++) te.setInventorySlotContents(i, null);
+        int[] slots = te.getAccessibleSlotsFromSide(0);
+        ItemStack dirt = new ItemStack(Blocks.dirt, 4);
+        ItemStack bucket = net.minecraftforge.fluids.FluidContainerRegistry.fillFluidContainer(new FluidStack(xp, 1000),
+            new ItemStack(Items.bucket));
+        boolean dirtIn = false, berryIn = false, bucketIn = false;
+        for (int s : slots) {
+            dirtIn |= te.canInsertItem(s, dirt, 0);
+            berryIn |= te.canInsertItem(s, copy(berry, 4), 0);
+            bucketIn |= bucket != null && te.canInsertItem(s, bucket, 0);
+        }
+        ItemStack left = net.minecraft.tileentity.TileEntityHopper.func_145889_a((IInventory) te, dirt.copy(), 0);
+        SelfTest.check(!dirtIn && berryIn && bucketIn && left != null && left.stackSize == 4, "only XP in its tank: a pipe or "
+            + "hopper can't put dirt into an XP crafter's tank, but can put essence berries and a bucket of liquid XP (dirt "
+            + dirtIn + ", berries " + berryIn + ", bucket " + bucketIn + ", dirt left over " + left + ")");
+        for (int i = 0; i < te.getSizeInventory(); i++) te.setInventorySlotContents(i, null);
     }
 
     static String fluids(FluidStack[] fs) {
@@ -516,6 +611,10 @@ final class XpSelfTest {
             && XpCrafters.crafterAt(world, q[0], q[1], q[2]) == null && said[0] != null && said[0].contains("plain tank")
             && said[0].contains("LV robot arm"), "on a plain ULV tank a tiny pile of gallium dust only gets a hint (" + said[0] + ")");
         if (hud != null) hud.plainTank(q);
+        net.minecraft.inventory.ISidedInventory te = (net.minecraft.inventory.ISidedInventory) world.getTileEntity(q[0], q[1], q[2]);
+        boolean dirtIn = false;
+        for (int s : te.getAccessibleSlotsFromSide(0)) dirtIn |= te.canInsertItem(s, new ItemStack(Blocks.dirt), 0);
+        SelfTest.check(dirtIn, "a plain ULV tank still takes any item from a pipe, as GregTech has it (dirt " + dirtIn + ")");
     }
 
     // ---- chain armour ------------------------------------------------------------------------------------------------

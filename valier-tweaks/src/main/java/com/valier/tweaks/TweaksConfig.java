@@ -40,6 +40,8 @@ public final class TweaksConfig {
     public static String xpCrafterFullItem = "minecraft:emerald_block";
     public static String[] xpCrafterSolidXp = { "TConstruct:oreBerries:5=250" };
     public static int xpCrafterTinyTimes = 9;
+    public static int xpCrafterCostPercent = 100;
+    public static String[] xpCrafterCosts = {};
     public static int xpCrafterSmallTimes = 4;
     public static boolean chainArmourFullDust = true;
 
@@ -212,6 +214,16 @@ public final class TweaksConfig {
         xpCrafterSmallTimes = c.getInt("xpCrafterSmallTimes", cat, 4, 1, 64,
             "How many times the liquid XP the whole dust takes instead of a small pile. 4: GregTech makes a dust from 4 "
                 + "small piles.");
+        xpCrafterCostPercent = c.getInt("xpCrafterCostPercent", cat, 100, 1, 1000,
+            "Every XP recipe's liquid XP, in percent of what GTNH's XP bucket recipe takes. 100: the same (a tiny pile of "
+                + "gallium dust takes 8,000 mB); 25: a quarter (2,000 mB). Items set in xpCrafterCosts take what is set "
+                + "there instead. The whole dust (full dust on) takes xpCrafterTinyTimes or xpCrafterSmallTimes times "
+                + "this.");
+        xpCrafterCosts = c.getStringList("xpCrafterCosts", cat, new String[0],
+            "The liquid XP one craft of an item takes, as item=mB, instead of GTNH's cost and xpCrafterCostPercent. The "
+                + "item is what a liquid XP recipe makes: an ore dictionary name, e.g. dustTinyGallium=2000, or an item name "
+                + "(mod:item or mod:item:meta). The whole dust (full dust on) still takes xpCrafterTinyTimes or "
+                + "xpCrafterSmallTimes times it. An entry that sets nothing is named in the server log.");
         chainArmourFullDust = c.getBoolean("chainArmourFullDust", "macerator", true,
             "Chain armour macerates into whole steel dust: a chain helmet gives 1 steel dust instead of 5 small piles, "
                 + "chain leggings 2 instead of 7 small piles (boots 1 and chestplates 2, as before), so a full set still "
