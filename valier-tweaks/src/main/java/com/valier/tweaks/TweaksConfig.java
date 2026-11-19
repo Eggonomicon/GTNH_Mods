@@ -12,6 +12,7 @@ public final class TweaksConfig {
     public static int logsPerTick = 128;
     public static boolean peacefulDimensions = true;
     public static boolean noBoilerAsh = true;
+    public static boolean noRailcraftBoilerExplosions = true;
     public static boolean lootSpawners = true;
     public static String lootSpawnerItem = "minecraft:diamond_block";
     public static int lootSpawnerItemCount = 1;
@@ -85,6 +86,14 @@ public final class TweaksConfig {
             "GregTech's small coal and high pressure coal boilers, and GT++'s advanced solid fuel boilers, make no ash or "
                 + "dark ash from the fuel they burn. The fuel burns and makes steam as before. Ash already in a boiler "
                 + "stays there until taken out.");
+        noRailcraftBoilerExplosions = c.getBoolean(
+            "noRailcraftBoilerExplosions",
+            "boilers",
+            true,
+            "Railcraft boilers don't explode. Railcraft blows a boiler up when water reaches it while it is superheated "
+                + "(300 or more) with an empty water tank, and that explosion breaks blocks even with mobGriefing off and "
+                + "GregTech's machine explosions off. On: it hisses and smokes instead, takes the water, cools to 299 as "
+                + "Railcraft has it and keeps working. Other explosions are untouched. Off: Railcraft's explosion.");
         cat = "lootspawner";
         c.setCategoryComment(cat, "Loot spawners: sneak-right-click a mob spawner with the item below and it stops spawning "
             + "mobs. Each spawner cycle it makes the loot of the mobs it would have spawned (as if a player killed them, no "

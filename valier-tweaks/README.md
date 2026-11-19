@@ -70,6 +70,21 @@ is installed):
 - **Advanced boilers:** in `MTEAdvancedBoilerBase.consumeFuel`, the two calls that add tiny ash to the output slot add
   nothing.
 
+## Railcraft boilers don't explode (1.13.0)
+
+Railcraft blows a steam boiler up when water reaches it while it is **superheated** (300 or more) and its water tank
+is **empty**: typically the water supply ran out while the firebox kept burning, and then the water came back. Its
+explosion has no entity behind it, so `mobGriefing false` doesn't stop it, and neither do GregTech's machine
+explosion settings; Railcraft itself has no setting for it.
+
+With this mod (`noRailcraftBoilerExplosions`, on by default) it doesn't explode:
+
+- **What happens instead:** the boiler hisses and puffs smoke, takes the water and cools to 299 (as Railcraft has it
+  just before its explosion), and keeps working. Nothing breaks. The server log gets a line with where it was.
+- **Only Railcraft boilers:** it cancels an explosion (Forge's `ExplosionEvent.Start`) only when it starts exactly at a
+  Railcraft boiler block (a firebox or tank) and has no entity behind it. Every other explosion is untouched.
+- **Without Railcraft** it does nothing. Clients need nothing.
+
 ## Loot spawners (1.3.0)
 
 A mob farm spawns real mobs, which then have to be killed and their drops picked up: lag, and on a peaceful server
@@ -251,6 +266,7 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `logsPerTick` | `128` | Extra logs broken per tick (Tinkers' own rate). |
 | `pdim` / `peacefulDimensions` | `true` | The `/pdim peaceful` switch. Off: no dimension is kept peaceful. |
 | `boilers` / `noBoilerAsh` | `true` | Solid fuel boilers make no ash. Off: GregTech's normal ash. |
+| `noRailcraftBoilerExplosions` | `true` | Railcraft boilers vent steam instead of exploding when water reaches them hot and dry. Off: Railcraft's explosion. |
 | `lootspawner` / `lootSpawners` | `true` | Loot spawners work. Off: none can be made, and existing ones become ordinary spawners of the same mob again within 2 seconds of loading, dropping what they kept. |
 | `lootSpawnerItem` | `minecraft:diamond_block` | What it takes to make one (`mod:item` or `mod:item:meta`). Empty: free, with an empty hand. A name that isn't an item: none can be made (a warning is logged). |
 | `lootSpawnerItemCount` | `1` | How many of that item. |
@@ -309,6 +325,15 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
   - **Ash back on**, to show the test reaches GregTech's ash code: the same 60 coal leave ash, and a coal block leaves
     one dust of dark ash.
   - The setting is put back and the boilers are removed.
+- **Railcraft boiler self-test:** `valiertweaks selftest railboiler` (same flag), in an empty chunk of the test world.
+  It builds Railcraft's smallest boiler (a solid firebox with a low pressure tank on it) as a player would, waits for
+  it to form, puts dirt two blocks from it, then sets it off through Railcraft's own code: the boiler is made
+  superheated with an empty water tank, water is poured into the firebox, and the firebox ticks.
+  - **On (the setting):** Railcraft cooled it to 299 (its explosion code ran), the explosion is stopped, and the
+    boiler, its water, the dirt and the formed boiler are all still there.
+  - **Other explosions:** an explosion with no entity behind it a few blocks away still breaks its dirt.
+  - **Off**, to show the test reaches Railcraft's real explosion: the same steps blow the dirt away.
+  - The setting is put back and the area cleared.
 - **Loot spawner self-test:** `valiertweaks selftest lootspawner` (same flag), in an empty chunk of the test world.
   - **Clicks:** a sneaking fake player with diamond blocks makes one (one block used, none placed). Not sneaking does
     nothing, an empty hand shows the status or a hint, and a protected spawner or a Wither spawner is refused.

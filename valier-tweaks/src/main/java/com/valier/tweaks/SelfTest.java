@@ -81,8 +81,8 @@ final class SelfTest {
 
     static void run(ICommandSender sender, String step) {
         if (!"trees".equals(step) && !"peaceful".equals(step) && !"boilers".equals(step) && !"lootspawner".equals(step)
-            && !"xpcrafter".equals(step)) {
-            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner, xpcrafter"));
+            && !"xpcrafter".equals(step) && !"railboiler".equals(step)) {
+            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner, xpcrafter, railboiler"));
             return;
         }
         passed = failed = 0;
@@ -93,6 +93,7 @@ final class SelfTest {
             else if ("boilers".equals(step)) new Boilers().start();
             else if ("lootspawner".equals(step)) new LootSelfTest().start();
             else if ("xpcrafter".equals(step)) new XpSelfTest().start();
+            else if ("railboiler".equals(step)) new RailBoilerSelfTest().start();
             else new Peaceful().start();
         } catch (Throwable t) {
             ValierTweaks.LOG.error("[ValierTweaks SelfTest] " + step + " threw", t);

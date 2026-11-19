@@ -5,6 +5,8 @@
 //   GTNHLib and ModularUI 2 only because GregTech's machine interfaces extend theirs, and AE2 because its tanks do
 //   (the XP crafters read GregTech tanks).
 // - WAILA: XP crafters tell it what they are doing, for the optional Valier Client mod (only used when WAILA is there).
+// - Railcraft: only the self-test uses it (to build a real boiler). The mod itself finds Railcraft's boiler class by
+//   name, so it loads without Railcraft.
 // Point -PgtnhInstance=<folder> (or gtnhInstance in ~/.gradle/gradle.properties) at your server's folder; by default
 // it is ../../GTNH_Instance next to this repository.
 def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Instance"
@@ -17,5 +19,6 @@ dependencies {
         "${gtnh}/mods/gtnhlib-0.11.54.jar",
         "${gtnh}/mods/modularui2-2.3.94-1.7.10.jar",
         "${gtnh}/mods/appliedenergistics2-rv3-beta-1095-GTNH.jar",
-        "${gtnh}/mods/Waila-1.19.34.jar"))
+        "${gtnh}/mods/Waila-1.19.34.jar",
+        "${gtnh}/mods/Railcraft-9.17.36.jar"))
 }

@@ -21,7 +21,7 @@ import cpw.mods.fml.common.registry.GameRegistry;
  * Small server-side gameplay fixes for Valier: a Tinkers' Construct lumber axe fells the whole tree even when it breaks
  * partway ({@link TreeFinisher}), players can make their Personal Space dimension peaceful ({@link PeacefulDims},
  * {@code /pdim}), GregTech's solid fuel boilers make no ash ({@code mixin} package, loaded by
- * {@link LateMixinLoader}), a spawner can become a loot spawner that makes its mobs' loot without the mobs
+ * {@link LateMixinLoader}), Railcraft boilers don't explode ({@link RailcraftBoilers}), a spawner can become a loot spawner that makes its mobs' loot without the mobs
  * ({@link LootSpawners}), a GregTech tank can become an XP crafter that makes what the XP bucket recipes make from
  * liquid XP ({@link XpCrafters}), and chain armour macerates into whole steel dust ({@link ChainArmour}).
  */
@@ -57,6 +57,10 @@ public class ValierTweaks {
             .bus()
             .register(loot); // the scan, on server ticks
         MinecraftForge.EVENT_BUS.register(new MobLoot.Guard()); // what a loot roll tries to add to the world
+        if (Loader.isModLoaded("Railcraft")) {
+            RailcraftBoilers boilers = RailcraftBoilers.make();
+            if (boilers != null) MinecraftForge.EVENT_BUS.register(boilers); // explosions
+        }
     }
 
     @Mod.EventHandler
