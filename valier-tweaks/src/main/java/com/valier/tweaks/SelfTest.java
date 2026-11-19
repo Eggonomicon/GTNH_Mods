@@ -65,7 +65,7 @@ import tconstruct.tools.TinkerTools;
  * </ul>
  * Each check logs one {@code [ValierTweaks SelfTest] PASS/FAIL} line, then a SUMMARY line; the area is cleared after.
  */
-final class SelfTest {
+public final class SelfTest {
 
     static final boolean ENABLED = Boolean.getBoolean("valiertweaks.selftest");
 
@@ -81,8 +81,8 @@ final class SelfTest {
 
     static void run(ICommandSender sender, String step) {
         if (!"trees".equals(step) && !"peaceful".equals(step) && !"boilers".equals(step) && !"lootspawner".equals(step)
-            && !"xpcrafter".equals(step) && !"railboiler".equals(step)) {
-            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner, xpcrafter, railboiler"));
+            && !"xpcrafter".equals(step) && !"railboiler".equals(step) && !"mod".equals(step) && !"pipes".equals(step) && !"pipeperf".equals(step)) {
+            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner, xpcrafter, railboiler, mod, pipes, pipeperf"));
             return;
         }
         passed = failed = 0;
@@ -94,6 +94,12 @@ final class SelfTest {
             else if ("lootspawner".equals(step)) new LootSelfTest().start();
             else if ("xpcrafter".equals(step)) new XpSelfTest().start();
             else if ("railboiler".equals(step)) new RailBoilerSelfTest().start();
+            else if ("pipes".equals(step)) new PipeSelfTest().start();
+            else if ("pipeperf".equals(step)) new PipePerfTest().start();
+            else if ("mod".equals(step)) {
+                ModSelfTest.run();
+                summary();
+            }
             else new Peaceful().start();
         } catch (Throwable t) {
             ValierTweaks.LOG.error("[ValierTweaks SelfTest] " + step + " threw", t);
@@ -504,12 +510,12 @@ final class SelfTest {
                 .getBoolean("Broken");
     }
 
-    static void summary() {
+    public static void summary() {
         String s = "SUMMARY " + stepName + ": " + passed + " passed, " + failed + " failed" + (failures.isEmpty() ? "" : " " + failures);
         log(s);
     }
 
-    static void check(boolean ok, String what) {
+    public static void check(boolean ok, String what) {
         if (ok) passed++;
         else {
             failed++;
@@ -518,7 +524,7 @@ final class SelfTest {
         log((ok ? "PASS " : "FAIL ") + what);
     }
 
-    static void log(String text) {
+    public static void log(String text) {
         ValierTweaks.LOG.info("[ValierTweaks SelfTest] " + text);
     }
 }

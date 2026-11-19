@@ -69,7 +69,7 @@ public final class PeacefulDims {
     /** Natural spawning and vanilla spawners ask first. */
     @SubscribeEvent
     public void onCheckSpawn(LivingSpawnEvent.CheckSpawn event) {
-        if (hostile(event.entity) && isPeaceful(event.world)) event.setResult(Event.Result.DENY);
+        if (!event.world.isRemote && hostile(event.entity) && isPeaceful(event.world)) event.setResult(Event.Result.DENY);
     }
 
     /**
@@ -78,7 +78,8 @@ public final class PeacefulDims {
      */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onJoin(EntityJoinWorldEvent event) {
-        if (!event.entity.addedToChunk && hostile(event.entity) && isPeaceful(event.world)) event.setCanceled(true);
+        if (event.world.isRemote || event.entity.addedToChunk) return; // players' own copies are the server's to remove
+        if (hostile(event.entity) && isPeaceful(event.world)) event.setCanceled(true);
     }
 
     /** Removes hostile mobs that are already in a peaceful dimension, as peaceful difficulty does. */

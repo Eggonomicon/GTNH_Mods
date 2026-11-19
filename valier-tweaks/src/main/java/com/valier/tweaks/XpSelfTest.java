@@ -116,6 +116,7 @@ final class XpSelfTest {
             if (crafterItem != null) new XpMenuSelfTest(this).run();
             if (crafterItem != null) solid();
             plainTank();
+            if (crafterItem != null) oldKind();
             chainArmour();
         } catch (Throwable t) {
             ValierTweaks.LOG.error("[ValierTweaks SelfTest] xpcrafter threw", t);
@@ -225,45 +226,6 @@ final class XpSelfTest {
         Slot slot = XpCrafters.CraftSync.resultSlot(bench);
         SelfTest.check(slot != null && slot.slotNumber == 0 && XpCrafters.isCrafterItem(slot.getStack()),
             "in a crafting table the crafter is in the output slot, the slot sent to the player (" + slot + ")");
-        if (Loader.isModLoaded("valierclient")) {
-            clientRecipe(right, new ItemStack[] { tank, pump, conveyor, tank, table, circuit, tank, pump, conveyor });
-            if (crafterItem != null) clientModName(crafterItem, tank);
-        }
-    }
-
-    /** Valier Client's copy of the recipe (it shows it in NEI) takes the same grid, not one with a conveyor for the arm. */
-    void clientRecipe(ItemStack[] right, ItemStack[] wrong) {
-        IRecipe r = null;
-        try {
-            r = (IRecipe) Class.forName("com.valier.client.XpCrafterRecipe")
-                .getMethod("make")
-                .invoke(null);
-        } catch (Throwable e) {
-            ValierTweaks.LOG.warn("[ValierTweaks SelfTest] Valier Client's recipe", e);
-        }
-        ItemStack out = r == null ? null : r.getRecipeOutput();
-        SelfTest.check(r != null && r.matches(grid(right), world) && !r.matches(grid(wrong), world)
-            && out != null && XpCrafters.isTankItem(out) && out.getDisplayName()
-                .contains("Valier XP Crafter"),
-            "Valier Client: its copy of the recipe, for NEI, takes the same grid and shows a Valier XP Crafter (" + out + ")");
-    }
-
-    /** Valier Client turns WAILA's mod name line at the end of a crafter item's tooltip into Valier Tweaks. */
-    @SuppressWarnings("unchecked")
-    void clientModName(ItemStack crafter, ItemStack tank) {
-        List<String> a = null, b = null;
-        String gt = "§9§o" + mcp.mobius.waila.utils.ModIdentification.nameFromStack(crafter);
-        try {
-            java.lang.reflect.Method fix = Class.forName("com.valier.client.ModNameLine")
-                .getMethod("fix", ItemStack.class, List.class);
-            a = (List<String>) fix.invoke(null, crafter, new ArrayList<>(java.util.Arrays.asList("Valier XP Crafter", gt)));
-            b = (List<String>) fix.invoke(null, tank, new ArrayList<>(java.util.Arrays.asList("Ultra Low Voltage Fluid Tank", gt)));
-        } catch (Throwable e) {
-            ValierTweaks.LOG.warn("[ValierTweaks SelfTest] Valier Client's tooltip mod name", e);
-        }
-        SelfTest.check(a != null && "§9§oValier Tweaks".equals(a.get(1)) && b != null && gt.equals(b.get(1)),
-            "Valier Client: a crafter item's tooltip mod name line (" + gt.substring(4) + ") says Valier Tweaks, a plain tank's "
-                + "stays (" + a + " / " + b + ")");
     }
 
     InventoryCrafting grid(ItemStack... stacks) {
@@ -289,9 +251,9 @@ final class XpSelfTest {
         int[] p = { bx + 4, y, bz + 4 };
         int[] out = { bx + 5, y, bz + 4 };
         XpCrafters.Crafter c = place(crafterItem.copy(), p);
-        MTEBasicTank tank = XpCrafters.tankAt(world, p[0], p[1], p[2]);
-        SelfTest.check(c != null && tank != null && c.makes == null && !c.full,
-            "placed as a player places it, it is a ULV tank that is an XP crafter, making nothing yet (" + tank + ")");
+        TileXpCrafter tank = XpCrafters.tankAt(world, p[0], p[1], p[2]);
+        SelfTest.check(c != null && tank != null && c.makes == null && !c.full && world.getBlock(p[0], p[1], p[2]) == ModBlocks.xpCrafter,
+            "placed as a player places it, it is a Valier XP Crafter block, making nothing yet (" + tank + ")");
         if (c == null || tank == null) return;
         XpCrafters.Data d = XpCrafters.data(world, false);
         world.setBlock(out[0], out[1], out[2], Blocks.chest);
@@ -452,7 +414,7 @@ final class XpSelfTest {
         gtBerryRecipes(berry);
         int[] p = { bx + 12, y, bz + 10 }, q = { bx + 13, y, bz + 10 };
         XpCrafters.Crafter c = place(crafterItem.copy(), p);
-        MTEBasicTank tank = XpCrafters.tankAt(world, p[0], p[1], p[2]);
+        TileXpCrafter tank = XpCrafters.tankAt(world, p[0], p[1], p[2]);
         if (c == null || tank == null) {
             SelfTest.check(false, "solid XP: a third crafter could be placed");
             return;
@@ -607,7 +569,7 @@ final class XpSelfTest {
         hold(copy(tinyGallium, 1));
         player.setSneaking(true);
         PlayerInteractEvent ev = click(q);
-        SelfTest.check(ok && XpCrafters.tankAt(world, q[0], q[1], q[2]) != null && ev.isCanceled()
+        SelfTest.check(ok && XpCrafters.gtTankAt(world, q[0], q[1], q[2]) != null && ev.isCanceled()
             && XpCrafters.crafterAt(world, q[0], q[1], q[2]) == null && said[0] != null && said[0].contains("plain tank")
             && said[0].contains("LV robot arm"), "on a plain ULV tank a tiny pile of gallium dust only gets a hint (" + said[0] + ")");
         if (hud != null) hud.plainTank(q);
@@ -661,6 +623,93 @@ final class XpSelfTest {
         return XpCrafters.crafterAt(world, p[0], p[1], p[2]);
     }
 
+    /**
+     * 2.0.0: crafters of the old kind (a GregTech tank with a record) become the Valier XP Crafter block where they
+     * stand: liquid XP (or another fluid, however much), input and output slots and the record all kept, nothing
+     * spilled. An old crafter item (a tank item) places the block too.
+     */
+    void oldKind() {
+        XpCrafters.Data d = XpCrafters.data(world, true);
+        Item berries = (Item) Item.itemRegistry.getObject("TConstruct:oreBerries");
+        int[] o1 = { bx + 2, y, bz + 14 }, o2 = { bx + 6, y, bz + 14 }, o3 = { bx + 10, y, bz + 14 };
+        MTEBasicTank gt = placeTank(o1);
+        if (gt == null || berries == null) {
+            SelfTest.check(false, "old kind: a plain ULV tank could be placed (" + gt + "), berries exist");
+            return;
+        }
+        gt.mFluid = new FluidStack(xp, 12345);
+        gt.mInventory[gt.getInputSlot()] = new ItemStack(berries, 7, 5);
+        gt.mInventory[gt.getOutputSlot()] = new ItemStack(Items.bucket, 2);
+        XpCrafters.Crafter c = new XpCrafters.Crafter(o1[0], o1[1], o1[2]);
+        c.bank = 777;
+        c.made = 42;
+        c.store[0] = copy(tinyGallium, 5);
+        d.put(c);
+        XpCrafters.run(world, d, c); // makes nothing: only the block changes
+        TileXpCrafter t = XpCrafters.tankAt(world, o1[0], o1[1], o1[2]);
+        int loose = itemsNear(o1).size();
+        SelfTest.check(t != null && world.getBlock(o1[0], o1[1], o1[2]) == ModBlocks.xpCrafter && XpCrafters.crafterAt(world, o1[0], o1[1], o1[2]) == c
+            && amount(t) == 12345 && t.slots[TileXpCrafter.IN] != null && t.slots[TileXpCrafter.IN].stackSize == 7
+            && t.slots[TileXpCrafter.OUT] != null && t.slots[TileXpCrafter.OUT].stackSize == 2 && c.bank == 777 && c.made == 42
+            && c.stored() == 5 && t.getStackInSlot(TileXpCrafter.STORE) == c.store[0] && loose == 0,
+            "old kind: within a second a GregTech-tank crafter is a Valier XP Crafter block with its 12,345 mB, its 7 berries "
+                + "and 2 buckets, its record and store as they were, nothing spilled (" + (t == null ? null : amount(t) + " mB")
+                + ", " + loose + " items on the ground)");
+        world.func_147480_a(o1[0], o1[1], o1[2], true);
+        ItemStack dropped = null;
+        int berriesDropped = 0;
+        for (EntityItem e : itemsNear(o1)) {
+            if (XpCrafters.isCrafterItem(e.getEntityItem())) dropped = e.getEntityItem();
+            else if (e.getEntityItem().getItem() == berries) berriesDropped += e.getEntityItem().stackSize;
+            e.setDead();
+        }
+        FluidStack carried = XpCrafters.fluidOf(dropped);
+        SelfTest.check(dropped != null && carried != null && carried.amount == 12345 && lore(dropped).contains("Tank: 12,345 mB")
+            && berriesDropped == 7, "broken, it drops as the item holding its 12,345 mB (and its berries drop) ("
+                + (dropped == null ? null : lore(dropped)) + ")");
+        if (dropped != null) {
+            XpCrafters.Crafter again = place(dropped, o1);
+            TileXpCrafter t1 = XpCrafters.tankAt(world, o1[0], o1[1], o1[2]);
+            SelfTest.check(again != null && t1 != null && amount(t1) == 12345 && again.bank == 777,
+                "placed again, its tank holds the 12,345 mB again");
+        }
+
+        MTEBasicTank gt2 = placeTank(o2);
+        if (gt2 != null) {
+            gt2.mFluid = new FluidStack(FluidRegistry.WATER, 50000);
+            XpCrafters.Crafter c2 = new XpCrafters.Crafter(o2[0], o2[1], o2[2]);
+            c2.makes = LootSpawners.copyOne(tinyGallium);
+            d.put(c2);
+            XpCrafters.run(world, d, c2);
+            TileXpCrafter t2 = XpCrafters.tankAt(world, o2[0], o2[1], o2[2]);
+            SelfTest.check(t2 != null && amount(t2) == 50000 && t2.getCapacity() == 50000 && t2.getFluid().getFluid() == FluidRegistry.WATER
+                && t2.fill(new FluidStack(xp, 1000), false) == 0 && c2.status == XpCrafters.Status.WRONG_FLUID,
+                "old kind holding 50,000 mB of water: kept, all of it; no liquid XP goes on top, and it says why (" + c2.status + ")");
+        }
+
+        ItemStack old = new ItemStack(GregTechAPI.sBlockMachines, 1, 817);
+        NBTTagCompound tag = new NBTTagCompound(), info = new NBTTagCompound();
+        info.setTag("Makes", copy(tinyGallium, 1).writeToNBT(new NBTTagCompound()));
+        info.setInteger("Bank", 500);
+        tag.setTag(XpCrafters.ITEM_TAG, info);
+        tag.setTag("mFluid", new FluidStack(xp, 4000).writeToNBT(new NBTTagCompound()));
+        old.setTagCompound(tag);
+        XpCrafters.Crafter c3 = place(old, o3);
+        TileXpCrafter t3 = XpCrafters.tankAt(world, o3[0], o3[1], o3[2]);
+        SelfTest.check(c3 != null && t3 != null && c3.bank == 500 && c3.makes != null && c3.makes.isItemEqual(tinyGallium)
+            && amount(t3) == 4000, "an old crafter item (a GregTech tank item) places a Valier XP Crafter block, with its "
+                + "recipe, held XP and 4,000 mB (" + (t3 == null ? null : amount(t3)) + ")");
+    }
+
+    MTEBasicTank placeTank(int[] p) {
+        hold(new ItemStack(GregTechAPI.sBlockMachines, 1, 817));
+        player.setSneaking(false);
+        player.getHeldItem()
+            .tryPlaceItemIntoWorld(player, world, p[0], p[1] - 1, p[2], 1, 0.5F, 1F, 0.5F);
+        placed.add(p);
+        return XpCrafters.gtTankAt(world, p[0], p[1], p[2]);
+    }
+
     void hold(ItemStack stack) {
         player.inventory.currentItem = 0;
         player.inventory.setInventorySlotContents(0, stack);
@@ -695,7 +744,7 @@ final class XpSelfTest {
             world);
     }
 
-    static int amount(MTEBasicTank tank) {
+    static int amount(TileXpCrafter tank) {
         FluidStack f = tank.getFluid();
         return f == null ? 0 : f.amount;
     }
@@ -710,7 +759,7 @@ final class XpSelfTest {
         return n;
     }
 
-    String state(XpCrafters.Crafter c, MTEBasicTank tank, IInventory chest) {
+    String state(XpCrafters.Crafter c, TileXpCrafter tank, IInventory chest) {
         return "bank " + c.bank + ", tank " + amount(tank) + ", made " + c.made + ", " + c.status + (chest == null ? ""
             : ", chest: " + count(chest, tinyGallium) + " tiny gallium, " + count(chest, galliumDust) + " gallium dust");
     }

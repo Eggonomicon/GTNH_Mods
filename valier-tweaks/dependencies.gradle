@@ -20,5 +20,8 @@ dependencies {
         "${gtnh}/mods/modularui2-2.3.94-1.7.10.jar",
         "${gtnh}/mods/appliedenergistics2-rv3-beta-1095-GTNH.jar",
         "${gtnh}/mods/Waila-1.19.34.jar",
-        "${gtnh}/mods/Railcraft-9.17.36.jar"))
+        "${gtnh}/mods/Railcraft-9.17.36.jar",
+        "${gtnh}/mods/ServerUtilities-2.4.22.jar",
+        "${gtnh}/mods/NotEnoughItems-2.8.171-GTNH.jar",
+        "${gtnh}/mods/CodeChickenCore-1.4.22.jar"))
 }

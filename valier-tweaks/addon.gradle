@@ -1,0 +1,9 @@
+// `gradlew runClient -PvalierDevClient` starts a plain Forge dev client that builds a scene of this mod's blocks in a
+// fresh flat world, saves screenshots to run/client/screenshots/ and quits (client package: DevClient, DevScene).
+// Plain Forge: no GregTech, so XP crafters don't work there, they are only shown.
+if (project.hasProperty("valierDevClient")) {
+    tasks.named("runClient") {
+        systemProperty("valiertweaks.devclient", "true")
+        args("--width", "1280", "--height", "720")
+    }
+}

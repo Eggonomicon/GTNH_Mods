@@ -38,7 +38,7 @@ final class XpMenuSelfTest {
     void run() {
         int[] p = { t.bx + 4, t.y, t.bz + 10 };
         XpCrafters.Crafter c = t.place(t.crafterItem.copy(), p);
-        MTEBasicTank tank = XpCrafters.tankAt(t.world, p[0], p[1], p[2]);
+        TileXpCrafter tank = XpCrafters.tankAt(t.world, p[0], p[1], p[2]);
         if (c == null || tank == null) {
             SelfTest.check(false, "menu: a second crafter could be placed");
             return;
@@ -95,7 +95,7 @@ final class XpMenuSelfTest {
                 + ") or a cover (an LV pump), which go to the tank as before");
     }
 
-    void icons(XpMenu m, XpCrafters.Crafter c, MTEBasicTank tank) {
+    void icons(XpMenu m, XpCrafters.Crafter c, TileXpCrafter tank) {
         int shown = 0, at = slotOf(m, tiny);
         for (int i = 0; i < XpMenu.RECIPES; i++) if (m.shown[i] != null) shown++;
         int all = XpCrafters.recipes()
@@ -159,7 +159,7 @@ final class XpMenuSelfTest {
         t.player.inventory.setItemStack(null);
     }
 
-    void pour(XpMenu m, MTEBasicTank tank) {
+    void pour(XpMenu m, TileXpCrafter tank) {
         ItemStack bucket = FluidContainerRegistry.fillFluidContainer(new FluidStack(t.xp, 1000), new ItemStack(Items.bucket));
         if (bucket == null) {
             SelfTest.check(false, "menu: a bucket of liquid XP exists to pour in");
@@ -181,7 +181,7 @@ final class XpMenuSelfTest {
         t.player.inventory.setItemStack(null);
     }
 
-    void store(XpMenu m, XpCrafters.Data d, XpCrafters.Crafter c, MTEBasicTank tank) {
+    void store(XpMenu m, XpCrafters.Data d, XpCrafters.Crafter c, TileXpCrafter tank) {
         tank.fill(new FluidStack(t.xp, 15000), true);
         XpCrafters.run(t.world, d, c);
         m.refresh();

@@ -2,9 +2,18 @@
 {
   "modid": "${modId}",
   "name": "${modName}",
-  "description": "Server-side tweaks for the Valier server. A Tinkers' Construct lumber axe fells the whole tree, even when it breaks partway, so no floating trees are left behind. /pdim peaceful makes a Personal Space dimension peaceful. GregTech's solid fuel boilers make no ash. Loot spawners: a spawner that makes its mobs' loot without spawning them, into the chests and pipes touching it. XP crafters: a GregTech tank that makes what GTNH's XP bucket recipes make from liquid XP (WAILA shows it with the optional Valier Client mod). Chain armour macerates into whole steel dust.",
+  "description": "Gameplay additions for the Valier server, needed on the server and on players' computers. Loot spawners make their mobs' loot without spawning them. XP crafters make what GTNH's XP bucket recipes make from liquid XP (WAILA shows what each one is doing). A Tinkers' Construct lumber axe fells the whole tree, even when it breaks partway. /pdim peaceful makes a Personal Space dimension peaceful. GregTech's solid fuel boilers make no ash, and Railcraft boilers don't explode. Chain armour macerates into whole steel dust. Includes what the old Valier Client mod did; remove valierclient jars.",
   "version": "${modVersion}",
   "mcversion": "${minecraftVersion}",
   "authorList": ["Valier"]
+},
+{
+  "modid": "valierclient",
+  "name": "Valier Client (now part of Valier Tweaks)",
+  "description": "Valier Client is part of Valier Tweaks since 2.0.0. If the game stops with a duplicate mods screen naming valierclient, delete the old valierclient jar from your mods folder.",
+  "version": "${modVersion}",
+  "mcversion": "${minecraftVersion}",
+  "authorList": ["Valier"],
+  "parent": "${modId}"
 }
 ]

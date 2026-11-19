@@ -8,9 +8,6 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 
-import gregtech.api.interfaces.tileentity.IGregTechTileEntity;
-import gregtech.api.metatileentity.BaseMetaTileEntity;
-import gregtech.api.metatileentity.implementations.MTEBasicTank;
 import mcp.mobius.waila.api.IWailaConfigHandler;
 import mcp.mobius.waila.api.IWailaDataAccessor;
 import mcp.mobius.waila.api.IWailaDataProvider;
@@ -31,15 +28,15 @@ public final class XpCrafterWaila implements IWailaDataProvider {
 
     /** Called by WAILA (IMC {@code register}), on the server and on clients; only the server's is ever asked. */
     public static void callbackRegister(IWailaRegistrar registrar) {
-        registrar.registerNBTProvider(new XpCrafterWaila(), BaseMetaTileEntity.class);
+        registrar.registerNBTProvider(new XpCrafterWaila(), TileXpCrafter.class);
     }
 
     @Override
     public NBTTagCompound getNBTData(EntityPlayerMP player, TileEntity te, NBTTagCompound tag, World world, int x, int y,
         int z) {
-        if (tag == null || world == null || world.isRemote || !(te instanceof IGregTechTileEntity)) return tag;
+        if (tag == null || world == null || world.isRemote || !(te instanceof TileXpCrafter)) return tag;
         NBTTagCompound info = XpCrafters.hudAt(world.provider.dimensionId, x, y, z);
-        if (info != null && ((IGregTechTileEntity) te).getMetaTileEntity() instanceof MTEBasicTank) tag.setTag(TAG, info);
+        if (info != null) tag.setTag(TAG, info);
         return tag;
     }
 

@@ -37,15 +37,15 @@ import mcp.mobius.waila.api.impl.ModuleRegistrar;
  */
 final class XpHudSelfTest {
 
-    static final String CLIENT = "com.valier.client.";
-    static final String OPTION = "valierclient.xpcrafter";
+    static final String CLIENT = "com.valier.tweaks.client.";
+    static final String OPTION = "valiertweaks.xpcrafter";
     static final List<String> HEAD = Collections.singletonList("§fUltra Low Voltage Fluid Tank");
     static final List<String> BODY = Collections.singletonList("Facing: North");
     static final List<String> TAIL = Collections.singletonList("§9§oGregTech");
 
     final WorldServer world;
     final EntityPlayerMP player;
-    final boolean client = Loader.isModLoaded("valierclient");
+    final boolean client = true; // since 2.0.0 the players' part is in this jar
 
     XpHudSelfTest(WorldServer world, EntityPlayerMP player) {
         this.world = world;
@@ -120,14 +120,20 @@ final class XpHudSelfTest {
     /** A plain tank: nothing added, nothing changed. */
     void plainTank(int[] q) {
         NBTTagCompound data = data(q);
-        List<String> head = client ? run(true, q, data, HEAD, true) : HEAD,
-            body = client ? run(false, q, data, BODY, true) : BODY, tail = client ? run(2, q, data, TAIL, true) : TAIL;
+        List<String> head = client ? same(run(true, q, data, HEAD, true), HEAD) : HEAD,
+            body = client ? same(run(false, q, data, BODY, true), BODY) : BODY,
+            tail = client ? same(run(2, q, data, TAIL, true), TAIL) : TAIL;
         SelfTest.check(!data.hasKey(XpCrafterWaila.TAG) && HEAD.equals(head) && BODY.equals(body) && TAIL.equals(tail),
             "WAILA: a plain ULV tank gets nothing extra, and Valier Client changes nothing (" + head + " / " + body + " / "
                 + tail + ")");
     }
 
     // ---- helpers ----------------------------------------------------------------------------------------------------
+
+    /** Since 2.0.0 the players' providers are only for the crafter block: none at all for a plain tank is unchanged. */
+    static List<String> same(List<String> got, List<String> start) {
+        return got == null ? start : got;
+    }
 
     static boolean makes(NBTTagCompound t, ItemStack what) {
         if (t == null || !t.hasKey("Makes", 10)) return false;

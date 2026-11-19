@@ -1,7 +1,84 @@
 # Valier Tweaks
 
-Server-side. Clients need nothing (the optional [Valier Client](../valier-client/README.md) mod adds WAILA lines for
-XP crafters). Small gameplay fixes for the Valier server.
+Gameplay additions for the Valier server. **Since 2.0.0 it is needed on the server and on every player's computer**
+(it has its own blocks), and it includes what the old Valier Client mod did: players delete `valierclient-*.jar`.
+
+## 2.0.0: one jar, its own blocks, and pipes
+
+- **One jar for everyone.** Put `valiertweaks-2.0.x.jar` in the server's and every player's `mods` folder, and delete
+  `valierclient-*.jar` (if it is left in, Forge stops at start-up with a "duplicate mods" screen naming both files).
+- **Joining:** a server with Valier Tweaks 2.0 asks a joining player for 2.0.x (any 2.0 version: fixes that only change
+  the server don't need a new download). A player with it can still join servers without it.
+- **Loot spawners and XP crafters are real blocks now** (Valier Loot Spawner, Valier XP Crafter). Existing ones become
+  the new blocks where they stand the first time their chunk loads with 2.0.0, keeping everything: mob, settings,
+  upgrades, paid blocks, loot held; recipe, XP held, tank, slots, store. Old items (a wrench's vanilla spawner item, a
+  crafter that was a GregTech tank item) place the new blocks. All clicks and recipes are as before.
+- **Valier pipes:** item and fluid pipes in four tiers, see below.
+- **Removing the mod later** deletes its blocks from the world. `/valiertweaks revertblocks confirm` (ops, console)
+  first turns loot spawners and XP crafters back into marked vanilla spawners and GregTech tanks (crafters' stores drop
+  on top; loot spawners only in loaded chunks; pipes can't be kept).
+
+## Valier pipes (2.0.0)
+
+Item pipes and fluid pipes that move things straight from block to block: nothing travels along the pipe, so a pipe
+holds nothing and breaking one spills nothing. They are built to cost the server as little as possible:
+
+- **Pipes never tick.** Placing, breaking or changing one only marks it; the pipes joined to it are worked out again at
+  the end of that tick. Idle pipes cost nothing at all.
+- **Only Extract and Request faces work**, each on its tier's interval, from one queue ordered by when each is due. A
+  face that finds nothing to do waits twice as long each time (up to `pipeMaxSleepTicks`, 5 s); a change inside the
+  block it touches wakes it at its next interval. All pipe work is capped at `pipeBudgetMicros` a tick; anything still
+  due waits for the next tick.
+- **Never loads a chunk.** A face whose block is in an unloaded chunk waits for that chunk.
+- `/valiertweaks pipes` (ops) shows the networks, the working and sleeping faces, transfers and the time spent.
+
+**Laying them:** a pipe joins pipes of its kind (any tier) and any block with an inventory (item pipes) or a tank (fluid
+pipes) beside it. Sneak-right-click with a wrench to shut a side, or open it again. A pipe never joins a block in a
+chunk claimed by a team its owner (whoever placed it) isn't in or allied with.
+
+**Faces.** Where a pipe touches a block, a coloured plate shows that face's mode:
+
+| Mode | Colour | What it does |
+|---|---|---|
+| Provide (new faces) | green | Passive. Request faces on the network may take what they ask for from this block. "Overflow" on: it also takes what Extract faces can't put anywhere else (a barrel as the network's buffer). |
+| Insert | blue | Passive. Extract faces put things into this block. |
+| Extract | orange | Every interval, takes up to its amount out of this block (by its filter) and sends it to Insert faces, then to Request faces short of it, then to overflow Provide faces. |
+| Request | purple | Keeps what its filter lists stocked in this block (for each filter slot, a keep amount: a stack by default), taking only what's missing from Provide faces. |
+| Off | grey | Leaves the block alone. |
+
+Nothing moves until some face is Extract or Request. A chest on a Provide face (no setup) and a machine on a Request
+face asking for iron: the machine is kept stocked from the chest.
+
+**A face's menu:** right-click the arm touching a block (sneak-right-click with an empty hand cycles the mode). It has
+the mode; the amount per transfer (up to the tier's most); the priority (higher first; equal ones take turns); redstone
+(always, only with a signal, only without); the filter (9 ghost slots: click with an item to set, empty-handed to clear;
+whitelist or blacklist; same or any damage value; same or any NBT; ore dictionary); for Request faces the keep amount of
+the selected slot; for Provide faces overflow; and the **tag**. Fluid faces filter by fluid: a filter item holding one
+(a bucket, a cell) names it; Request keeps that many mB (1,000 by default).
+
+**Tags:** a face only trades with faces carrying the same tag (no tag with no tag). On Basic, Advanced and Elite pipes
+that means channels within the pipes joined together. On **Wireless** pipes it means links: a tagged Wireless face
+trades with every Wireless face of the same tag, anywhere, in any dimension (`pipeWirelessCrossDimension`), as long as
+both are in loaded chunks. "001 in, 001 out". Tags are private to the pipe owner's ServerUtilities team (or to the owner
+alone without a team), so nobody else can send to or take from yours.
+
+**Exact transfers:** it takes out first (what really came out is what counts: some barrels and machines give a little
+more or less than they show), then puts in as a vanilla hopper does (stacks first, never past the block's stack limit).
+What nothing took goes back; if it can't, the face holds it and hands it on first next time (a few stacks at most,
+`pipeHeldStacks`; it drops if the pipe breaks). A double chest is one inventory, and a face never moves things into the
+block it takes them from. Slots and tanks follow the block's own rules for the side the pipe touches.
+
+**Tiers and recipes** (amounts and intervals in the config, `pipes` section):
+
+| Tier | Per transfer | Every | Recipe |
+|---|---|---|---|
+| Basic | 8 items / 1,000 mB | 20 ticks | 6 bronze plates, 2 glass panes, a hopper (item) or bucket (fluid): 8 pipes |
+| Advanced | 32 / 4,000 mB | 10 ticks | 8 Basic around an LV conveyor (item) or LV pump (fluid): 8 |
+| Elite | 64 / 16,000 mB | 5 ticks | 8 Advanced around an MV conveyor or MV pump: 8 |
+| Wireless | 64 / 16,000 mB | 5 ticks | an Elite pipe, an ender pearl, an MV emitter and an MV sensor: 1 |
+
+Loot spawners and XP crafters work with them: pipes can take from both, and one with only a Valier pipe pulling from it
+(Extract or Provide) works (before, with nothing to push into, it would wait for "no output").
 
 ## Lumber axes fell the whole tree
 
@@ -156,11 +233,9 @@ hostile spawners do nothing at all. A loot spawner skips the mobs and makes just
   dresses them. The egg is used up (not in creative). Claims apply and blocked mobs are refused. What it was keeping,
   its timer and its emerald block stay. Plain spawners are left alone. (Botania's tooltip tip about spawn eggs is its
   own creative-only feature, and it doesn't change a loot spawner.)
-- **What players see (1.5.0):** clients need nothing. The WAILA hover reads "Monster Spawner (Valier Loot Spawner:
-  Zombie)". The price: the little mob inside the cage isn't drawn. Clients draw it from that same name, and no mob has
-  it, so the cage stays empty, the way vanilla shows a spawner of a mob that isn't installed. With
-  `lootSpawnerHoverName` off, the mob spins in the cage again (faster as the next batch comes up) and the hover says
-  "Monster Spawner (Zombie)".
+- **What players see (2.0.0):** the Valier Loot Spawner block (a gold-framed cage) with its mob spinning inside
+  (faster as the next batch comes up), and WAILA's name "Valier Loot Spawner (Zombie, Looting II)". 1.5.0 to 1.14.0
+  showed a vanilla spawner with an empty cage instead (`lootSpawnerHoverName`, gone in 2.0.0).
 - **Status:** sneak-right-click it with an empty hand to see its mob, its timing, whether it is working or waiting
   (and why) and when the next batch comes. On an ordinary spawner the same click says how to make one.
 - **Protection:** it only works where the player could break the spawner, so claims keep others from converting
@@ -170,15 +245,15 @@ hostile spawners do nothing at all. A loot spawner skips the mobs and makes just
   mobs when making a loot spawner, switching the emerald filter or picking one up, and breaking one did it for anyone.
   Now a loot spawner's own spawner part never runs: it needs a player within 0 blocks, and its real range is kept in
   the save. A plain spawner is held the same way for the moment it is being converted.
-- **Breaking it** (or blowing it up) drops whatever it was keeping, and the emerald block if it has one. It is still a
-  spawner: it drops nothing else of its own (EnderIO turns it into a broken spawner). To keep it, use a wrench.
-  Removed by a command or WorldEdit, what it kept is gone.
+- **Breaking it (2.0.0):** players can't (in survival), and explosions and the Wither can't either: move it with a
+  wrench. Creative players, a Matter Manipulator or another mod removing it: what it was keeping and the blocks paid
+  into it drop. Before 2.0.0 a pickaxe broke it into EnderIO's broken spawner.
 - **Blocked mobs:** the Wither and the Ender Dragon (`lootSpawnerBlockedMobs`).
 
-How it is stored: in the world save it is an ordinary spawner of the same mob, marked by a small compound
-(`ValierLootSpawner`) inside its spawn data. Vanilla keeps that through everything (saves, dollies, NBT tools). The
-mod turns a marked spawner back into a loot spawner as its chunk loads, or within 2 seconds if it turns up some other
-way. Without the mod, it is simply an ordinary spawner of the same mob again.
+How it is stored: since 2.0.0 it is its own block and tile (`valiertweaks.LootSpawner`), its state still in a small
+compound (`ValierLootSpawner`) inside its spawn data. Before 2.0.0 it was an ordinary spawner marked that way; such a
+spawner (an old save, or one a dolly moved) becomes the block as its chunk loads, or within 2 seconds if it turns up
+some other way. Players' computers get a plain spawner tile for it, so vanilla draws the mob.
 
 ## XP crafters (1.9.0, menu and store 1.11.0, essence berries 1.12.0, cost settings 1.14.0)
 
@@ -196,8 +271,12 @@ a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An 
   The tanks are GT++'s **Ultra Low Voltage Fluid Tank**, empty (one holding fluid doesn't fit, so none is lost) and not
   crafters already. The result is a "Valier XP Crafter": one of the tanks, renamed, with a tooltip saying what it makes.
   1.9.0 and 1.10.0 made it from one tank and a block of diamond; crafters made that way keep working.
-- **Placed, it is still that tank:** clients and pipes see a ULV fluid tank (32,000 mB). Fill it with liquid XP the
-  usual way (EnderIO, OpenBlocks; both call it `xpjuice`).
+- **Placed, it is the Valier XP Crafter block (2.0.0; before, it stayed a ULV fluid tank).** Its tank holds 32,000
+  mB and takes only liquid XP, from pipes, buckets and its menu (EnderIO and OpenBlocks call it `xpjuice`). Its input
+  slot takes only liquid XP containers (emptied into the tank each second, the empties kept for pipes to take) and
+  essence berries; pipes and hoppers can take its empties and its store. A crafter that was a GregTech tank becomes
+  this block within a second of its chunk loading, keeping its fluid (whatever it was, however much), slots and
+  record; its covers drop.
 - **Its menu (1.11.0):** right-click it, with an empty hand or holding anything except a GregTech tool (wrench,
   screwdriver, mallet, hammer, crowbar, wire cutter, soldering iron, jackhammer) or a cover, which go to the tank as
   GregTech has them (1.11.0 needed an empty hand). It is a chest window the server fills, so every player sees it
@@ -244,21 +323,15 @@ a small pile of brick dust from 4, iron dust from 2, and so on (27 of them). An 
   with the emerald block again, or sneak and hit it with an empty hand, to switch it off and get the block back.
 - **Status:** sneak-right-click it with an empty hand: what it makes, the XP each takes, whether it is working or
   waiting and why, its tank and the XP it holds, how many it has made and what its store holds.
-- **Breaking it** (with drops: a player, an explosion) drops the XP crafter item with its recipe, emerald block and
-  the XP it held, and its store as items; placed again, it carries on. Removed without drops (a Matter Manipulator, a
-  frame mover, a command), it is forgotten and stays a plain tank there, and its store drops where it was.
-- **What players see:** the crafting table shows the crafter in its output slot (the server sends it; clients don't
-  know the recipe, so NEI shows it only with [Valier Client](../valier-client/README.md) 1.1.0). The item's tooltip, the
-  menu and the status say what it makes. WAILA shows the plain tank: it works out names on the player's computer, and
-  no tank in GTNH shows a name the server sends.
-- **WAILA with Valier Client (1.10.0):** with WAILA on the server, a crafter adds what it makes and is doing to the
-  block data WAILA sends a player looking at it (a `ValierXpCrafter` compound: the item, the cost, the status, its tank,
-  the XP held, the count, and from 1.11.0 how many items its store holds). Players with the optional [Valier Client](../valier-client/README.md) mod see "Valier XP
-  Crafter" and those lines; everyone else's WAILA ignores it. WAILA asks on its network thread, so the server keeps
-  each crafter's info ready (refreshed every second and whenever a crafter changes) instead of reading the world
-  there.
+- **Breaking it** (however: a player, an explosion, a Matter Manipulator) drops the XP crafter item with its recipe,
+  emerald block, the XP it held and the liquid XP in its tank (2.0.0), and its store and slots as items; placed again,
+  it carries on.
+- **What players see:** the crafter block, NEI's recipe and listing (also under "@Valier"), the Valier creative tab,
+  and WAILA's lines: what it makes, the cost, the status, its tank, the XP held, the count and its store (the server
+  keeps each crafter's info ready, refreshed every second and whenever it changes, since WAILA asks on its network
+  thread). WAILA option "Valier XP crafters" turns the lines off.
 
-Stored in each world's `data/valiertweaks_xpcrafters.dat`, by position. Without the mod they are plain tanks.
+Stored in each world's `data/valiertweaks_xpcrafters.dat`, by position (the block holds the tank and slots).
 
 ## Whole steel dust from chain armour (1.9.0)
 
@@ -297,7 +370,6 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `lootSpawnerSpecialMobs` | `true` | Special Mobs variants and their loot, as with real spawned mobs. |
 | `lootSpawnerWrench` | `true` | Sneak-right-click with a wrench picks a loot spawner up as a Valier Loot Spawner item. |
 | `lootSpawnerSpawnEggs` | `false` | Sneak-right-click with a spawn egg changes a loot spawner's mob (egg used up). |
-| `lootSpawnerHoverName` | `true` | The WAILA hover says "Valier Loot Spawner: Zombie" (and no mob is drawn in the cage). Off: the mob is drawn and the hover names only the mob. |
 | `xpcrafter` / `xpCrafter` | `true` | XP crafters can be made and work. Off: none can be made, and existing ones stop (keeping what they know). |
 | `xpCrafterTank` | `gregtech:gt.blockmachines:817` | The GregTech tank three of which (with two LV pumps, an LV conveyor, an LV robot arm, a crafting table and an LV circuit) craft one (GT++'s ULV fluid tank). Any GregTech tank works. Not an item: none can be made. (1.11.0 removed `xpCrafterItem`, the diamond block of the old recipe.) |
 | `xpCrafterFluids` | `xpjuice` | Fluids that count as liquid XP. Recipes made only of containers of these are what it can make. |
@@ -308,6 +380,14 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `xpCrafterCostPercent` | `100` | Every XP recipe's liquid XP, in percent of GTNH's XP bucket recipe (1 to 1000). |
 | `xpCrafterCosts` | (empty) | Items whose craft costs a set amount instead, as `item=mB`: an ore dictionary name (`dustTinyGallium=2000`) or `mod:item[:meta]`. Entries that set nothing are named in the server log. |
 | `macerator` / `chainArmourFullDust` | `true` | Chain helmets macerate into 1 steel dust, chain leggings into 2. |
+| `pipes` / `pipeItems` | `8, 32, 64, 64` | Items one Extract or Request face moves per transfer at most, per tier (Basic, Advanced, Elite, Wireless). |
+| `pipeFluids` | `1000, 4000, 16000, 16000` | The same for fluid (mB). |
+| `pipeTicks` | `20, 10, 5, 5` | Ticks between a working face's transfers, per tier. |
+| `pipeMaxSleepTicks` | `100` | Longest wait of a face that keeps finding nothing to do (20 to 1200). |
+| `pipeBudgetMicros` | `2000` | Most time a tick spent on pipes, in microseconds; the rest waits a tick. |
+| `pipeNetworkMax` | `4096` | A network of more pipes than this does nothing (a safety limit). |
+| `pipeWirelessCrossDimension` | `true` | Wireless pipes link across dimensions. |
+| `pipeHeldStacks` | `4` | Stacks a face may hold back before the oldest drops. |
 
 ## Build and test
 

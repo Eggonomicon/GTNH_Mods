@@ -25,7 +25,6 @@ import net.minecraftforge.fluids.FluidContainerRegistry;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.IFluidContainerItem;
 
-import gregtech.api.metatileentity.implementations.MTEBasicTank;
 
 /**
  * An XP crafter's menu (a right-click on it, see {@link XpCrafters#menuItem}): a six-row chest window the server fills
@@ -115,7 +114,7 @@ final class XpMenu extends Container {
         XpCrafters.Crafter c = crafter;
         for (int i = 0; i < SIZE; i++) if (!isStore(i)) icons.setInventorySlotContents(i, filler());
 
-        MTEBasicTank tank = XpCrafters.tankAt(world, c.x, c.y, c.z);
+        TileXpCrafter tank = XpCrafters.tankAt(world, c.x, c.y, c.z);
         FluidStack f = tank == null ? null : tank.getFluid();
         int amount = f == null || f.getFluid() == null ? 0 : f.amount, capacity = tank == null ? 0 : tank.getCapacity();
         boolean xp = amount <= 0 || XpCrafters.isXp(f.getFluid());
@@ -326,7 +325,7 @@ final class XpMenu extends Container {
      * XP on the cursor goes into the XP it holds towards the next craft (shift: the whole stack).
      */
     void pour(EntityPlayer p, boolean all) {
-        MTEBasicTank tank = XpCrafters.tankAt(world, crafter.x, crafter.y, crafter.z);
+        TileXpCrafter tank = XpCrafters.tankAt(world, crafter.x, crafter.y, crafter.z);
         ItemStack cursor = p.inventory.getItemStack();
         if (tank == null) return;
         int solid = XpCrafters.solidXp(cursor);

@@ -106,7 +106,8 @@ public final class LootSpawners {
         World world = event.world;
         if (world.isRemote || !player.isSneaking()) return;
         int x = event.x, y = event.y, z = event.z;
-        if (world.getBlock(x, y, z) != Blocks.mob_spawner) return;
+        Block block = world.getBlock(x, y, z);
+        if (block != Blocks.mob_spawner && block != ModBlocks.lootSpawner) return;
         TileEntity te = world.getTileEntity(x, y, z);
         ItemStack held = player.getHeldItem();
         if (hit) { // sneak-hit with an empty hand: its upgrade blocks come back out
@@ -279,7 +280,7 @@ public final class LootSpawners {
     // ---- picking one up with a wrench, and putting it back ----------------------------------------------------------
 
     /** A wrench, as the mods that make them say: GregTech's tools are all BuildCraft wrenches, but only wrenches say yes. */
-    static boolean isWrench(ItemStack held, EntityPlayer player, int x, int y, int z) {
+    public static boolean isWrench(ItemStack held, EntityPlayer player, int x, int y, int z) {
         if (held == null || held.getItem() == null) return false;
         Item item = held.getItem();
         try {
@@ -298,7 +299,7 @@ public final class LootSpawners {
     }
 
     /** Lets the wrench know it was used (some take durability for it). */
-    static void wrenchUsed(ItemStack held, EntityPlayer player, int x, int y, int z) {
+    public static void wrenchUsed(ItemStack held, EntityPlayer player, int x, int y, int z) {
         if (held == null || BC_WRENCH == null || BC_WRENCH_USED == null || !BC_WRENCH.isInstance(held.getItem())) return;
         try {
             BC_WRENCH_USED.invoke(held.getItem(), player, x, y, z);
@@ -337,8 +338,8 @@ public final class LootSpawners {
         }
         t.filterPaid = null; // it goes with the item
         t.markDirty();
-        world.playAuxSFX(2001, x, y, z, Block.getIdFromBlock(Blocks.mob_spawner)); // the sound and bits of a break
-        world.setBlockToAir(x, y, z); // no break or harvest event: nothing else drops
+        world.playAuxSFX(2001, x, y, z, Block.getIdFromBlock(ModBlocks.lootSpawner)); // the sound and bits of a break
+        world.setBlockToAir(x, y, z); // it holds nothing now, so nothing else drops
         give(player, item);
         wrenchUsed(wrench, player, x, y, z);
         ValierTweaks.LOG.info("{} picked up the {} loot spawner at dim {} {} {} {} with a wrench", player.getCommandSenderName(),
@@ -351,19 +352,18 @@ public final class LootSpawners {
     }
 
     /**
-     * A vanilla spawner item named "Valier Loot Spawner (Zombie)", holding the spawner in {@value #ITEM_TAG}; its damage
-     * is the mob's id, so clients with NEI draw the right mob in it.
+     * A Valier Loot Spawner item named "Valier Loot Spawner (Zombie)", holding the spawner in {@value #ITEM_TAG}.
+     * Before 2.0.0 it was a vanilla spawner item; those still place a loot spawner ({@link #savedSpawner}).
      */
     static ItemStack toItem(LootSpawnerTile t) {
         String type = t.logic()
             .getEntityNameToSpawn();
         String mob = mobWords(type);
-        ItemStack stack = new ItemStack(Blocks.mob_spawner, 1, entityId(type));
+        ItemStack stack = new ItemStack(ModBlocks.lootSpawner);
         NBTTagCompound tag = new NBTTagCompound();
         tag.setTag(ITEM_TAG, t.saveForItem());
         NBTTagCompound display = new NBTTagCompound();
-        display.setString("Name", EnumChatFormatting.RESET + "" + EnumChatFormatting.GOLD + "Valier Loot Spawner"
-            + EnumChatFormatting.RESET + " (" + mob + ")");
+        display.setString("Name", displayName(type, t.looting.level(), t.speedLevel()));
         String grey = EnumChatFormatting.RESET + "" + EnumChatFormatting.GRAY;
         NBTTagList lore = new NBTTagList();
         lore.appendTag(new NBTTagString(grey + "Makes the loot of each " + mob + ", no mobs."));
@@ -379,16 +379,29 @@ public final class LootSpawners {
         return stack;
     }
 
-    /** The spawner a Valier Loot Spawner item holds, or null for any other item. */
+    /** "Valier Loot Spawner (Zombie, Looting II, Speed I)", in gold: the item's name, and what players' WAILA shows. */
+    static String displayName(String type, int looting, int speed) {
+        return EnumChatFormatting.RESET + "" + EnumChatFormatting.GOLD + "Valier Loot Spawner" + EnumChatFormatting.RESET + " ("
+            + mobWords(type) + (looting > 0 ? ", Looting " + roman(looting) : "") + (speed > 0 ? ", Speed " + roman(speed) : "")
+            + ")";
+    }
+
+    /**
+     * The spawner a Valier Loot Spawner item holds (this mod's item, or the vanilla spawner item a wrench gave before
+     * 2.0.0), or null for any other item.
+     */
     static NBTTagCompound savedSpawner(ItemStack stack) {
-        if (stack == null || stack.getItem() != Item.getItemFromBlock(Blocks.mob_spawner) || !stack.hasTagCompound()) return null;
+        if (stack == null || !stack.hasTagCompound()) return null;
+        if (stack.getItem() != Item.getItemFromBlock(Blocks.mob_spawner) && stack.getItem() != Item.getItemFromBlock(ModBlocks.lootSpawner))
+            return null;
         NBTTagCompound tag = stack.getTagCompound();
         return tag.hasKey(ITEM_TAG, 10) ? tag.getCompoundTag(ITEM_TAG) : null;
     }
 
     /**
-     * A Valier Loot Spawner item placed: the spawner vanilla just made (a pig spawner) gets what the item holds and
-     * becomes a loot spawner. Lowest priority and not for cancelled placements, so claims that stop it win.
+     * A Valier Loot Spawner item from before 2.0.0 (a vanilla spawner item) placed: the spawner vanilla just made (a pig
+     * spawner) gets what the item holds and becomes a loot spawner block. Lowest priority and not for cancelled
+     * placements, so claims that stop it win. This mod's own item does it in {@link ItemBlockLootSpawner}.
      */
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onPlace(BlockEvent.PlaceEvent event) {
@@ -421,7 +434,36 @@ public final class LootSpawners {
         return loot;
     }
 
-    /** The mob's global entity id (what NEI's spawner item uses), or 0 for mobs without one. */
+    /**
+     * This mod's item placed ({@link ItemBlockLootSpawner}): the new block's tile gets what the item holds (nothing: a
+     * pig loot spawner).
+     */
+    static void placeInto(World world, LootSpawnerTile t, NBTTagCompound saved, EntityPlayer player) {
+        NBTTagCompound tag;
+        if (saved != null) tag = (NBTTagCompound) saved.copy();
+        else {
+            tag = new NBTTagCompound();
+            t.writeAll(tag); // a fresh tile: marks it (a pig spawner, dressed as vanilla dresses its mobs)
+        }
+        tag.setInteger("x", t.xCoord);
+        tag.setInteger("y", t.yCoord);
+        tag.setInteger("z", t.zCoord);
+        t.readFromNBT(tag);
+        if (!TweaksConfig.lootSpawners) { // switched off: a plain spawner of that mob, what was paid dropped
+            TileEntityMobSpawner plain = toVanilla(world, t);
+            if (plain != null) revert(world, plain);
+            return;
+        }
+        t.timer = nextDelay(t, world);
+        t.markDirty();
+        world.markBlockForUpdate(t.xCoord, t.yCoord, t.zCoord);
+        ValierTweaks.LOG.info("{} placed a {} loot spawner at {}", player == null ? "Something" : player.getCommandSenderName(),
+            t.logic()
+                .getEntityNameToSpawn(),
+            t.where());
+    }
+
+    /** The mob's global entity id, or 0 for mobs without one. */
     static int entityId(String type) {
         Object cls = EntityList.stringToClassMapping.get(type);
         if (cls == null) return 0;
@@ -795,7 +837,7 @@ public final class LootSpawners {
     }
 
     /** Whether the player could break the spawner (claims and other protection decide), or is an op. */
-    static boolean mayChange(EntityPlayer player, World world, int x, int y, int z) {
+    public static boolean mayChange(EntityPlayer player, World world, int x, int y, int z) {
         if (player instanceof EntityPlayerMP && MinecraftServer.getServer() != null
             && MinecraftServer.getServer()
                 .getConfigurationManager()
@@ -832,71 +874,39 @@ public final class LootSpawners {
     // ---- breaking one spills what it holds ------------------------------------------------------------------------
 
     private static boolean asking; // our own permission check above, not a real break
-    private static final List<LootSpawnerTile> spills = new ArrayList<>();
 
     /**
-     * A player breaking a loot spawner: what it holds is dropped next tick, once the block is really gone (a break
-     * event can still be cancelled, or be only a permission check). A dolly moving it fires no break, and its loot
-     * travels with it.
+     * The block is going (creative players, a Matter Manipulator, another mod; see {@link BlockLootSpawner#breakBlock}):
+     * the loot it holds and what was paid into it drop where it was. A wrench empties it first, so nothing drops then.
      */
-    @SubscribeEvent(priority = EventPriority.LOWEST)
-    public void onBreak(BlockEvent.BreakEvent event) {
-        if (asking || event.world.isRemote || event.block != Blocks.mob_spawner) return;
-        TileEntity te = event.world.getTileEntity(event.x, event.y, event.z);
-        if (te instanceof LootSpawnerTile && ((LootSpawnerTile) te).hasDrops()) {
-            ((LootSpawnerTile) te).savedSinceBreak = false;
-            spills.add((LootSpawnerTile) te);
+    static void spillAll(World w, LootSpawnerTile t) {
+        for (int i = 0; i < LootSpawnerTile.SLOTS; i++) {
+            ItemStack s = t.items[i];
+            t.items[i] = null;
+            if (s != null) drop(w, t.xCoord, t.yCoord, t.zCoord, s);
+        }
+        if (t.filterPaid != null) drop(w, t.xCoord, t.yCoord, t.zCoord, t.filterPaid);
+        t.filterPaid = null;
+        if (t.xpPaid != null) drop(w, t.xCoord, t.yCoord, t.zCoord, t.xpPaid);
+        t.xpPaid = null;
+        for (LootSpawnerTile.Upgrade u : new LootSpawnerTile.Upgrade[] { t.looting, t.speed }) {
+            for (ItemStack s : u.refund()) drop(w, t.xCoord, t.yCoord, t.zCoord, s);
+            u.paid = 0;
         }
     }
 
-    /**
-     * Blocks that drop before they are removed (explosions, the Wither, a mod breaking blocks with drops): the tile is
-     * still there, so what it holds joins the drops.
-     */
-    @SubscribeEvent(priority = EventPriority.LOW)
-    public void onHarvest(BlockEvent.HarvestDropsEvent event) {
-        if (event.world.isRemote || event.block != Blocks.mob_spawner) return;
-        TileEntity te = event.world.getTileEntity(event.x, event.y, event.z);
-        if (!(te instanceof LootSpawnerTile)) return;
-        LootSpawnerTile t = (LootSpawnerTile) te;
-        for (int i = 0; i < LootSpawnerTile.SLOTS; i++) {
-            if (t.items[i] != null) event.drops.add(t.items[i]);
-            t.items[i] = null;
-        }
-        if (t.filterPaid != null) event.drops.add(t.filterPaid);
+    /** Forgets what it holds and was paid, which a copy of it carries on (see {@link #toVanilla}): nothing spills. */
+    static void empty(LootSpawnerTile t) {
+        for (int i = 0; i < LootSpawnerTile.SLOTS; i++) t.items[i] = null;
         t.filterPaid = null;
-        if (t.xpPaid != null) event.drops.add(t.xpPaid);
         t.xpPaid = null;
-        event.drops.addAll(t.looting.refund());
-        event.drops.addAll(t.speed.refund());
         t.looting.paid = 0;
         t.speed.paid = 0;
-        t.markDirty();
     }
 
-    static void spill() {
-        if (spills.isEmpty()) return;
-        for (LootSpawnerTile t : spills) {
-            World w = t.getWorldObj();
-            // Still there (the break was cancelled or only a check), or saved since (a mover took it, loot and all).
-            if (w == null || !t.isInvalid() || t.savedSinceBreak) continue;
-            if (w.blockExists(t.xCoord, t.yCoord, t.zCoord) && w.getBlock(t.xCoord, t.yCoord, t.zCoord) == Blocks.mob_spawner)
-                continue;
-            for (int i = 0; i < LootSpawnerTile.SLOTS; i++) {
-                ItemStack s = t.items[i];
-                t.items[i] = null;
-                if (s != null) drop(w, t.xCoord, t.yCoord, t.zCoord, s);
-            }
-            if (t.filterPaid != null) drop(w, t.xCoord, t.yCoord, t.zCoord, t.filterPaid);
-            t.filterPaid = null;
-            if (t.xpPaid != null) drop(w, t.xCoord, t.yCoord, t.zCoord, t.xpPaid);
-            t.xpPaid = null;
-            for (LootSpawnerTile.Upgrade u : new LootSpawnerTile.Upgrade[] { t.looting, t.speed }) {
-                for (ItemStack s : u.refund()) drop(w, t.xCoord, t.yCoord, t.zCoord, s);
-                u.paid = 0;
-            }
-        }
-        spills.clear();
+    /** Drops a stack in the middle of a block (pipes, crafters). */
+    public static void dropAt(World w, int x, int y, int z, ItemStack s) {
+        if (s != null && s.stackSize > 0) drop(w, x, y, z, s);
     }
 
     static void drop(World w, int x, int y, int z, ItemStack s) {
@@ -964,27 +974,84 @@ public final class LootSpawners {
     }
 
     /**
-     * Replaces a marked vanilla spawner tile with a loot spawner tile holding the same data, and tells the neighbours
-     * (pipes check again and connect to its inventory).
+     * A marked spawner (a vanilla spawner just marked, or a loot spawner from before 2.0.0, whose block is the vanilla
+     * one) becomes the Valier Loot Spawner block where it stands, with the same data, and the neighbours are told (pipes
+     * check again and connect to its inventory). On the block already: the tile just takes the data.
      */
-    static LootSpawnerTile swap(World world, TileEntityMobSpawner old) {
+    public static LootSpawnerTile swap(World world, TileEntityMobSpawner old) {
         NBTTagCompound tag = new NBTTagCompound();
-        old.writeToNBT(tag);
-        LootSpawnerTile loot = new LootSpawnerTile();
-        loot.readFromNBT(tag);
+        if (old instanceof LootSpawnerTile) ((LootSpawnerTile) old).writeAll(tag);
+        else old.writeToNBT(tag);
         int x = old.xCoord, y = old.yCoord, z = old.zCoord;
-        world.setTileEntity(x, y, z, loot);
+        if (world.getBlock(x, y, z) != ModBlocks.lootSpawner) {
+            if (old instanceof LootSpawnerTile) empty((LootSpawnerTile) old); // the copy carries it on
+            world.setBlock(x, y, z, ModBlocks.lootSpawner, 0, 3); // the vanilla block and its tile go, nothing drops
+        }
+        TileEntity te = world.getTileEntity(x, y, z);
+        LootSpawnerTile loot;
+        if (te instanceof LootSpawnerTile) loot = (LootSpawnerTile) te;
+        else {
+            loot = new LootSpawnerTile();
+            world.setTileEntity(x, y, z, loot);
+        }
+        loot.readFromNBT(tag);
         loot.markDirty();
         world.markBlockForUpdate(x, y, z);
-        world.notifyBlocksOfNeighborChange(x, y, z, Blocks.mob_spawner);
+        world.notifyBlocksOfNeighborChange(x, y, z, ModBlocks.lootSpawner);
         return loot;
+    }
+
+    /**
+     * The other way: a loot spawner block becomes a marked vanilla spawner with the same data (for {@link #revert}, and
+     * before the mod is removed). Null if the vanilla block didn't take.
+     */
+    static TileEntityMobSpawner toVanilla(World world, LootSpawnerTile t) {
+        NBTTagCompound tag = new NBTTagCompound();
+        t.writeAll(tag);
+        tag.setString("id", "MobSpawner");
+        int x = t.xCoord, y = t.yCoord, z = t.zCoord;
+        empty(t); // the copy carries it on: nothing spills
+        world.setBlock(x, y, z, Blocks.mob_spawner, 0, 3);
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!(te instanceof TileEntityMobSpawner)) return null;
+        if (te.getClass() != TileEntityMobSpawner.class) { // ours, or another mod's, must not handle it
+            te = new TileEntityMobSpawner();
+            world.setTileEntity(x, y, z, te);
+        }
+        te.readFromNBT(tag);
+        te.markDirty();
+        world.markBlockForUpdate(x, y, z);
+        return (TileEntityMobSpawner) te;
+    }
+
+    /** Loot spawners of the old kind found as their chunks loaded, made the block at the end of the tick. */
+    private static final List<Object[]> pending = new ArrayList<>();
+
+    static void convertPending() {
+        if (pending.isEmpty() || RevertBlocks.reverting) return;
+        List<Object[]> now = new ArrayList<>(pending);
+        pending.clear();
+        for (Object[] p : now) {
+            World world = (World) p[0];
+            int x = (Integer) p[1], y = (Integer) p[2], z = (Integer) p[3];
+            if (!world.blockExists(x, y, z) || world.getBlock(x, y, z) != Blocks.mob_spawner) continue;
+            TileEntity te = world.getTileEntity(x, y, z);
+            if (te instanceof LootSpawnerTile) {
+                swap(world, (TileEntityMobSpawner) te);
+                ValierTweaks.LOG.info("The {} loot spawner at {} is a Valier Loot Spawner block now",
+                    ((LootSpawnerTile) world.getTileEntity(x, y, z)).logic()
+                        .getEntityNameToSpawn(),
+                    ((LootSpawnerTile) world.getTileEntity(x, y, z)).where());
+            }
+        }
     }
 
     // ---- keeping them loot spawners -------------------------------------------------------------------------------
 
     /**
-     * A loot spawner is saved as a marked vanilla spawner. As its chunk loads (its tiles are made, not yet running),
-     * swap it back before anything sees the vanilla tile.
+     * A loot spawner from before 2.0.0 is saved as a marked vanilla spawner. As its chunk loads (its tiles are made, not
+     * yet running) its tile is swapped for a loot spawner tile before anything sees the vanilla one, and at the end of
+     * the tick it becomes the block ({@link #convertPending}: no block changes while a chunk is still loading).
      */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onChunkLoad(ChunkDataEvent.Load event) {
@@ -1004,6 +1071,7 @@ public final class LootSpawners {
             LootSpawnerTile loot = new LootSpawnerTile();
             loot.readFromNBT(tag);
             chunk.func_150812_a(old.xCoord & 15, old.yCoord, old.zCoord & 15, loot); // replaces (and invalidates) the old
+            pending.add(new Object[] { event.world, old.xCoord, old.yCoord, old.zCoord });
         }
     }
 
@@ -1014,26 +1082,39 @@ public final class LootSpawners {
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
-        spill();
+        convertPending();
         if (++tick % 40 == 0) scan();
     }
 
+    /**
+     * Turns the old kind into the block (marked vanilla spawners, and loot spawner tiles still on the vanilla block);
+     * with loot spawners switched off, every loot spawner becomes a plain spawner instead. Returns how many changed.
+     */
     static int scan() {
         int swapped = 0;
         for (WorldServer world : DimensionManager.getWorlds()) {
-            List<TileEntityMobSpawner> marked = null;
-            for (Object te : world.loadedTileEntityList) {
-                if (te.getClass() == TileEntityMobSpawner.class && !((TileEntity) te).isInvalid()
-                    && LootSpawnerTile.isMarked((TileEntityMobSpawner) te)) {
-                    if (marked == null) marked = new ArrayList<>();
-                    marked.add((TileEntityMobSpawner) te);
+            List<TileEntityMobSpawner> found = null;
+            for (Object o : world.loadedTileEntityList) {
+                TileEntity te = (TileEntity) o;
+                if (te.isInvalid() || !(te instanceof TileEntityMobSpawner)) continue;
+                boolean old = te.getClass() == TileEntityMobSpawner.class && LootSpawnerTile.isMarked((TileEntityMobSpawner) te)
+                    || te instanceof LootSpawnerTile && world.getBlock(te.xCoord, te.yCoord, te.zCoord) == Blocks.mob_spawner;
+                boolean off = !TweaksConfig.lootSpawners && te instanceof LootSpawnerTile;
+                if (old || off) {
+                    if (found == null) found = new ArrayList<>();
+                    found.add((TileEntityMobSpawner) te);
                 }
             }
-            if (marked == null) continue;
-            for (TileEntityMobSpawner old : marked) {
-                if (world.getTileEntity(old.xCoord, old.yCoord, old.zCoord) != old) continue;
-                if (TweaksConfig.lootSpawners) swap(world, old);
-                else revert(world, old);
+            if (found == null) continue;
+            for (TileEntityMobSpawner t : found) {
+                if (world.getTileEntity(t.xCoord, t.yCoord, t.zCoord) != t) continue;
+                if (TweaksConfig.lootSpawners) {
+                    if (RevertBlocks.reverting) continue; // before the mod is removed: they stay vanilla
+                    swap(world, t);
+                } else if (t instanceof LootSpawnerTile && world.getBlock(t.xCoord, t.yCoord, t.zCoord) == ModBlocks.lootSpawner) {
+                    TileEntityMobSpawner plain = toVanilla(world, (LootSpawnerTile) t);
+                    if (plain != null) revert(world, plain);
+                } else revert(world, t);
                 swapped++;
             }
         }
@@ -1192,6 +1273,8 @@ public final class LootSpawners {
     static boolean accepts(World world, int x, int y, int z, ForgeDirection from) {
         TileEntity te = neighbour(world, x, y, z);
         if (te == null) return false;
+        if (te instanceof com.valier.tweaks.pipe.TilePipe) // a Valier pipe pulling from it takes items (2.0.0)
+            return ((com.valier.tweaks.pipe.TilePipe) te).pullsFrom(from.ordinal());
         if (te instanceof IInventory) {
             // GregTech cables and the like are inventories with no slots.
             if (te instanceof net.minecraft.inventory.ISidedInventory)

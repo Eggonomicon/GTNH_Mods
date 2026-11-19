@@ -19,11 +19,10 @@ import net.minecraft.util.EnumChatFormatting;
  * A mob spawner turned into a loot spawner ({@link LootSpawners}): it never spawns a mob. Instead, every spawner cycle
  * it makes the loot of the mobs it would have spawned and pushes it into the inventories and pipes touching it.
  * <p>
- * Clients need nothing: they see an ordinary spawner (the description packet is the vanilla one). In the world save it
- * is an ordinary spawner too ({@code id} "MobSpawner"), marked by a {@value #MARK} compound inside its SpawnData, which
- * vanilla keeps through every copy (saves, the JABBA dolly, NBT tools). {@link LootSpawners} turns a marked vanilla
- * spawner back into this tile when its chunk loads or when one turns up some other way. Without this mod it is an
- * ordinary spawner of the same mob again.
+ * Since 2.0.0 it is the tile of the Valier Loot Spawner block ({@link BlockLootSpawner}) on the server; players'
+ * computers have a plain spawner tile that draws the mob ({@link LootSpawnerClientTile}). Its state is kept in a
+ * {@value #MARK} compound inside its SpawnData, as before 2.0.0, when a loot spawner was a vanilla spawner saved as
+ * {@code id} "MobSpawner": {@link LootSpawners} turns those into the block when their chunk loads.
  * <p>
  * It is also an inventory (27 slots, take-only) holding loot that nothing around it could take yet, so hoppers, EnderIO
  * conduits on extract, AE2 import buses and the like can pull from it, and pipes connect to it.
@@ -244,7 +243,7 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         return copy;
     }
 
-    /** Writes the state into the mark, then saves as a vanilla spawner ("MobSpawner") so a world without the mod keeps it. */
+    /** Writes the state into the mark (saved under this tile's own id since 2.0.0). */
     @Override
     public void writeToNBT(NBTTagCompound nbt) {
         writeAll(nbt);
@@ -280,17 +279,12 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         NBTTagCompound data = nbt.getCompoundTag("SpawnData");
         data.setTag(MARK, mark);
         nbt.setTag("SpawnData", data);
-        nbt.setString("id", "MobSpawner");
     }
 
     /**
-     * What clients get: the vanilla spawner packet, without the mark. "Delay" is the time to the next roll, so the
-     * little mob spins faster as the next batch of loot comes up.
-     * <p>
-     * With {@link TweaksConfig#lootSpawnerHoverName} the mob's name is replaced by {@link #hoverName}: WAILA shows a
-     * spawner as "Monster Spawner (its EntityId)", read from this packet. No client has an entity of that name, so the
-     * cage stays empty, the way vanilla shows a spawner of a mob that isn't installed. SpawnData has to go too: a client
-     * with SpawnData but no entity would fail drawing it.
+     * What clients get: the vanilla spawner packet (their tile is a plain spawner, {@link LootSpawnerClientTile}, so the
+     * mob spins in the cage), without the mark, plus the Looting and Speed levels for the name players see. "Delay" is
+     * the time to the next roll, so the little mob spins faster as the next batch of loot comes up.
      */
     @Override
     public Packet getDescriptionPacket() {
@@ -300,10 +294,8 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         NBTTagCompound data = nbt.getCompoundTag("SpawnData");
         data.removeTag(MARK);
         if (egg && data.hasNoTags()) nbt.removeTag("SpawnData");
-        if (TweaksConfig.lootSpawnerHoverName) {
-            nbt.setString("EntityId", hoverName(logic().getEntityNameToSpawn(), looting.level(), speedLevel()));
-            nbt.removeTag("SpawnData");
-        }
+        nbt.setInteger("ValierLooting", looting.level());
+        nbt.setInteger("ValierSpeed", speedLevel());
         nbt.setShort("Delay", (short) Math.max(0, Math.min(Short.MAX_VALUE, timer)));
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, nbt);
     }

@@ -134,7 +134,11 @@ public final class XpCrafters {
         Recipe recipe = Recipe.make();
         if (recipe != null) GameRegistry.addRecipe(recipe);
         hud = Loader.isModLoaded("Waila");
-        if (hud) FMLInterModComms.sendMessage("Waila", "register", "com.valier.tweaks.XpCrafterWaila.callbackRegister");
+        if (hud) {
+            FMLInterModComms.sendMessage("Waila", "register", "com.valier.tweaks.XpCrafterWaila.callbackRegister");
+            // What players read (WAILA runs it on both sides; only clients draw it).
+            FMLInterModComms.sendMessage("Waila", "register", "com.valier.tweaks.client.XpCrafterHud.callbackRegister");
+        }
     }
 
     /** At server start: the recipes are looked up again, and the saved crafters read again. */
@@ -604,7 +608,13 @@ public final class XpCrafters {
         return LootSpawners.matches(TweaksConfig.xpCrafterTank, s);
     }
 
+    /** A Valier XP Crafter item: this mod's (since 2.0.0), or a GregTech tank item of the old kind. */
     static boolean isCrafterItem(ItemStack s) {
+        return s != null && s.getItem() != null && s.getItem() == Item.getItemFromBlock(ModBlocks.xpCrafter) || isOldCrafterItem(s);
+    }
+
+    /** A Valier XP Crafter item from before 2.0.0: a GregTech tank item carrying the crafter tag. */
+    static boolean isOldCrafterItem(ItemStack s) {
         return isTankItem(s) && s.hasTagCompound()
             && s.getTagCompound()
                 .hasKey(ITEM_TAG, 10);
@@ -614,8 +624,25 @@ public final class XpCrafters {
         return LootSpawners.matches(TweaksConfig.xpCrafterFullItem, s);
     }
 
-    /** 1: the tank is there; 0: it isn't; -1: can't tell yet (a GregTech machine whose machine isn't loaded). */
+    /**
+     * 1: the crafter block is there; 2: a GregTech tank of the old kind is (turned into the block by {@link #convert});
+     * 0: neither is; -1: can't tell yet.
+     */
     static int tankState(World w, int x, int y, int z) {
+        if (w.getBlock(x, y, z) == ModBlocks.xpCrafter) return w.getTileEntity(x, y, z) instanceof TileXpCrafter ? 1 : -1;
+        int gt = gtTankState(w, x, y, z);
+        return gt == 1 ? 2 : gt;
+    }
+
+    /** The crafter block's tile there, or null. */
+    static TileXpCrafter tankAt(World w, int x, int y, int z) {
+        if (w.getBlock(x, y, z) != ModBlocks.xpCrafter) return null;
+        TileEntity te = w.getTileEntity(x, y, z);
+        return te instanceof TileXpCrafter ? (TileXpCrafter) te : null;
+    }
+
+    /** For a GregTech tank: 1 it is there; 0 it isn't; -1 can't tell yet (a GregTech machine whose machine isn't loaded). */
+    static int gtTankState(World w, int x, int y, int z) {
         Item item = LootSpawners.itemOf(TweaksConfig.xpCrafterTank);
         Block block = item == null ? null : Block.getBlockFromItem(item);
         if (block == null || block == Blocks.air) return -1; // the setting is broken: forget nothing
@@ -630,22 +657,78 @@ public final class XpCrafters {
         return mte instanceof MTEBasicTank ? 1 : 0;
     }
 
-    static MTEBasicTank tankAt(World w, int x, int y, int z) {
-        if (tankState(w, x, y, z) != 1) return null;
+    static MTEBasicTank gtTankAt(World w, int x, int y, int z) {
+        if (gtTankState(w, x, y, z) != 1) return null;
         return (MTEBasicTank) ((IGregTechTileEntity) w.getTileEntity(x, y, z)).getMetaTileEntity();
+    }
+
+    /**
+     * A crafter of the old kind (a GregTech tank) becomes the Valier XP Crafter block where it stands: its covers drop,
+     * its fluid (whatever and however much) and its input and output slots go into the block, its record stays as it
+     * is. The tank is emptied first, so GregTech spills nothing as it goes. Null if there was no tank or the block
+     * didn't take.
+     */
+    static TileXpCrafter convert(World w, Data d, Crafter c) {
+        MTEBasicTank gt = gtTankAt(w, c.x, c.y, c.z);
+        if (gt == null) return null;
+        IGregTechTileEntity base = gt.getBaseMetaTileEntity();
+        for (ForgeDirection side : ForgeDirection.VALID_DIRECTIONS) if (base.hasCoverAtSide(side)) base.dropCover(side, side);
+        FluidStack fluid = gt.mFluid == null || gt.mFluid.amount <= 0 ? null : gt.mFluid.copy();
+        ItemStack in = gt.mInventory[gt.getInputSlot()], out = gt.mInventory[gt.getOutputSlot()];
+        in = in == null ? null : in.copy();
+        out = out == null ? null : out.copy();
+        gt.mFluid = null;
+        for (int i = 0; i < gt.mInventory.length; i++) gt.mInventory[i] = null;
+        w.setBlock(c.x, c.y, c.z, ModBlocks.xpCrafter, 0, 3);
+        TileXpCrafter t = tankAt(w, c.x, c.y, c.z);
+        if (t == null) {
+            ValierTweaks.LOG.error("The XP crafter at {} couldn't become a Valier XP Crafter block; its slots drop", c.where());
+            if (in != null) LootSpawners.drop(w, c.x, c.y, c.z, in);
+            if (out != null) LootSpawners.drop(w, c.x, c.y, c.z, out);
+            return null;
+        }
+        t.setContents(fluid, in, out);
+        hudUpdate(w, c);
+        ValierTweaks.LOG.info("The XP crafter at {} is a Valier XP Crafter block now (tank: {})", c.where(),
+            fluid == null ? "empty" : fluid.amount + " mB of " + fluid.getFluid()
+                .getName());
+        return t;
     }
 
     // ---- the item ---------------------------------------------------------------------------------------------------
 
-    /** The tank item made into a Valier XP Crafter item that knows what {@code c} knows. */
-    static ItemStack toItem(ItemStack tank, Crafter c) {
-        ItemStack s = tank.copy();
-        s.stackSize = 1;
-        NBTTagCompound tag = s.hasTagCompound() ? s.getTagCompound() : new NBTTagCompound();
+    /** A new Valier XP Crafter item (the creative tab's, pick-block's). {@code tank} isn't used (from before 2.0.0). */
+    public static ItemStack newItem(ItemStack tank) {
+        return toItem(new Crafter(0, 0, 0), null);
+    }
+
+    /**
+     * A Valier XP Crafter item that knows what {@code c} knows, for a dropped GregTech tank item of the old kind (its
+     * liquid XP, GregTech's "mFluid", goes along).
+     */
+    static ItemStack toItem(ItemStack tankDrop, Crafter c) {
+        return toItem(c, fluidOf(tankDrop));
+    }
+
+    /** A Valier XP Crafter item (since 2.0.0 this mod's block item) knowing what {@code c} knows, with its tank's fluid. */
+    static ItemStack toItem(Crafter c, FluidStack fluid) {
+        ItemStack s = new ItemStack(ModBlocks.xpCrafter);
+        NBTTagCompound tag = new NBTTagCompound();
         tag.setTag(ITEM_TAG, c.write(true));
+        if (fluid != null && fluid.amount > 0 && fluid.getFluid() != null)
+            tag.setTag("Fluid", fluid.writeToNBT(new NBTTagCompound()));
         s.setTagCompound(tag);
         label(s, c);
         return s;
+    }
+
+    /** The fluid a crafter item carries: this mod's "Fluid", or GregTech's "mFluid" (a tank item of the old kind). */
+    static FluidStack fluidOf(ItemStack s) {
+        if (s == null || !s.hasTagCompound()) return null;
+        NBTTagCompound tag = s.getTagCompound();
+        String key = tag.hasKey("Fluid", 10) ? "Fluid" : tag.hasKey("mFluid", 10) ? "mFluid" : null;
+        FluidStack f = key == null ? null : FluidStack.loadFluidStackFromNBT(tag.getCompoundTag(key));
+        return f == null || f.amount <= 0 ? null : f;
     }
 
     /** Its name and the tooltip lines saying what it makes. */
@@ -654,12 +737,16 @@ public final class XpCrafters {
         NBTTagCompound display = tag.getCompoundTag("display");
         display.setString("Name", EnumChatFormatting.RESET + NAME);
         NBTTagList lore = new NBTTagList();
-        for (String line : loreLines(c)) lore.appendTag(new NBTTagString(EnumChatFormatting.GRAY + line));
+        for (String line : loreLines(c, s)) lore.appendTag(new NBTTagString(EnumChatFormatting.GRAY + line));
         display.setTag("Lore", lore);
         tag.setTag("display", display);
     }
 
     static List<String> loreLines(Crafter c) {
+        return loreLines(c, null);
+    }
+
+    static List<String> loreLines(Crafter c, ItemStack s) {
         List<String> lines = new ArrayList<>();
         XpRecipe r = c.makes == null ? null : recipeFor(c.makes);
         if (r == null) {
@@ -672,6 +759,7 @@ public final class XpCrafters {
         }
         if (c.full) lines.add("Full dust: on (" + (c.fullPaid != null ? c.fullPaid.getDisplayName() + " in it" : "creative") + ")");
         if (c.bank > 0) lines.add("Holding " + mb(c.bank) + " mB of liquid XP");
+        if (fluidOf(s) != null) lines.add("Tank: " + mb(fluidOf(s).amount) + " mB of " + fluidOf(s).getLocalizedName());
         lines.add("Fill it with liquid XP (or essence berries");
         lines.add("in a chest touching it); what it makes");
         lines.add("goes into chests and pipes touching it,");
@@ -700,10 +788,11 @@ public final class XpCrafters {
         int x = event.x, y = event.y, z = event.z;
         Data d = data(world, false);
         Crafter c = d == null ? null : d.at(x, y, z);
-        if (c != null && tankState(world, x, y, z) == 0) {
+        int state = c == null ? 0 : tankState(world, x, y, z);
+        if (c != null && state == 0) {
             forget(world, d, c); // removed without dropping
             c = null;
-        }
+        } else if (state == 2 && !RevertBlocks.reverting) convert(world, d, c); // the old kind: the block now
         if (menu) {
             if (c != null) {
                 event.setCanceled(true);
@@ -712,7 +801,7 @@ public final class XpCrafters {
             return;
         }
         if (c == null) {
-            if (!hit && held != null && recipeFor(held) != null && tankAt(world, x, y, z) != null) {
+            if (!hit && held != null && recipeFor(held) != null && gtTankAt(world, x, y, z) != null) {
                 event.setCanceled(true);
                 tell(player, text(EnumChatFormatting.GRAY, "This is a plain tank. A " + NAME + " is crafted from three of "
                     + "these, two LV pumps, an LV conveyor, an LV robot arm, a crafting table and an LV circuit. Place "
@@ -865,19 +954,60 @@ public final class XpCrafters {
     }
 
     /**
-     * A Valier XP Crafter item placed: the tank GregTech just made is a crafter, knowing what the item knew. Lowest
-     * priority and not for cancelled placements, so claims that stop it win.
+     * A Valier XP Crafter item from before 2.0.0 (a GregTech tank item) placed: the tank GregTech just made is a
+     * crafter, knowing what the item knew, and becomes the block. Lowest priority and not for cancelled placements, so
+     * claims that stop it win. This mod's own item does it in {@link ItemBlockXpCrafter} ({@link #placed}).
      */
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onPlace(BlockEvent.PlaceEvent event) {
-        if (event.world.isRemote || !isCrafterItem(event.itemInHand) || tankAt(event.world, event.x, event.y, event.z) == null)
-            return;
+        if (event.world.isRemote || !isOldCrafterItem(event.itemInHand)
+            || gtTankAt(event.world, event.x, event.y, event.z) == null) return;
         Crafter c = Crafter.read(event.x, event.y, event.z, event.itemInHand.getTagCompound()
             .getCompoundTag(ITEM_TAG));
-        data(event.world, true).put(c);
-        hudUpdate(event.world, c);
-        ValierTweaks.LOG.info("{} placed an XP crafter at {}", event.player == null ? "Something" : event.player.getCommandSenderName(),
+        Data d = data(event.world, true);
+        d.put(c);
+        if (!RevertBlocks.reverting) convert(event.world, d, c);
+        ValierTweaks.LOG.info("{} placed an XP crafter (an item from before 2.0.0) at {}",
+            event.player == null ? "Something" : event.player.getCommandSenderName(), c.where());
+    }
+
+    /** This mod's crafter item placed: a crafter knowing what the item knew, its liquid XP in its tank. */
+    static void placed(World world, TileXpCrafter t, ItemStack stack, EntityPlayer player) {
+        int x = t.xCoord, y = t.yCoord, z = t.zCoord;
+        Data d = data(world, true);
+        Crafter old = d.at(x, y, z);
+        if (old != null) forget(world, d, old); // a record left where something removed a crafter without breaking it
+        NBTTagCompound tag = stack.hasTagCompound() ? stack.getTagCompound() : null;
+        Crafter c = tag != null && tag.hasKey(ITEM_TAG, 10) ? Crafter.read(x, y, z, tag.getCompoundTag(ITEM_TAG)) : new Crafter(x, y, z);
+        FluidStack f = fluidOf(stack);
+        if (f != null) t.setContents(f, null, null);
+        d.put(c);
+        hudUpdate(world, c);
+        ValierTweaks.LOG.info("{} placed an XP crafter at {}", player == null ? "Something" : player.getCommandSenderName(),
             c.where());
+    }
+
+    /**
+     * The crafter block going, however (see {@link BlockXpCrafter#breakBlock}): it drops as the crafter item, knowing
+     * what it knew and holding its tank's fluid; its store and slots drop too, and its record is gone.
+     */
+    static void broken(World w, TileXpCrafter t) {
+        int x = t.xCoord, y = t.yCoord, z = t.zCoord;
+        Data d = data(w, false);
+        Crafter c = d == null ? null : d.at(x, y, z);
+        LootSpawners.drop(w, x, y, z, toItem(c != null ? c : new Crafter(x, y, z), t.getFluid()));
+        for (int i = 0; i < t.slots.length; i++) {
+            if (t.slots[i] != null) LootSpawners.drop(w, x, y, z, t.slots[i]);
+            t.slots[i] = null;
+        }
+        t.fluid = null;
+        if (c == null) return;
+        for (int i = 0; i < Crafter.STORE; i++) {
+            if (c.store[i] != null) LootSpawners.drop(w, x, y, z, c.store[i]);
+            c.store[i] = null;
+        }
+        d.remove(c);
+        ValierTweaks.LOG.info("The XP crafter at {} was broken and dropped as an item", c.where());
     }
 
     /**
@@ -886,7 +1016,7 @@ public final class XpCrafters {
      */
     @SubscribeEvent(priority = EventPriority.LOW)
     public void onHarvest(BlockEvent.HarvestDropsEvent event) {
-        if (event.world.isRemote) return;
+        if (event.world.isRemote || event.block == ModBlocks.xpCrafter) return; // the block drops it itself
         Data d = data(event.world, false);
         Crafter c = d == null ? null : d.at(event.x, event.y, event.z);
         if (c == null) return;
@@ -931,8 +1061,14 @@ public final class XpCrafters {
             return;
         }
         if (state < 0) return;
+        if (state == 2 && (RevertBlocks.reverting || convert(w, d, c) == null)) return; // the old kind: the block now
+        TileXpCrafter t = tankAt(w, c.x, c.y, c.z);
+        if (t == null) return;
         if (!TweaksConfig.xpCrafter) c.status = Status.OFF;
-        else cycle(w, d, c, tankAt(w, c.x, c.y, c.z));
+        else {
+            t.emptyContainers();
+            cycle(w, d, c, t);
+        }
         hudUpdate(w, c);
     }
 
@@ -954,7 +1090,7 @@ public final class XpCrafters {
      * that over too. XP is taken from the tank only as needed, so with nothing to craft (or no room) it stays in the tank;
      * when the tank hasn't enough (or holds another fluid), solid XP touching it makes up the rest.
      */
-    static void cycle(World w, Data d, Crafter c, MTEBasicTank tank) {
+    static void cycle(World w, Data d, Crafter c, TileXpCrafter tank) {
         handOver(w, d, c);
         XpRecipe r = c.makes == null ? null : recipeFor(c.makes);
         if (r == null) {
@@ -1207,7 +1343,7 @@ public final class XpCrafters {
         t.setInteger("Bank", c.bank);
         t.setLong("Made", c.made);
         t.setInteger("Stored", c.stored());
-        MTEBasicTank tank = tankAt(w, c.x, c.y, c.z);
+        TileXpCrafter tank = tankAt(w, c.x, c.y, c.z);
         FluidStack f = tank == null ? null : tank.getFluid();
         if (f != null && f.amount > 0 && f.getFluid() != null) {
             t.setInteger("Tank", f.amount);
@@ -1227,7 +1363,7 @@ public final class XpCrafters {
         else msg.appendSibling(new ChatComponentText("makes " + countName(product(c, r)) + " from " + mb(cost(c, r))
             + " mB of liquid XP each, into the chests, inventories and pipes touching it, or its store. Now: "
             + c.status.words + "."));
-        MTEBasicTank tank = tankAt(w, c.x, c.y, c.z);
+        TileXpCrafter tank = tankAt(w, c.x, c.y, c.z);
         FluidStack f = tank == null ? null : tank.getFluid();
         msg.appendSibling(new ChatComponentText(" Its tank: " + (f == null || f.amount <= 0 ? "empty"
             : mb(f.amount) + " mB of " + f.getFluid()

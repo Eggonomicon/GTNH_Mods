@@ -32,8 +32,15 @@ public final class TweaksConfig {
     public static boolean lootSpawnerInfernalMobs = true;
     public static boolean lootSpawnerSpecialMobs = true;
     public static boolean lootSpawnerWrench = true;
-    public static boolean lootSpawnerHoverName = true;
     public static boolean lootSpawnerSpawnEggs = false;
+    public static int[] pipeItems = { 8, 32, 64, 64 };
+    public static int[] pipeFluids = { 1000, 4000, 16000, 16000 };
+    public static int[] pipeTicks = { 20, 10, 5, 5 };
+    public static int pipeMaxSleepTicks = 100;
+    public static int pipeBudgetMicros = 2000;
+    public static int pipeNetworkMax = 4096;
+    public static boolean pipeWirelessCrossDimension = true;
+    public static int pipeHeldStacks = 4;
     public static boolean xpCrafter = true;
     public static String xpCrafterTank = "gregtech:gt.blockmachines:817";
     public static String[] xpCrafterFluids = { "xpjuice" };
@@ -167,12 +174,9 @@ public final class TweaksConfig {
         lootSpawnerWrench = c.getBoolean("lootSpawnerWrench", cat, true,
             "Sneak-right-click a loot spawner with a wrench (GregTech, EnderIO Yeta, AE2 quartz, BuildCraft and the like) "
                 + "and it comes off as a Valier Loot Spawner item: same mob, settings and emerald block; the loot it was "
-                + "keeping drops. Placing the item makes it a loot spawner again. Claims are respected. Breaking one "
-                + "with a pickaxe is unchanged.");
-        lootSpawnerHoverName = c.getBoolean("lootSpawnerHoverName", cat, true,
-            "Players' WAILA hover on a loot spawner says \"Monster Spawner (Valier Loot Spawner: Zombie)\" instead of "
-                + "\"Monster Spawner (Zombie)\". The price: the little mob inside the cage isn't drawn, because clients "
-                + "draw it from that same name. Off: the mob spins in the cage and the hover names only the mob.");
+                + "keeping drops. Placing the item makes it a loot spawner again. Claims are respected. Without it, a "
+                + "loot spawner can't be moved except with a dolly (players can't break one).");
+        c.getCategory(cat).remove("lootSpawnerHoverName"); // 2.0.0: players see the mob and the block's own name
         lootSpawnerSpawnEggs = c.getBoolean("lootSpawnerSpawnEggs", cat, false,
             "Sneak-right-click a loot spawner with a spawn egg and it makes that mob's loot from now on, the mobs dressed "
                 + "as a vanilla spawner dresses them. The egg is used up (not in creative). Claims apply, blocked mobs are "
@@ -228,6 +232,26 @@ public final class TweaksConfig {
             "Chain armour macerates into whole steel dust: a chain helmet gives 1 steel dust instead of 5 small piles, "
                 + "chain leggings 2 instead of 7 small piles (boots 1 and chestplates 2, as before), so a full set still "
                 + "gives 6. All GregTech macerators. Clients' NEI still shows the small piles.");
+        cat = "pipes";
+        c.setCategoryComment(cat, "Valier item and fluid pipes. Four tiers each (Basic, Advanced, Elite, Wireless): the lists "
+            + "give each tier's value in that order. Players need the same values for their menus to show them right; the "
+            + "server's are what count.");
+        pipeItems = c.get(cat, "pipeItems", pipeItems, "Items one Extract or Request face moves per transfer, at most (a "
+            + "face's own amount can be lower).").getIntList();
+        pipeFluids = c.get(cat, "pipeFluids", pipeFluids, "Fluid (mB) one Extract or Request face moves per transfer, at most.")
+            .getIntList();
+        pipeTicks = c.get(cat, "pipeTicks", pipeTicks, "Ticks between an Extract or Request face's transfers (20 = once a "
+            + "second).").getIntList();
+        pipeMaxSleepTicks = c.getInt("pipeMaxSleepTicks", cat, 100, 20, 1200, "A face that finds nothing to do waits twice as "
+            + "long each time, up to this many ticks (a change in the block it touches wakes it sooner).");
+        pipeBudgetMicros = c.getInt("pipeBudgetMicros", cat, 2000, 100, 50000, "At most this many microseconds a tick on "
+            + "pipes; faces still due wait for the next tick.");
+        pipeNetworkMax = c.getInt("pipeNetworkMax", cat, 4096, 1, 1000000, "A network of more pipes than this does nothing "
+            + "(a safety limit against huge accidental networks).");
+        pipeWirelessCrossDimension = c.getBoolean("pipeWirelessCrossDimension", cat, true, "Wireless pipes link across "
+            + "dimensions (both ends' chunks must be loaded either way).");
+        pipeHeldStacks = c.getInt("pipeHeldStacks", cat, 4, 1, 64, "Stacks a face may hold back (what a block took less of than "
+            + "it said and that couldn't go back); past that the oldest drops.");
         if (c.hasChanged()) c.save();
     }
 }

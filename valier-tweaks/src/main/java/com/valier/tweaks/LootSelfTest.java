@@ -171,8 +171,8 @@ public final class LootSelfTest {
         said[0] = null;
         ev = click(s1);
         TileEntity t1 = te(s1);
-        SelfTest.check(ev.isCanceled() && t1 instanceof LootSpawnerTile,
-            "sneak-right-click with a diamond block makes a loot spawner (and the block isn't placed)");
+        SelfTest.check(ev.isCanceled() && t1 instanceof LootSpawnerTile && world.getBlock(s1[0], y, s1[2]) == ModBlocks.lootSpawner,
+            "sneak-right-click with a diamond block makes a Valier Loot Spawner block (and the diamond block isn't placed)");
         SelfTest.check(held() == 2, "one diamond block is used up (" + held() + " left)");
         SelfTest.check(said[0] != null && said[0].startsWith("Loot spawner made") && said[0].contains("Zombie"),
             "the player is told (" + said[0] + ")");
@@ -508,9 +508,9 @@ public final class LootSelfTest {
                 .contains("Zombie")
             && lore.tagCount() == 3 && lore.getStringTagAt(1)
                 .contains("damaged")
-            && item.getItemDamage() == 54 && LootSpawners.savedSpawner(item) != null,
-            "the item is a Valier Loot Spawner (Zombie) that says it throws damaged items away, with the zombie's id ("
-                + item.getDisplayName() + ", " + item.getItemDamage() + ")");
+            && item.getItem() == Item.getItemFromBlock(ModBlocks.lootSpawner) && LootSpawners.savedSpawner(item) != null,
+            "the item is a Valier Loot Spawner (Zombie) block item that says it throws damaged items away ("
+                + item.getDisplayName() + ")");
         SelfTest.check(itemsNear(w1, Items.leather) == 3 && itemsNear(w1, emerald()) == 0,
             "the loot it kept drops, the emerald block goes with the item (" + itemsNear(w1, Items.leather) + " leather, "
                 + itemsNear(w1, emerald()) + " emerald blocks on the ground)");
@@ -534,23 +534,19 @@ public final class LootSelfTest {
             .getEntityNameToSpawn()) && "Zombie".equals(after.getString("EntityId")),
             "NEI naming a mob for the placed spawner changes nothing");
         NBTTagCompound sent = packetNbt((S35PacketUpdateTileEntity) l2.getDescriptionPacket());
-        String hover = sent == null ? null : sent.getString("EntityId");
-        SelfTest.check(hover != null && hover.contains("Valier Loot Spawner") && hover.contains("Zombie") && !sent.hasKey("SpawnData")
-            && EntityList.createEntityByName(hover, null) == null,
-            "players' hover names it (Monster Spawner (" + hover + ")): no mob has that name, so none is drawn");
+        SelfTest.check(sent != null && "Zombie".equals(sent.getString("EntityId")) && !sent.hasKey("SpawnData")
+            && sent.hasKey("ValierLooting") && EntityList.createEntityByName(sent.getString("EntityId"), null) != null,
+            "players' computers get the real mob, so it spins in the cage, and its levels for the name (" + sent + ")");
         LootSpawnerTile l5 = swordZombies(w5, 1.0F);
         NBTTagCompound sent5 = packetNbt((S35PacketUpdateTileEntity) l5.getDescriptionPacket());
-        TweaksConfig.lootSpawnerHoverName = false;
-        NBTTagCompound off5;
-        try {
-            off5 = packetNbt((S35PacketUpdateTileEntity) l5.getDescriptionPacket());
-        } finally {
-            TweaksConfig.lootSpawnerHoverName = true;
-        }
-        SelfTest.check(sent5 != null && !sent5.hasKey("SpawnData") && sent5.getString("EntityId")
-            .contains("Valier Loot Spawner"), "with spawn data (zombies with swords) the hover packet leaves it out too");
-        SelfTest.check(off5 != null && "Zombie".equals(off5.getString("EntityId")) && off5.getCompoundTag("SpawnData")
-            .hasKey("Equipment"), "with lootSpawnerHoverName off, clients get the mob and its spawn data again");
+        SelfTest.check(sent5 != null && "Zombie".equals(sent5.getString("EntityId")) && sent5.getCompoundTag("SpawnData")
+            .hasKey("Equipment") && !sent5.getCompoundTag("SpawnData")
+                .hasKey(LootSpawnerTile.MARK),
+            "with spawn data (zombies with swords) players get it too, so the cage's zombie holds its sword; never the mark");
+        ItemStack pick = ModBlocks.lootSpawner.getPickBlock(null, world, w5[0], y, w5[2]);
+        SelfTest.check(pick != null && pick.getDisplayName()
+            .contains("Valier Loot Spawner (Zombie") && LootSpawners.savedSpawner(pick) != null,
+            "pick-block (and WAILA's name) is the Valier Loot Spawner (Zombie) item (" + (pick == null ? null : pick.getDisplayName()) + ")");
 
         // Picked up again: placing it where a claim stops it places nothing and keeps the item.
         player.inventory.setInventorySlotContents(0, wrench);
@@ -583,10 +579,22 @@ public final class LootSelfTest {
         SelfTest.check(t4 != null && t4.getClass() == TileEntityMobSpawner.class && !LootSpawnerTile.isMarked((TileEntityMobSpawner) t4)
             && "Zombie".equals(((TileEntityMobSpawner) t4).func_145881_a()
                 .getEntityNameToSpawn())
-            && itemsNear(w4, emerald()) == 1,
-            "with loot spawners switched off, the item places a plain zombie spawner and drops its emerald block");
+            && world.getBlock(w4[0], y, w4[2]) == Blocks.mob_spawner && itemsNear(w4, emerald()) == 1,
+            "with loot spawners switched off, the item places a plain (vanilla) zombie spawner and drops its emerald block");
         world.setBlockToAir(w4[0], y, w4[2]);
         killItems(w4);
+
+        // A wrench's item from before 2.0.0 (a vanilla spawner item holding the same) still places a loot spawner block.
+        ItemStack old = new ItemStack(Blocks.mob_spawner, 1, 54);
+        old.setTagCompound((NBTTagCompound) spare.getTagCompound()
+            .copy());
+        TileEntity t4b = placeItem(old, w4);
+        SelfTest.check(t4b instanceof LootSpawnerTile && world.getBlock(w4[0], y, w4[2]) == ModBlocks.lootSpawner
+            && ((LootSpawnerTile) t4b).noDamaged && "Zombie".equals(((LootSpawnerTile) t4b).logic()
+                .getEntityNameToSpawn()),
+            "an item from before 2.0.0 (a vanilla spawner item) places a Valier Loot Spawner block, same mob and settings");
+        if (t4b instanceof LootSpawnerTile) LootSpawners.empty((LootSpawnerTile) t4b);
+        world.setBlockToAir(w4[0], y, w4[2]);
 
         LootSpawnerTile l6 = lootSpawner(w6, "Cow");
         TweaksConfig.lootSpawnerWrench = false;
@@ -849,9 +857,9 @@ public final class LootSelfTest {
         ll.writeToNBT(tag);
         copy = new LootSpawnerTile();
         copy.readFromNBT(tag);
-        SelfTest.check(said[0] != null && said[0].contains("Looting III (6 in it; the most)") && sent != null && sent.getString("EntityId")
-            .contains("Looting III") && copy.looting.blocks == 6 && copy.looting.paid == 6 && copy.looting.item != null,
-            "its status and players' hover say Looting III, and it is saved (" + said[0] + " / " + (sent == null ? null : sent.getString("EntityId")) + ")");
+        SelfTest.check(said[0] != null && said[0].contains("Looting III (6 in it; the most)") && sent != null
+            && sent.getInteger("ValierLooting") == 3 && copy.looting.blocks == 6 && copy.looting.paid == 6 && copy.looting.item != null,
+            "its status and players' name for it say Looting III, and it is saved (" + said[0] + " / " + sent + ")");
         ItemStack wrench = gtTool(IDMetaTool01.WRENCH);
         player.inventory.setInventorySlotContents(0, wrench);
         click(x2);
@@ -867,12 +875,10 @@ public final class LootSelfTest {
         TileEntity placed = item == null ? null : placeItem(item, x3);
         SelfTest.check(named && placed instanceof LootSpawnerTile && ((LootSpawnerTile) placed).looting.blocks == 6
             && ((LootSpawnerTile) placed).looting.paid == 6, "picked up with a wrench its item says Looting III, and placed it still has it");
-        ArrayList<ItemStack> drops = new ArrayList<>();
-        MinecraftForge.EVENT_BUS.post(new BlockEvent.HarvestDropsEvent(x3[0], y, x3[2], world, Blocks.mob_spawner, 0, 0, 1.0F,
-            drops, null, false));
-        int lapisDropped = 0;
-        for (ItemStack d : drops) if (d.getItem() == lapis) lapisDropped += d.stackSize;
-        SelfTest.check(lapisDropped == 6, "broken, its 6 lapis blocks drop (" + lapisDropped + ")");
+        world.setBlockToAir(x3[0], y, x3[2]); // what creative players, a Matter Manipulator or another mod do
+        int lapisDropped = itemsNear(x3, lapis);
+        SelfTest.check(lapisDropped == 6, "removed, its 6 lapis blocks drop (" + lapisDropped + ")");
+        killItems(x3);
         player.inventory.setInventorySlotContents(0, null);
     }
 
@@ -1093,11 +1099,10 @@ public final class LootSelfTest {
         for (int i = 0; i < lines.tagCount(); i++) lore |= lines.getStringTagAt(i)
             .contains("Speed III, 4× as fast");
         SelfTest.check(said[0] != null && said[0].contains("Speed III, 4× as fast (6 in it; the most)") && said[0].contains("Every 5–5 s")
-            && sent != null && sent.getString("EntityId")
-                .contains("Speed III")
+            && sent != null && sent.getInteger("ValierSpeed") == 3
             && copy.speed.blocks == 6 && copy.speed.paid == 6 && copy.speed.item != null && lore,
-            "its status, players' hover and the wrench's item say Speed III, and it is saved (" + said[0] + " / "
-                + (sent == null ? null : sent.getString("EntityId")) + ")");
+            "its status, players' name for it and the wrench's item say Speed III, and it is saved (" + said[0] + " / "
+                + sent + ")");
         said[0] = null;
         hit(p1);
         SelfTest.check(sp.speed.blocks == 0 && sp.speed.paid == 0 && invCount(cursed) == 6 && LootSpawners.nextDelay(sp, world) == plain
@@ -1232,10 +1237,10 @@ public final class LootSelfTest {
 
     /** Takes the first spawner item out of the player's inventory. */
     ItemStack takeSpawnerItem() {
-        Item spawnerItem = Item.getItemFromBlock(Blocks.mob_spawner);
+        Item spawnerItem = Item.getItemFromBlock(Blocks.mob_spawner), ours = Item.getItemFromBlock(ModBlocks.lootSpawner);
         for (int i = 0; i < player.inventory.mainInventory.length; i++) {
             ItemStack s = player.inventory.mainInventory[i];
-            if (s != null && s.getItem() == spawnerItem && s.stackSize > 0) {
+            if (s != null && (s.getItem() == spawnerItem || s.getItem() == ours) && s.stackSize > 0) {
                 player.inventory.mainInventory[i] = null;
                 return s;
             }
@@ -1266,39 +1271,48 @@ public final class LootSelfTest {
         TileEntity t7 = te(s7p);
         NBTTagCompound tag = new NBTTagCompound();
         t7.writeToNBT(tag);
-        SelfTest.check("MobSpawner".equals(tag.getString("id")) && tag.getCompoundTag("SpawnData")
+        SelfTest.check((ValierTweaks.MODID + ".LootSpawner").equals(tag.getString("id")) && tag.getCompoundTag("SpawnData")
             .getCompoundTag(LootSpawnerTile.MARK)
             .getTagList("Items", 10)
-            .tagCount() == 1, "it saves as a plain spawner, with what it keeps inside its spawn data");
-        TileEntity plain = TileEntity.createAndLoadEntity(tag);
-        SelfTest.check(plain != null && plain.getClass() == TileEntityMobSpawner.class
-            && LootSpawnerTile.isMarked((TileEntityMobSpawner) plain)
-            && "Cow".equals(((TileEntityMobSpawner) plain).func_145881_a()
-                .getEntityNameToSpawn()),
-            "without this mod it would load as a plain cow spawner");
+            .tagCount() == 1, "it saves under its own id, with what it keeps inside its spawn data (" + tag.getString("id") + ")");
+        TileEntity loaded = TileEntity.createAndLoadEntity(tag);
+        SelfTest.check(loaded instanceof LootSpawnerTile && ((LootSpawnerTile) loaded).stacksHeld() == 1,
+            "and loads as a loot spawner tile again");
 
+        // A loot spawner as 1.x saved it: a marked vanilla spawner ("MobSpawner") on the vanilla block.
+        NBTTagCompound legacy = (NBTTagCompound) tag.copy();
+        legacy.setString("id", "MobSpawner");
         int[] s8p = { bx + 2, y, bz + 10 };
         TileEntityMobSpawner v8 = spawner(s8p, "Pig");
-        v8.readFromNBT(movedTo(tag, s8p));
+        v8.readFromNBT(movedTo(legacy, s8p));
         int swapped = LootSpawners.scan();
         TileEntity t8 = te(s8p);
-        SelfTest.check(swapped >= 1 && t8 instanceof LootSpawnerTile && ((LootSpawnerTile) t8).stacksHeld() == 1
-            && "Cow".equals(((LootSpawnerTile) t8).candidates.get(0).type),
-            "moved the way a dolly does, it is a loot spawner again (the 2 s scan), still holding its loot");
+        SelfTest.check(swapped >= 1 && t8 instanceof LootSpawnerTile && world.getBlock(s8p[0], y, s8p[2]) == ModBlocks.lootSpawner
+            && ((LootSpawnerTile) t8).stacksHeld() == 1 && "Cow".equals(((LootSpawnerTile) t8).candidates.get(0).type),
+            "the old kind (a marked vanilla spawner, as 1.x saved it or a dolly moved it) becomes the block (the 2 s scan), "
+                + "still holding its loot");
 
         int[] s9p = { bx + 6, y, bz + 10 };
         TileEntityMobSpawner v9 = spawner(s9p, "Pig");
-        v9.readFromNBT(movedTo(tag, s9p));
+        v9.readFromNBT(movedTo(legacy, s9p));
         Chunk chunk = world.getChunkFromBlockCoords(s9p[0], s9p[2]);
         MinecraftForge.EVENT_BUS.post(new ChunkDataEvent.Load(chunk, new NBTTagCompound()));
         Object t9 = chunk.chunkTileEntityMap.get(new ChunkPosition(s9p[0] & 15, y, s9p[2] & 15));
-        SelfTest.check(t9 instanceof LootSpawnerTile && v9.isInvalid(), "as its chunk loads, a saved loot spawner is swapped back first");
+        SelfTest.check(t9 instanceof LootSpawnerTile && v9.isInvalid() && world.getBlock(s9p[0], y, s9p[2]) == Blocks.mob_spawner,
+            "as its chunk loads, an old one gets its loot spawner tile first (the block changes at the end of the tick)");
         if (t9 instanceof LootSpawnerTile) world.setTileEntity(s9p[0], y, s9p[2], (TileEntity) t9);
+        LootSpawners.convertPending();
+        TileEntity t9b = te(s9p);
+        SelfTest.check(world.getBlock(s9p[0], y, s9p[2]) == ModBlocks.lootSpawner && t9b instanceof LootSpawnerTile
+            && ((LootSpawnerTile) t9b).stacksHeld() == 1 && "Cow".equals(((LootSpawnerTile) t9b).candidates.get(0).type),
+            "and then it is the block, with its loot and mob");
 
         S35PacketUpdateTileEntity packet = (S35PacketUpdateTileEntity) s4.getDescriptionPacket();
         NBTTagCompound sent = packetNbt(packet); // its getter is client-only
-        SelfTest.check(sent != null && !sent.hasKey("SpawnData") && !sent.hasKey("SpawnPotentials") && sent.getString("EntityId")
-            .contains("Valier Loot Spawner"), "clients get a plain spawner packet, without the loot data");
+        SelfTest.check(sent != null && !sent.hasKey("SpawnPotentials") && !sent.getCompoundTag("SpawnData")
+            .hasKey(LootSpawnerTile.MARK) && sent.hasKey("EntityId") && !sent.getString("EntityId")
+                .contains("Valier"),
+            "players get a plain spawner packet with the real mob, without the loot data (" + sent + ")");
     }
 
     static NBTTagCompound packetNbt(S35PacketUpdateTileEntity packet) {
@@ -1337,17 +1351,15 @@ public final class LootSelfTest {
             TweaksConfig.lootSpawnerItem = item;
         }
 
-        // Blown up (drops come before the block goes): what it keeps joins the drops.
+        // Explosions, the Wither and survival players can't break it; only a wrench (or creative) takes it away.
         int[] s12 = { bx + 2, y, bz + 14 };
         LootSpawnerTile l12 = lootSpawner(s12, "Cow");
-        l12.addToBuffer(new ItemStack(Items.leather, 4));
-        l12.noDamaged = true;
-        l12.filterPaid = new ItemStack(Blocks.emerald_block);
-        ArrayList<ItemStack> drops = new ArrayList<>();
-        MinecraftForge.EVENT_BUS.post(new BlockEvent.HarvestDropsEvent(s12[0], y, s12[2], world, Blocks.mob_spawner, 0, 0,
-            1.0F, drops, null, false));
-        SelfTest.check(has(drops, Items.leather, -1) && has(drops, emerald(), -1) && l12.isEmpty() && l12.filterPaid == null,
-            "blown up, what it kept (and the emerald block it took) is among the drops");
+        world.createExplosion(null, s12[0] + 0.5, y + 1.5, s12[2] + 0.5, 4.0F, true);
+        player.capabilities.isCreativeMode = false;
+        float hardness = ModBlocks.lootSpawner.getPlayerRelativeBlockHardness(player, world, s12[0], y, s12[2]);
+        SelfTest.check(te(s12) == l12 && world.getBlock(s12[0], y, s12[2]) == ModBlocks.lootSpawner && hardness == 0.0F
+            && !ModBlocks.lootSpawner.canEntityDestroy(world, s12[0], y, s12[2], null),
+            "an explosion next to it leaves it, the Wither can't break it, a survival player can't mine it (" + hardness + ")");
 
         // Switched off: marked spawners become plain spawners again, dressed as before, what they kept dropped on top.
         int[] s13 = { bx + 6, y, bz + 14 }, s14 = { bx + 10, y, bz + 14 };
@@ -1374,6 +1386,13 @@ public final class LootSelfTest {
             "and what it kept drops on top of it (" + itemsNear(s14, Items.leather) + " leather, "
                 + itemsNear(s14, emerald()) + " emerald block)");
         killItems(s14);
+        TileEntity t13 = te(s13);
+        SelfTest.check(world.getBlock(s13[0], y, s13[2]) == Blocks.mob_spawner && t13 != null
+            && t13.getClass() == TileEntityMobSpawner.class && !LootSpawnerTile.isMarked((TileEntityMobSpawner) t13)
+            && itemsNear(s13, Items.leather) == 2 && itemsNear(s13, emerald()) == 1,
+            "switched off, a Valier Loot Spawner block is a plain vanilla cow spawner again too, what it kept on top ("
+                + itemsNear(s13, Items.leather) + " leather)");
+        killItems(s13);
     }
 
     NBTTagCompound movedTo(NBTTagCompound tag, int[] p) {
@@ -1393,11 +1412,11 @@ public final class LootSelfTest {
         s6.addToBuffer(new ItemStack(Items.leather, 7));
         s6.noDamaged = true;
         s6.filterPaid = new ItemStack(Blocks.emerald_block);
-        MinecraftForge.EVENT_BUS.post(new BlockEvent.BreakEvent(s6p[0], y, s6p[2], world, Blocks.mob_spawner, 0, player));
+        MinecraftForge.EVENT_BUS.post(new BlockEvent.BreakEvent(s6p[0], y, s6p[2], world, ModBlocks.lootSpawner, 0, player));
         world.setBlockToAir(s6p[0], y, s6p[2]);
         TileEntity t7 = te(s7p);
         if (t7 instanceof LootSpawnerTile) ((LootSpawnerTile) t7).addToBuffer(new ItemStack(Items.leather, 3));
-        MinecraftForge.EVENT_BUS.post(new BlockEvent.BreakEvent(s7p[0], y, s7p[2], world, Blocks.mob_spawner, 0, player));
+        MinecraftForge.EVENT_BUS.post(new BlockEvent.BreakEvent(s7p[0], y, s7p[2], world, ModBlocks.lootSpawner, 0, player));
 
         // Unloaded and loaded again.
         s10p = new int[] { rx + 4, y, bz + 4 };
