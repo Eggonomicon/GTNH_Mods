@@ -30,6 +30,10 @@ public class TilePipe extends TileEntity {
     /** Bits 0-5: joined to a pipe on that side; bits 6-11: touching a block with an inventory (or tank) there. */
     int conn;
     final FaceConfig[] faces = new FaceConfig[6];
+    /** A creative pipe's centre: what it makes, endlessly ({@link CreativeSource}); null on other tiers. */
+    FaceConfig source;
+    /** The "side" of a creative pipe's source settings (menus, the network). */
+    public static final int SOURCE = 6;
     UUID owner;
     String ownerName = "";
     /** Players' computers: {@link #conn} plus three bits per side for the face modes, from bit 12. */
@@ -57,9 +61,21 @@ public class TilePipe extends TileEntity {
         return (conn >> (6 + side) & 1) != 0;
     }
 
-    /** The face settings of a side touching a block (made with the defaults the first time), or null. */
+    public boolean creative() {
+        return tier() == PipeTier.CREATIVE;
+    }
+
+    /**
+     * The face settings of a side touching a block (made with the defaults the first time), or null. Side
+     * {@link #SOURCE}: a creative pipe's source settings.
+     */
     public FaceConfig face(int side) {
-        if (!blockOn(side)) return null;
+        if (side == SOURCE) {
+            if (!creative()) return null;
+            if (source == null) source = new FaceConfig();
+            return source;
+        }
+        if (side < 0 || side > 5 || !blockOn(side)) return null;
         if (faces[side] == null) faces[side] = new FaceConfig();
         return faces[side];
     }
@@ -201,6 +217,7 @@ public class TilePipe extends TileEntity {
             list.appendTag(f);
         }
         if (list.tagCount() > 0) nbt.setTag("Faces", list);
+        if (source != null) nbt.setTag("Source", source.settings());
         if (owner != null) {
             nbt.setLong("OwnerMost", owner.getMostSignificantBits());
             nbt.setLong("OwnerLeast", owner.getLeastSignificantBits());
@@ -220,6 +237,7 @@ public class TilePipe extends TileEntity {
             int s = f.getByte("Side");
             if (s >= 0 && s < 6) faces[s] = FaceConfig.read(f);
         }
+        source = nbt.hasKey("Source", 10) ? FaceConfig.read(nbt.getCompoundTag("Source")) : null;
         owner = nbt.hasKey("OwnerMost") ? new UUID(nbt.getLong("OwnerMost"), nbt.getLong("OwnerLeast")) : null;
         ownerName = nbt.getString("OwnerName");
     }

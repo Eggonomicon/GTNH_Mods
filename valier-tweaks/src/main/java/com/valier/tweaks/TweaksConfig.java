@@ -33,9 +33,9 @@ public final class TweaksConfig {
     public static boolean lootSpawnerSpecialMobs = true;
     public static boolean lootSpawnerWrench = true;
     public static boolean lootSpawnerSpawnEggs = false;
-    public static int[] pipeItems = { 8, 32, 64, 64 };
-    public static int[] pipeFluids = { 1000, 4000, 16000, 16000 };
-    public static int[] pipeTicks = { 20, 10, 5, 5 };
+    public static int[] pipeItems = com.valier.tweaks.pipe.PipeTier.ITEMS.clone();
+    public static int[] pipeFluids = com.valier.tweaks.pipe.PipeTier.FLUIDS.clone();
+    public static int[] pipeTicks = com.valier.tweaks.pipe.PipeTier.TICKS.clone();
     public static int pipeMaxSleepTicks = 100;
     public static int pipeBudgetMicros = 2000;
     public static int pipeNetworkMax = 4096;
@@ -233,15 +233,15 @@ public final class TweaksConfig {
                 + "chain leggings 2 instead of 7 small piles (boots 1 and chestplates 2, as before), so a full set still "
                 + "gives 6. All GregTech macerators. Clients' NEI still shows the small piles.");
         cat = "pipes";
-        c.setCategoryComment(cat, "Valier item and fluid pipes. Four tiers each (Basic, Advanced, Elite, Wireless): the lists "
-            + "give each tier's value in that order. Players need the same values for their menus to show them right; the "
-            + "server's are what count.");
-        pipeItems = c.get(cat, "pipeItems", pipeItems, "Items one Extract or Request face moves per transfer, at most (a "
-            + "face's own amount can be lower).").getIntList();
-        pipeFluids = c.get(cat, "pipeFluids", pipeFluids, "Fluid (mB) one Extract or Request face moves per transfer, at most.")
-            .getIntList();
-        pipeTicks = c.get(cat, "pipeTicks", pipeTicks, "Ticks between an Extract or Request face's transfers (20 = once a "
-            + "second).").getIntList();
+        c.setCategoryComment(cat, "Valier item and fluid pipes. Seven tiers each; the lists give each tier's value in this "
+            + "order: Basic, Advanced, Elite, Wireless, Superior, Ultimate, Creative (the block metadata). Players need the "
+            + "same values for their menus to show them right; the server's are what count.");
+        pipeItems = tiers(c.get(cat, "pipeItems", com.valier.tweaks.pipe.PipeTier.ITEMS, "Items one Extract or Request face "
+            + "moves per transfer, at most (a face's own amount can be lower)."), com.valier.tweaks.pipe.PipeTier.ITEMS);
+        pipeFluids = tiers(c.get(cat, "pipeFluids", com.valier.tweaks.pipe.PipeTier.FLUIDS, "Fluid (mB) one Extract or "
+            + "Request face moves per transfer, at most."), com.valier.tweaks.pipe.PipeTier.FLUIDS);
+        pipeTicks = tiers(c.get(cat, "pipeTicks", com.valier.tweaks.pipe.PipeTier.TICKS, "Ticks between an Extract or "
+            + "Request face's transfers (20 = once a second)."), com.valier.tweaks.pipe.PipeTier.TICKS);
         pipeMaxSleepTicks = c.getInt("pipeMaxSleepTicks", cat, 100, 20, 1200, "A face that finds nothing to do waits twice as "
             + "long each time, up to this many ticks (a change in the block it touches wakes it sooner).");
         pipeBudgetMicros = c.getInt("pipeBudgetMicros", cat, 2000, 100, 50000, "At most this many microseconds a tick on "
@@ -253,5 +253,15 @@ public final class TweaksConfig {
         pipeHeldStacks = c.getInt("pipeHeldStacks", cat, 4, 1, 64, "Stacks a face may hold back (what a block took less of than "
             + "it said and that couldn't go back); past that the oldest drops.");
         if (c.hasChanged()) c.save();
+    }
+
+    /** A per-tier list; one saved before a tier existed (2.0 had four) gets that tier's default added. */
+    private static int[] tiers(net.minecraftforge.common.config.Property p, int[] defaults) {
+        int[] v = p.getIntList();
+        if (v.length >= defaults.length) return v;
+        int[] out = java.util.Arrays.copyOf(v, defaults.length);
+        for (int i = v.length; i < defaults.length; i++) out[i] = defaults[i];
+        p.set(out);
+        return out;
     }
 }

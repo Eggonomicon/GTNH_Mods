@@ -1,5 +1,7 @@
-"""The pipe menu's icons, drawn from code (no image goes in; see ASSETS-PROVENANCE.md): one 256x16 strip of 16x16 icons,
+"""The pipe menu's icons, drawn from code (no image goes in; see ASSETS-PROVENANCE.md): one 512x16 strip of 16x16 icons (room for 32),
 in the order GuiPipeFace's ICON_* constants name them. gen_textures.py writes it to textures/gui/pipe_icons.png."""
+import math
+
 from PIL import Image
 
 K = (24, 24, 28)
@@ -157,12 +159,46 @@ def icon(n):
                 if (nx, ny) not in pts:
                     _px(img, nx, ny, K)
         _rect(img, 5, 7, 6, 8, K)
+    elif n == 16:  # void: a black hole, a dark core in a violet swirl
+        for y in range(16):
+            for x in range(16):
+                d = ((x - 7.5) ** 2 + (y - 7.5) ** 2) ** 0.5
+                if d <= 3.0:
+                    img[y][x] = (8, 4, 14)
+                elif d <= 6.8:
+                    a = math.atan2(y - 7.5, x - 7.5) + d * 0.9
+                    light = 0.5 + 0.5 * math.sin(a * 2)
+                    img[y][x] = (int(70 + 110 * light), int(20 + 40 * light), int(110 + 120 * light))
+                elif d <= 7.6:
+                    img[y][x] = K
+    elif n in (17, 18, 19):  # spread: in order, round robin, even split; three bins, filled to show how
+        fills = {17: (11, 3, 0), 18: (6, 5, 6), 19: (7, 7, 7)}[n]
+        for i, h in enumerate(fills):
+            x0 = 1 + i * 5
+            _rect(img, x0, 3, x0 + 3, 14, K)
+            _rect(img, x0 + 1, 4, x0 + 2, 13, (200, 200, 205))
+            if h:
+                _rect(img, x0 + 1, 14 - h, x0 + 2, 13, (70, 140, 230))
+        if n == 17:  # a "1" over the first bin
+            for y in range(0, 3):
+                _px(img, 2, y, (240, 210, 90))
+                _px(img, 3, y, (240, 210, 90))
+        if n == 18:  # a loop arrow along the top
+            for x in range(2, 14):
+                _px(img, x, 1, (240, 210, 90))
+            _px(img, 13, 0, (240, 210, 90))
+            _px(img, 13, 2, (240, 210, 90))
+            _px(img, 12, 0, (240, 210, 90))
+            _px(img, 12, 2, (240, 210, 90))
     return img
 
 
+COUNT = 20
+
+
 def strip():
-    out = Image.new('RGBA', (256, 16), (0, 0, 0, 0))
-    for n in range(16):
+    out = Image.new('RGBA', (512, 16), (0, 0, 0, 0))
+    for n in range(COUNT):
         img = icon(n)
         for y in range(16):
             for x in range(16):

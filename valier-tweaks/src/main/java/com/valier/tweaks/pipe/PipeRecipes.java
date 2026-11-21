@@ -19,7 +19,11 @@ import gregtech.api.enums.ItemList;
  * Basic (8):    bronze plates around a hopper (items) or bucket (fluid), glass panes left and right
  * Advanced (8): 8 Basic around an LV conveyor (items) or LV pump (fluid)
  * Elite (8):    8 Advanced around an MV conveyor or MV pump
+ * Superior (8): 8 Elite around an HV conveyor or HV pump
+ * Ultimate (8): 8 Superior around an EV conveyor or EV pump
  * Wireless (1): an Elite pipe, an ender pearl, an MV emitter and an MV sensor
+ * Creative:     none (creative tab and NEI only)
+ * Pipe Configurator: a Basic item pipe, a Basic fluid pipe, redstone and paper (shapeless)
  * </pre>
  *
  * Without GregTech (a test client): iron instead of bronze plates, a hopper or bucket for every part.
@@ -35,16 +39,24 @@ public final class PipeRecipes {
             Object core = kind == PipeKind.ITEM ? new ItemStack(Blocks.hopper) : new ItemStack(Items.bucket);
             Object lv = gt ? (kind == PipeKind.ITEM ? Gt.conveyorLV() : Gt.pumpLV()) : core;
             Object mv = gt ? (kind == PipeKind.ITEM ? Gt.conveyorMV() : Gt.pumpMV()) : core;
+            Object hv = gt ? (kind == PipeKind.ITEM ? Gt.conveyorHV() : Gt.pumpHV()) : core;
+            Object ev = gt ? (kind == PipeKind.ITEM ? Gt.conveyorEV() : Gt.pumpEV()) : core;
             GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(block, 8, PipeTier.BASIC), "PPP", "GCG", "PPP", 'P',
                 gt ? "plateBronze" : "ingotIron", 'G', "paneGlass", 'C', core));
             GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(block, 8, PipeTier.ADVANCED), "BBB", "BCB", "BBB", 'B',
                 new ItemStack(block, 1, PipeTier.BASIC), 'C', lv));
             GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(block, 8, PipeTier.ELITE), "BBB", "BCB", "BBB", 'B',
                 new ItemStack(block, 1, PipeTier.ADVANCED), 'C', mv));
+            GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(block, 8, PipeTier.SUPERIOR), "BBB", "BCB", "BBB", 'B',
+                new ItemStack(block, 1, PipeTier.ELITE), 'C', hv));
+            GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(block, 8, PipeTier.ULTIMATE), "BBB", "BCB", "BBB", 'B',
+                new ItemStack(block, 1, PipeTier.SUPERIOR), 'C', ev));
             GameRegistry.addRecipe(new ShapelessOreRecipe(new ItemStack(block, 1, PipeTier.WIRELESS),
                 new ItemStack(block, 1, PipeTier.ELITE), new ItemStack(Items.ender_pearl), gt ? Gt.emitterMV() : Items.ender_eye,
                 gt ? Gt.sensorMV() : Items.ender_eye));
         }
+        GameRegistry.addRecipe(new ShapelessOreRecipe(new ItemStack(ModBlocks.pipeConfigurator), new ItemStack(ModBlocks.itemPipe, 1,
+            PipeTier.BASIC), new ItemStack(ModBlocks.fluidPipe, 1, PipeTier.BASIC), "dustRedstone", new ItemStack(Items.paper)));
     }
 
     /** GregTech's parts (only touched with GregTech loaded). */
@@ -56,6 +68,22 @@ public final class PipeRecipes {
 
         static ItemStack conveyorMV() {
             return ItemList.Conveyor_Module_MV.get(1);
+        }
+
+        static ItemStack conveyorHV() {
+            return ItemList.Conveyor_Module_HV.get(1);
+        }
+
+        static ItemStack conveyorEV() {
+            return ItemList.Conveyor_Module_EV.get(1);
+        }
+
+        static ItemStack pumpHV() {
+            return ItemList.Electric_Pump_HV.get(1);
+        }
+
+        static ItemStack pumpEV() {
+            return ItemList.Electric_Pump_EV.get(1);
         }
 
         static ItemStack pumpLV() {

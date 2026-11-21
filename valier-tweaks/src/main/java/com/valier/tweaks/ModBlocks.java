@@ -12,6 +12,7 @@ public final class ModBlocks {
     public static BlockLootSpawner lootSpawner;
     public static BlockXpCrafter xpCrafter;
     public static com.valier.tweaks.pipe.BlockPipe itemPipe, fluidPipe;
+    public static com.valier.tweaks.pipe.ItemPipeConfigurator pipeConfigurator;
 
     private ModBlocks() {}
 
@@ -34,5 +35,8 @@ public final class ModBlocks {
         GameRegistry.registerBlock(itemPipe, com.valier.tweaks.pipe.ItemBlockPipe.class, "item_pipe");
         GameRegistry.registerBlock(fluidPipe, com.valier.tweaks.pipe.ItemBlockPipe.class, "fluid_pipe");
         GameRegistry.registerTileEntity(com.valier.tweaks.pipe.TilePipe.class, ValierTweaks.MODID + ".Pipe");
+        pipeConfigurator = new com.valier.tweaks.pipe.ItemPipeConfigurator();
+        pipeConfigurator.setCreativeTab(tab);
+        GameRegistry.registerItem(pipeConfigurator, "pipe_configurator");
     }
 }

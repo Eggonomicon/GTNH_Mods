@@ -29,6 +29,7 @@ import com.valier.tweaks.ValierTweaks;
 import com.valier.tweaks.pipe.ContainerPipeFace;
 import com.valier.tweaks.pipe.FaceConfig;
 import com.valier.tweaks.pipe.FaceMode;
+import com.valier.tweaks.pipe.FilterList;
 import com.valier.tweaks.pipe.PipeActionMessage;
 import com.valier.tweaks.pipe.PipeTier;
 import com.valier.tweaks.pipe.TilePipe;
@@ -41,20 +42,26 @@ import com.valier.tweaks.pipe.TilePipe;
  * <ul>
  * <li>Top: mode (left-click next, right-click back), redstone, overflow (Provide), priority; per transfer and every N
  * ticks (steppers; the mouse wheel works on them too); the tag.</li>
- * <li>Filter: item list, mod list or existing items; whitelist/blacklist, damage, NBT, ore dictionary; snapshot (fill
- * the list from the block), clear. 18 ghost slots: left-click with an item sets (a stack sets the amount too),
- * right-click clears, the mouse wheel changes the amount (keep that many in the block); items dragged from NEI set a
- * slot too, so nobody needs to own the item.</li>
+ * <li>Filter: three lists at once, picked by the tabs (Allow, Deny, Void). Each: item list, mod list or existing items;
+ * damage, NBT, ore dictionary; snapshot (fill the list from the block), clear. 18 ghost slots: left-click with an item
+ * sets (a stack sets the amount too), right-click clears, the mouse wheel changes the amount (Allow: keep that many in
+ * the block; Void: destroy only what is over it); items dragged from NEI set a slot too, so nobody needs to own the
+ * item.</li>
+ * <li>Pulling faces: the spread (in order, round robin, even split) where the overflow button sits on Provide faces.</li>
  * </ul>
  */
 public class GuiPipeFace extends GuiContainer {
 
     static final ResourceLocation ICONS = new ResourceLocation(ValierTweaks.MODID, "textures/gui/pipe_icons.png");
     // Icon strip positions (tools/gui_icons.py).
-    static final int ICON_OFF = 0, ICON_WHITE = 6, ICON_BLACK = 7, ICON_CLEAR = 8, ICON_CHECK = 9, ICON_CROSS = 10,
-        ICON_ITEMS = 11, ICON_MODS = 12, ICON_EXISTING = 13, ICON_SNAPSHOT = 14, ICON_TAG = 15;
+    static final int ICON_OFF = 0, ICON_ALLOW = 6, ICON_DENY = 7, ICON_CLEAR = 8, ICON_CHECK = 9, ICON_CROSS = 10,
+        ICON_ITEMS = 11, ICON_MODS = 12, ICON_EXISTING = 13, ICON_SNAPSHOT = 14, ICON_TAG = 15, ICON_VOID = 16,
+        ICON_SPREAD = 17; // + Spread ordinal
+    static final int[] LIST_ICONS = { ICON_ALLOW, ICON_DENY, ICON_VOID };
+    static final int[] LIST_COLOURS = { 0x7CFF7C, 0xFF7C7C, 0xE6A0FF };
+    static final int[] AMOUNT_COLOURS = { 0xFFFF60, 0xFFFF60, 0xE6A0FF };
     static final int TEXT = 0x404040;
-    static final String[] SIDES = { "Below", "Above", "North", "South", "West", "East" };
+    static final String[] SIDES = { "Below", "Above", "North", "South", "West", "East", "Source" };
 
     final ContainerPipeFace c;
     final List<Widget> widgets = new ArrayList<>();
@@ -71,6 +78,66 @@ public class GuiPipeFace extends GuiContainer {
 
     FaceConfig cfg() {
         return c.cfg;
+    }
+
+    /** The list the filter shows. */
+    FilterList fl() {
+        return c.fl();
+    }
+
+    /** Whether a list does anything in the face's mode (Void: only on faces that pull or are pushed into). */
+    boolean used(int list) {
+        FaceMode m = cfg().mode;
+        if (m == FaceMode.OFF) return false;
+        if (c.source()) return list == FaceConfig.ALLOW;
+        if (list == FaceConfig.VOID) return m.pulls() || m.takesPushes();
+        return true;
+    }
+
+    /** What a list does in the face's mode, for the tooltips. */
+    List<String> listExplain(int list) {
+        FaceMode m = cfg().mode;
+        String what = c.fluid() ? "fluids" : "items";
+        List<String> out = new ArrayList<>();
+        out.add(EnumChatFormatting.WHITE + FaceConfig.LIST_NAMES[list] + " list (" + cfg().list(list).entries() + ")");
+        if (m == FaceMode.OFF) {
+            out.add("This face is off.");
+            return out;
+        }
+        if (c.source()) {
+            out.add(list == FaceConfig.ALLOW ? "What this creative pipe makes, endlessly." : "Not used by a creative source.");
+            return out;
+        }
+        switch (list) {
+            case FaceConfig.ALLOW:
+                if (m == FaceMode.REQUEST) {
+                    out.add("What to keep stocked in this block:");
+                    out.add("each entry's amount (none: a stack, 1,000 mB).");
+                } else {
+                    out.add("Only the " + what + " it names pass (empty: all).");
+                    out.add(m == FaceMode.INSERT ? "An amount: fill the block up to it."
+                        : "An amount: leave that many in the block.");
+                }
+                break;
+            case FaceConfig.DENY:
+                out.add("The " + what + " it names are never moved or");
+                out.add("destroyed by this face. Wins over both other lists.");
+                break;
+            default:
+                if (!used(list)) {
+                    out.add("Not used in " + m.words + " mode.");
+                    break;
+                }
+                if (m.pulls()) {
+                    out.add(EnumChatFormatting.LIGHT_PURPLE + "Destroys the " + what + " it names in this block,");
+                    out.add(EnumChatFormatting.LIGHT_PURPLE + "within each transfer. An amount: leave that many.");
+                }
+                if (m.takesPushes()) {
+                    out.add(EnumChatFormatting.LIGHT_PURPLE + "Destroys the " + what + " it names that are sent");
+                    out.add(EnumChatFormatting.LIGHT_PURPLE + "here and don't fit (overflow trash).");
+                }
+        }
+        return out;
     }
 
     void send(int action, int a, int b) {
@@ -103,11 +170,17 @@ public class GuiPipeFace extends GuiContainer {
         Widget overflow = add(100, 16, 18, 18, b -> send(PipeActionMessage.OVERFLOW, 0, 0));
         overflow.item = () -> new ItemStack(Blocks.hopper);
         overflow.badge = () -> cfg().acceptOverflow ? ICON_CHECK : ICON_CROSS;
-        overflow.visible = () -> cfg().mode == FaceMode.PROVIDE;
+        overflow.visible = () -> cfg().mode == FaceMode.PROVIDE && !c.source();
         overflow.tip = () -> lines(EnumChatFormatting.WHITE + "Overflow: " + (cfg().acceptOverflow ? "on" : "off"),
             "On: this block also takes what pulling faces", "can't put anywhere else (a buffer).");
+        Widget spread = add(100, 16, 18, 18, b -> send(PipeActionMessage.SPREAD, b == 1 ? -1 : 1, 0));
+        spread.icon = () -> ICON_SPREAD + cfg().spread.ordinal();
+        spread.visible = () -> cfg().mode.pulls();
+        spread.tip = () -> lines(EnumChatFormatting.WHITE + "Spread: " + cfg().spread.words, cfg().spread.explain + ".",
+            EnumChatFormatting.GRAY + "Click: next. Right-click: back.");
         stepper(120, 16, 18, 24, PipeActionMessage.PRIORITY, 1, 10, () -> String.valueOf(cfg().priority),
-            () -> lines(EnumChatFormatting.WHITE + "Priority: " + cfg().priority, "Higher goes first; equal ones take turns.",
+            () -> lines(EnumChatFormatting.WHITE + "Priority: " + cfg().priority, "Higher fills first; equal ones share",
+                "by the pulling face's spread setting.",
                 EnumChatFormatting.GRAY + "Shift: by 10. Mouse wheel works too."));
         // Row 2: per transfer, every N ticks.
         stepper(33, 38, 16, 26, PipeActionMessage.AMOUNT, fluid ? 100 : 1, fluid ? 1000 : 16, () -> number(perMove()),
@@ -118,49 +191,65 @@ public class GuiPipeFace extends GuiContainer {
             () -> lines(EnumChatFormatting.WHITE + "Every " + cfg().interval(c.pipe.tier()) + " ticks", "Fastest on this tier: every "
                 + c.minTicks + ". Slower costs the server less.", EnumChatFormatting.GRAY + "Shift: by 20 (a second)."));
         // Row 3: the tag.
-        tag = new GuiTextField(fontRendererObj, guiLeft + 27, guiTop + 59, 141, 12);
+        tag = new GuiTextField(fontRendererObj, guiLeft + 27, guiTop + 58, 141, 12);
         tag.setMaxStringLength(FaceConfig.MAX_TAG);
         tag.setText(cfg().tag);
         typed = cfg().tag;
-        Widget tagIcon = add(8, 57, 16, 16, null);
+        Widget tagIcon = add(8, 56, 16, 16, null);
         tagIcon.icon = () -> ICON_TAG;
         tagIcon.flat = true;
         tagIcon.tip = () -> lines(EnumChatFormatting.WHITE + "Tag" + (cfg().tag.isEmpty() ? " (none)" : ": " + cfg().tag),
-            "Faces only trade with faces of the same tag.", c.pipe.tier() == PipeTier.WIRELESS
+            "Faces only trade with faces of the same tag.", PipeTier.wireless(c.pipe.tier())
                 ? "Wireless: links to your team's Wireless pipes" : "Within the pipes joined together (channels).",
-            c.pipe.tier() == PipeTier.WIRELESS ? "with the same tag, anywhere." : "Enter (or closing) saves it.");
-        // Filter toolbar: 9 buttons of 18.
+            PipeTier.wireless(c.pipe.tier()) ? "with the same tag, anywhere." : "Enter (or closing) saves it.");
+        // The three lists, as tabs over the filter.
+        for (int l = 0; l < 3; l++) {
+            int list = l;
+            Widget t = add(8 + 53 * l, 73, 52, 11, b -> {
+                c.list = list;
+                selected = -1;
+                send(PipeActionMessage.LIST, list, 0);
+            });
+            t.text = () -> FaceConfig.LIST_NAMES[list] + " " + cfg().list(list).entries();
+            t.on = () -> c.list == list;
+            t.colour = () -> used(list) ? LIST_COLOURS[list] : 0x909090;
+            t.tip = () -> listExplain(list);
+        }
+        // Filter toolbar: 9 buttons of 18, all for the list shown.
         for (FaceConfig.Kind k : FaceConfig.Kind.values()) {
             Widget w = add(8 + 18 * k.ordinal(), 85, 18, 18, b -> send(PipeActionMessage.KIND, k.ordinal(), 0));
             w.icon = () -> k == FaceConfig.Kind.ITEMS ? ICON_ITEMS : k == FaceConfig.Kind.MODS ? ICON_MODS : ICON_EXISTING;
-            w.on = () -> cfg().kind == k;
-            w.tip = () -> lines(EnumChatFormatting.WHITE + k.words + (cfg().kind == k ? " (on)" : ""), k.explain);
+            w.on = () -> fl().kind == k;
+            w.visible = () -> k == FaceConfig.Kind.ITEMS || !c.source() && (k == FaceConfig.Kind.MODS || c.list != FaceConfig.VOID);
+            w.tip = () -> lines(EnumChatFormatting.WHITE + k.words + (fl().kind == k ? " (on)" : ""), k.explain);
         }
-        Widget black = add(62, 85, 18, 18, b -> send(PipeActionMessage.BLACKLIST, 0, 0));
-        black.icon = () -> cfg().blacklist ? ICON_BLACK : ICON_WHITE;
-        black.tip = () -> cfg().blacklist ? lines(EnumChatFormatting.WHITE + "Blacklist", "Everything except what matches.")
-            : lines(EnumChatFormatting.WHITE + "Whitelist", "Only what matches (an empty list lets all through).");
+        Widget info = add(62, 85, 18, 18, null);
+        info.icon = () -> LIST_ICONS[c.list];
+        info.flat = true;
+        info.tip = () -> listExplain(c.list);
         Widget damage = add(80, 85, 18, 18, b -> send(PipeActionMessage.DAMAGE, b == 1 ? -1 : 1, 0));
         damage.item = () -> new ItemStack(Items.iron_sword, 1, damageShown());
         damage.overlay = this::damageMark;
-        damage.tip = () -> lines(EnumChatFormatting.WHITE + cfg().damage.words, cfg().damage.explain,
+        damage.tip = () -> lines(EnumChatFormatting.WHITE + fl().damage.words, fl().damage.explain,
             EnumChatFormatting.GRAY + "Click: next. Right-click: back.");
         Widget nbt = add(98, 85, 18, 18, b -> send(PipeActionMessage.NBT, 0, 0));
         nbt.item = () -> new ItemStack(Items.name_tag);
-        nbt.badge = () -> cfg().matchNbt ? ICON_CHECK : ICON_CROSS;
-        nbt.tip = () -> lines(EnumChatFormatting.WHITE + (cfg().matchNbt ? "Match NBT" : "Ignore NBT"),
-            cfg().matchNbt ? "Enchantments, names and the like must be the same." : "Enchantments, names and the like don't matter.");
+        nbt.badge = () -> fl().matchNbt ? ICON_CHECK : ICON_CROSS;
+        nbt.tip = () -> lines(EnumChatFormatting.WHITE + (fl().matchNbt ? "Match NBT" : "Ignore NBT"),
+            fl().matchNbt ? "Enchantments, names and the like must be the same." : "Enchantments, names and the like don't matter.");
         Widget ore = add(116, 85, 18, 18, b -> send(PipeActionMessage.ORE, 0, 0));
         ore.item = () -> new ItemStack(Blocks.iron_ore);
-        ore.badge = () -> cfg().oreDict ? ICON_CHECK : ICON_CROSS;
-        ore.tip = () -> lines(EnumChatFormatting.WHITE + "Ore dictionary " + (cfg().oreDict ? "on" : "off"),
+        ore.badge = () -> fl().oreDict ? ICON_CHECK : ICON_CROSS;
+        ore.tip = () -> lines(EnumChatFormatting.WHITE + "Ore dictionary " + (fl().oreDict ? "on" : "off"),
             "On: items sharing an ore dictionary name", "match (any copper ingot for a copper ingot).");
         Widget snap = add(134, 85, 18, 18, b -> send(PipeActionMessage.SNAPSHOT, 0, 0));
         snap.icon = () -> ICON_SNAPSHOT;
-        snap.tip = () -> lines(EnumChatFormatting.WHITE + "Snapshot", "The list becomes what the block on this face", "holds now (each item once).");
+        snap.visible = () -> !c.source();
+        snap.tip = () -> lines(EnumChatFormatting.WHITE + "Snapshot", "The " + FaceConfig.LIST_NAMES[c.list]
+            + " list becomes what the block", "on this face holds now (each item once).");
         Widget clear = add(152, 85, 18, 18, b -> send(PipeActionMessage.CLEAR, 0, 0));
         clear.icon = () -> ICON_CLEAR;
-        clear.tip = () -> lines(EnumChatFormatting.WHITE + "Clear the list");
+        clear.tip = () -> lines(EnumChatFormatting.WHITE + "Clear the " + FaceConfig.LIST_NAMES[c.list] + " list");
         // The selected slot's amount.
         int[] steps = fluid ? new int[] { -1000, -100, 100, 1000 } : new int[] { -16, -1, 1, 16 };
         for (int i = 0; i < 4; i++) {
@@ -200,12 +289,17 @@ public class GuiPipeFace extends GuiContainer {
         return cfg().amount <= 0 ? c.max : Math.min(cfg().amount, c.max);
     }
 
+    /** Whether the list shown takes amounts (Allow and Void item lists). */
+    boolean amounts() {
+        return c.list != FaceConfig.DENY && fl().kind == FaceConfig.Kind.ITEMS && !c.source();
+    }
+
     boolean amountRow() {
-        return cfg().kind == FaceConfig.Kind.ITEMS && selected >= 0 && cfg().filter[selected] != null;
+        return amounts() && selected >= 0 && fl().filter[selected] != null;
     }
 
     int damageShown() {
-        switch (cfg().damage) {
+        switch (fl().damage) {
             case D25:
                 return 80;
             case D50:
@@ -219,7 +313,7 @@ public class GuiPipeFace extends GuiContainer {
     }
 
     String damageMark() {
-        switch (cfg().damage) {
+        switch (fl().damage) {
             case EXACT:
                 return "=";
             case ANY:
@@ -255,7 +349,7 @@ public class GuiPipeFace extends GuiContainer {
         TilePipe p = c.pipe;
         int conn = p.renderState & 0xFFF;
         for (int s = 0; s < 6; s++) if ((conn >> (6 + s) & 1) != 0) out.add(s);
-        if (!out.contains(c.side)) out.add(0, c.side);
+        if (!out.contains(c.side) && !c.source()) out.add(0, c.side);
         return out;
     }
 
@@ -355,25 +449,26 @@ public class GuiPipeFace extends GuiContainer {
             .bindTexture(ICONS);
         GL11.glColor4f(1, 1, 1, 1);
         GL11.glEnable(GL11.GL_BLEND);
-        func_146110_a(x, y, n * 16, 0, 16, 16, 256, 16);
+        func_146110_a(x, y, n * 16, 0, 16, 16, 512, 16);
     }
 
     @Override
     protected void drawGuiContainerForegroundLayer(int mx, int my) {
         String title = PipeTier.NAMES[c.pipe.tier()] + (c.fluid() ? " Fluid" : " Item") + " Pipe";
         fontRendererObj.drawString(title, 8, 5, TEXT);
-        String face = SIDES[c.side] + " face";
+        String face = c.source() ? "Source (endless)" : SIDES[c.side] + " face";
         fontRendererObj.drawString(face, xSize - 8 - fontRendererObj.getStringWidth(face), 5, 0x707070);
         fontRendererObj.drawString(c.fluid() ? "mB" : "Move", 8, 42, TEXT);
-        fontRendererObj.drawString("Filter", 8, 75, TEXT);
-        String sum = cfg().kind.words + (cfg().kind == FaceConfig.Kind.EXISTING ? "" : cfg().blacklist ? ", blacklist" : ", whitelist");
-        fontRendererObj.drawString(sum, xSize - 8 - fontRendererObj.getStringWidth(sum), 75, 0x606060);
         fontRendererObj.drawString("Every", 87, 42, TEXT);
         if (amountRow()) {
-            int k = cfg().count[selected];
-            String s = k > 0 ? "Keep " + number(k) + (c.fluid() ? " mB" : "") + " here" : "No amount (slot " + (selected + 1) + ")";
+            int k = fl().count[selected];
+            String unit = c.fluid() ? " mB" : "";
+            String s = c.list == FaceConfig.VOID ? (k > 0 ? "Void over " + number(k) + unit : "Void all of it")
+                : k > 0 ? "Keep " + number(k) + unit + " here" : "No amount (slot " + (selected + 1) + ")";
             fontRendererObj.drawString(s, 8, 147, TEXT);
-        } else if (cfg().kind == FaceConfig.Kind.EXISTING) {
+        } else if (!used(c.list)) {
+            fontRendererObj.drawString(FaceConfig.LIST_NAMES[c.list] + ": not used in " + cfg().mode.words + " mode", 8, 147, 0x806060);
+        } else if (fl().kind == FaceConfig.Kind.EXISTING) {
             fontRendererObj.drawString("Matches what the block holds", 8, 147, 0x606060);
         } else {
             fontRendererObj.drawString(c.netState.isEmpty() ? "Inventory" : c.netState, 8, 147, 0x606060);
@@ -382,12 +477,12 @@ public class GuiPipeFace extends GuiContainer {
         GL11.glDisable(GL11.GL_LIGHTING);
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         for (int i = 0; i < FaceConfig.FILTER; i++) {
-            if (cfg().filter[i] == null || cfg().count[i] <= 0 || cfg().kind != FaceConfig.Kind.ITEMS) continue;
-            String n = number(cfg().count[i]);
+            if (!amounts() || fl().filter[i] == null || fl().count[i] <= 0) continue;
+            String n = number(fl().count[i]);
             int x = ContainerPipeFace.FILTER_X + (i % 9) * 18, y = ContainerPipeFace.FILTER_Y + (i / 9) * 18;
             GL11.glPushMatrix();
             GL11.glTranslatef(0, 0, 300);
-            fontRendererObj.drawStringWithShadow(n, x + 17 - fontRendererObj.getStringWidth(n), y + 9, 0xFFFF60);
+            fontRendererObj.drawStringWithShadow(n, x + 17 - fontRendererObj.getStringWidth(n), y + 9, AMOUNT_COLOURS[c.list]);
             GL11.glPopMatrix();
         }
         GL11.glEnable(GL11.GL_DEPTH_TEST);
@@ -415,8 +510,8 @@ public class GuiPipeFace extends GuiContainer {
             }
         }
         int slot = ghostAt(mx, my);
-        if (slot >= 0 && cfg().filter[slot] == null && mc.thePlayer.inventory.getItemStack() == null) {
-            drawHoveringText(lines(EnumChatFormatting.WHITE + "Filter slot " + (slot + 1), "Click with an item (or drag one from NEI)",
+        if (slot >= 0 && fl().filter[slot] == null && mc.thePlayer.inventory.getItemStack() == null) {
+            drawHoveringText(lines(EnumChatFormatting.WHITE + FaceConfig.LIST_NAMES[c.list] + " slot " + (slot + 1), "Click with an item (or drag one from NEI)",
                 "to set it; a stack sets the amount too.", EnumChatFormatting.GRAY + "Right-click clears. Wheel: amount."), mx, my,
                 fontRendererObj);
         }
@@ -432,9 +527,13 @@ public class GuiPipeFace extends GuiContainer {
             return;
         }
         List list = stack.getTooltip(mc.thePlayer, mc.gameSettings.advancedItemTooltips);
-        if (cfg().kind == FaceConfig.Kind.ITEMS) list.add(EnumChatFormatting.YELLOW + (cfg().count[slot] > 0
-            ? "Keep " + cfg().count[slot] + (c.fluid() ? " mB" : "") + " in the block" : "No amount"));
-        list.add(EnumChatFormatting.GRAY + "Right-click: clear. Wheel: amount (shift: more).");
+        int k = fl().count[slot];
+        String unit = c.fluid() ? " mB" : "";
+        if (c.list == FaceConfig.DENY) list.add(EnumChatFormatting.RED + "Denied: never moved or destroyed here");
+        else if (amounts()) list.add(c.list == FaceConfig.VOID
+            ? EnumChatFormatting.LIGHT_PURPLE + (k > 0 ? "Destroys what is over " + k + unit : "Destroys all of it")
+            : EnumChatFormatting.YELLOW + (k > 0 ? "Keep " + k + unit + " in the block" : "No amount"));
+        list.add(EnumChatFormatting.GRAY + (amounts() ? "Right-click: clear. Wheel: amount (shift: more)." : "Right-click: clear."));
         drawHoveringText(list, x, y, fontRendererObj);
     }
 
@@ -483,7 +582,7 @@ public class GuiPipeFace extends GuiContainer {
         int dir = d > 0 ? 1 : -1;
         int mx = Mouse.getEventX() * width / mc.displayWidth, my = height - Mouse.getEventY() * height / mc.displayHeight - 1;
         int g = ghostAt(mx, my);
-        if (g >= 0 && cfg().filter[g] != null && cfg().kind == FaceConfig.Kind.ITEMS) {
+        if (g >= 0 && fl().filter[g] != null && amounts()) {
             selected = g;
             int step = c.fluid() ? (shift() ? 1000 : 100) : (shift() ? 16 : 1);
             send(PipeActionMessage.COUNT, g, dir * step);
@@ -562,6 +661,7 @@ public class GuiPipeFace extends GuiContainer {
         Supplier<String> text, overlay;
         Supplier<Integer> badge;
         Supplier<List<String>> tip;
+        Supplier<Integer> colour;
         BooleanSupplier visible, on;
         IntConsumer wheel;
         boolean flat;
@@ -622,7 +722,7 @@ public class GuiPipeFace extends GuiContainer {
             if (text != null) {
                 String t = text.get();
                 int tx = hasPicture ? ax + 20 : ax + (w - fontRendererObj.getStringWidth(t) + 1) / 2;
-                int colour = hover ? 0xFFFFA0 : 0xFFFFFF;
+                int colour = hover ? 0xFFFFA0 : this.colour != null ? this.colour.get() : 0xFFFFFF;
                 fontRendererObj.drawStringWithShadow(t, tx, ay + (h - 7) / 2, colour);
             }
         }

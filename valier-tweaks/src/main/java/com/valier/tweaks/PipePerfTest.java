@@ -78,8 +78,8 @@ public final class PipePerfTest { // public: Forge calls its tick handler from a
             a.setInventorySlotContents(0, new ItemStack(Blocks.dirt, 64));
             b.setInventorySlotContents(0, new ItemStack(Blocks.dirt, 16));
             FaceConfig f = p2.face(ForgeDirection.EAST.ordinal());
-            f.filter[0] = new ItemStack(Blocks.dirt);
-            f.count[0] = 16;
+            f.allow.filter[0] = new ItemStack(Blocks.dirt);
+            f.allow.count[0] = 16;
             set(p2, ForgeDirection.EAST, FaceMode.REQUEST);
             p1.faceChanged();
         }

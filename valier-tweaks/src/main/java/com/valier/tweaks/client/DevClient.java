@@ -83,11 +83,20 @@ public final class DevClient {
         if (shots == 3 && t >= 190) shot(mc, "valier-4-spawner-crafter.png");
         if (shots == 4 && t >= 236) org.lwjgl.input.Mouse.setCursorPosition(mc.displayWidth - 20, 20); // no tooltip in the shot
         if (shots == 4 && t >= 240) shot(mc, "valier-5-pipe-menu.png");
-        if (shots == 5 && t >= 250 && !(mc.currentScreen instanceof net.minecraft.client.gui.inventory.GuiContainerCreative)) {
+        if (shots == 5 && t >= 242 && mc.currentScreen instanceof GuiPipeFace) { // the same face, its Void list
+            GuiPipeFace g = (GuiPipeFace) mc.currentScreen;
+            if (g.c.list != com.valier.tweaks.pipe.FaceConfig.VOID) {
+                g.c.list = com.valier.tweaks.pipe.FaceConfig.VOID;
+                ValierTweaks.NET.sendToServer(new com.valier.tweaks.pipe.PipeActionMessage(g.c.windowId,
+                    com.valier.tweaks.pipe.PipeActionMessage.LIST, com.valier.tweaks.pipe.FaceConfig.VOID, 0, null, null));
+            }
+        }
+        if (shots == 5 && t >= 250) shot(mc, "valier-5b-void-list.png");
+        if (shots == 6 && t >= 256 && !(mc.currentScreen instanceof net.minecraft.client.gui.inventory.GuiContainerCreative)) {
             creativeTab(mc); // every Valier block and item, as the creative tab lists them
         }
-        if (shots == 5 && t >= 275) shot(mc, "valier-6-creative-tab.png");
-        if (shots == 6) {
+        if (shots == 6 && t >= 281) shot(mc, "valier-6-creative-tab.png");
+        if (shots == 7) {
             mc.displayGuiScreen(null);
             mc.theWorld.sendQuittingDisconnectingPacket();
             mc.loadWorld((WorldClient) null);

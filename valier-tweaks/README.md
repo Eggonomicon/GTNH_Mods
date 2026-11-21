@@ -3,84 +3,214 @@
 Gameplay additions for the Valier server. **Since 2.0.0 it is needed on the server and on every player's computer**
 (it has its own blocks), and it includes what the old Valier Client mod did: players delete `valierclient-*.jar`.
 
+The newest version is always at https://github.com/Eggonomicon/GTNH_Mods/releases/latest/download/valiertweaks.jar
+(the same jar, named `valiertweaks.jar`; keep only one Valier Tweaks jar in `mods`).
+
+## 2.1.0: faster pipes, three filter lists, void, spread, WAILA, pick-up, copy settings, creative pipes
+
+- **Two faster tiers:** Superior (HV) and Ultimate (EV). An Ultimate fluid face moves 640,000 L/s, against GregTech's
+  Huge Dark Steel pipe's 111,360 L/s and Huge Potin's 24,000 L/s.
+- **Three filter lists on every face at once:** Allow, Deny and Void, for items and fluids. Deny wins over the other
+  two.
+- **Void:**
+  - a pulling face destroys what its Void list names in its block (keeping any amount you set);
+  - a pushing face destroys what is sent to it and doesn't fit (overflow trash).
+- **Priority is strict now**, and each pulling face picks how equal priorities share: in order, round robin or even
+  split. In 2.0, the turn-taking could send things to a lower priority while a higher one still had room.
+- **WAILA shows what each face does and what is flowing through the network.**
+- **The wrench** picks a pipe up (sneak-right-click its centre).
+- **The Pipe Configurator** copies a face's settings onto other faces.
+- **Creative item and fluid pipes** make endless items or fluid for ops and creative players.
+- **Joining:** a 2.1 server asks players for 2.1.x, so everyone updates from the link above. A 2.0 jar can't join a 2.1
+  server, and a 2.1 jar can't join a 2.0 server.
+- **2.0 faces keep working.** A whitelist becomes the Allow list, and a blacklist becomes the Deny list.
+
 ## 2.0.0: one jar, its own blocks, and pipes
 
-- **One jar for everyone.** Put `valiertweaks-2.0.x.jar` in the server's and every player's `mods` folder, and delete
-  `valierclient-*.jar` (if it is left in, Forge stops at start-up with a "duplicate mods" screen naming both files).
-  The newest version is always at https://github.com/Eggonomicon/GTNH_Mods/releases/latest/download/valiertweaks.jar
-  (the same jar, named `valiertweaks.jar`; keep only one Valier Tweaks jar in `mods`).
-- **Joining:** a server with Valier Tweaks 2.0 asks a joining player for 2.0.x (any 2.0 version: fixes that only change
-  the server don't need a new download). A player with it can still join servers without it.
-- **Loot spawners and XP crafters are real blocks now** (Valier Loot Spawner, Valier XP Crafter). Existing ones become
-  the new blocks where they stand the first time their chunk loads with 2.0.0, keeping everything: mob, settings,
-  upgrades, paid blocks, loot held; recipe, XP held, tank, slots, store. Old items (a wrench's vanilla spawner item, a
-  crafter that was a GregTech tank item) place the new blocks. All clicks and recipes are as before.
-- **Valier pipes:** item and fluid pipes in four tiers, see below.
-- **Removing the mod later** deletes its blocks from the world. `/valiertweaks revertblocks confirm` (ops, console)
-  first turns loot spawners and XP crafters back into marked vanilla spawners and GregTech tanks (crafters' stores drop
-  on top; loot spawners only in loaded chunks; pipes can't be kept).
+- **One jar for everyone.** Put the jar in the server's and every player's `mods` folder, and delete
+  `valierclient-*.jar`. If it is left in, Forge stops at start-up with a "duplicate mods" screen naming both files.
+- **Joining:** a server with Valier Tweaks asks a joining player for the same major.minor version (any 2.1.x for 2.1).
+  Fixes that only change the server don't need a new download. A player with it can still join servers without it.
+- **Loot spawners and XP crafters are real blocks now** (Valier Loot Spawner, Valier XP Crafter).
+  - Existing ones become the new blocks where they stand, the first time their chunk loads with 2.0.0.
+  - They keep everything. A loot spawner keeps its mob, settings, upgrades, paid blocks and loot held. A crafter keeps
+    its recipe, XP held, tank, slots and store.
+  - Old items place the new blocks: a wrench's vanilla spawner item, or a crafter that was a GregTech tank item.
+  - All clicks and recipes are as before.
+- **Valier pipes:** item and fluid pipes, see below.
+- **Removing the mod later** deletes its blocks from the world. Run `/valiertweaks revertblocks confirm` (ops, console)
+  first: it turns loot spawners and XP crafters back into marked vanilla spawners and GregTech tanks.
+  - Crafters' stores drop on top.
+  - Loot spawners are only reverted in loaded chunks.
+  - Pipes can't be kept.
 
-## Valier pipes (2.0.0)
+## Valier pipes (2.0.0; 2.1.0 added tiers, the three lists, void, spread, WAILA, pick-up, the configurator, creative pipes)
 
-Item pipes and fluid pipes that move things straight from block to block: nothing travels along the pipe, so a pipe
-holds nothing and breaking one spills nothing. They are built to cost the server as little as possible:
+Item pipes and fluid pipes move things straight from block to block. Nothing travels along the pipe, so a pipe holds
+nothing in transit. They are built to cost the server as little as possible:
 
 - **Pipes never tick.** Placing, breaking or changing one only marks it; the pipes joined to it are worked out again at
   the end of that tick. Idle pipes cost nothing at all.
-- **Only Extract and Request faces work**, each on its tier's interval, from one queue ordered by when each is due. A
-  face that finds nothing to do waits twice as long each time (up to `pipeMaxSleepTicks`, 5 s); a change inside the
-  block it touches wakes it at its next interval. All pipe work is capped at `pipeBudgetMicros` a tick; anything still
-  due waits for the next tick.
+- **Only pulling and Request faces work.** Each runs on its tier's interval, from one queue ordered by when each is due.
+  - A face that finds nothing to do waits twice as long each time, up to `pipeMaxSleepTicks` (5 s).
+  - A change inside the block it touches wakes it at its next interval.
+  - All pipe work is capped at `pipeBudgetMicros` a tick; anything still due waits for the next tick.
+  - Faster tiers move bigger batches at the same interval rather than running more often, so they cost about the same.
 - **Never loads a chunk.** A face whose block is in an unloaded chunk waits for that chunk.
 - `/valiertweaks pipes` (ops) shows the networks, the working and sleeping faces, transfers and the time spent.
 
-**Laying them:** a pipe joins pipes of its kind (any tier) and any block with an inventory (item pipes) or a tank (fluid
-pipes) beside it. Sneak-right-click with a wrench to shut a side, or open it again. A pipe never joins a block in a
-chunk claimed by a team its owner (whoever placed it) isn't in or allied with.
+**Laying them:**
+- A pipe joins pipes of its kind (any tier) and any block beside it with an inventory (item pipes) or a tank (fluid
+  pipes).
+- A pipe never joins a block in a chunk claimed by a team its owner (whoever placed it) isn't in or allied with.
+- **The wrench (sneak-right-click):** on an arm, it shuts that side or opens it again. On the pipe's **centre**, it picks
+  the pipe up into your inventory, with anything its faces were holding back (2.1.0).
+- Pickaxes break pipes as before.
 
 **Faces.** Where a pipe touches a block, a coloured plate shows that face's mode:
 
 | Mode | Colour | What it does |
 |---|---|---|
-| Provide (new faces) | green | Passive. Request faces on the network may take what they ask for from this block. "Overflow" on: it also takes what Extract faces can't put anywhere else (a barrel as the network's buffer). |
-| Insert | blue | Passive. Extract faces put things into this block. |
-| Extract | orange | Every interval, takes up to its amount out of this block (by its filter) and sends it to Insert faces, then to Request faces short of it, then to overflow Provide faces. |
-| Request | purple | Keeps what its filter lists stocked in this block (for each filter slot, a keep amount: a stack by default), taking only what's missing from Provide faces. |
+| Provide (new faces) | green | Passive. Request faces may take what they ask for from this block. With "Overflow" on, it also takes what pulling faces can't put anywhere else (a barrel as the network's buffer). |
+| Push | blue | Passive. Pulling faces put things into this block. |
+| Pull | orange | Every interval, takes up to its amount out of this block and sends it to Push faces, then Request faces short of it, then overflow Provide faces. |
+| Push/Pull | teal | Both: pulls out of its block, and takes in what other faces send (a buffer). |
+| Request | purple | Keeps what its Allow list names stocked in this block, taking only what's missing from Provide faces. Each entry keeps its own amount; without one, a stack (fluids: 1,000 mB). |
 | Off | grey | Leaves the block alone. |
 
-Nothing moves until some face is Extract or Request. A chest on a Provide face (no setup) and a machine on a Request
-face asking for iron: the machine is kept stocked from the chest.
+Nothing moves until some face pulls or requests. For example, a chest on a Provide face (no setup) and a machine on a
+Request face asking for iron: the machine is kept stocked from the chest.
 
-**A face's menu:** right-click the arm touching a block (sneak-right-click with an empty hand cycles the mode). It has
-the mode; the amount per transfer (up to the tier's most); the priority (higher first; equal ones take turns); redstone
-(always, only with a signal, only without); the filter (9 ghost slots: click with an item to set, empty-handed to clear;
-whitelist or blacklist; same or any damage value; same or any NBT; ore dictionary); for Request faces the keep amount of
-the selected slot; for Provide faces overflow; and the **tag**. Fluid faces filter by fluid: a filter item holding one
-(a bucket, a cell) names it; Request keeps that many mB (1,000 by default).
+**A face's menu:** right-click the arm touching a block. Sneak-right-click it with an empty hand to cycle the mode
+instead. The menu has:
+- the mode;
+- redstone: always, only with a signal, or only without one;
+- on pulling faces, the **spread** (see below); on Provide faces, overflow;
+- the priority (higher first);
+- the amount per transfer (up to the tier's most) and the interval (never faster than the tier);
+- the **tag**;
+- the three **filter lists**.
 
-**Tags:** a face only trades with faces carrying the same tag (no tag with no tag). On Basic, Advanced and Elite pipes
-that means channels within the pipes joined together. On **Wireless** pipes it means links: a tagged Wireless face
-trades with every Wireless face of the same tag, anywhere, in any dimension (`pipeWirelessCrossDimension`), as long as
-both are in loaded chunks. "001 in, 001 out". Tags are private to the pipe owner's ServerUtilities team (or to the owner
-alone without a team), so nobody else can send to or take from yours.
+**Filter lists (2.1.0).** Each face has three lists, picked by the tabs over the filter. All three work at once.
+- **What each list has:** 18 ghost slots.
+  - Click a slot with an item to set it (a stack sets an amount too); right-click to clear it.
+  - The mouse wheel changes a slot's amount.
+  - Items dragged from NEI work too, so nobody needs to own the item.
+- **Each list is a whole filter of its own:**
+  - what it matches: the listed items, anything from their mods, or (Allow and Deny) anything the block already holds;
+  - damage: same, any, or only undamaged or damaged tools and armour (also 25, 50 or 75% worn or more);
+  - NBT: same or any;
+  - ore dictionary: on or off;
+  - a snapshot button (the block's items become the list) and a clear button.
+- **Deny:** what it names is never moved or destroyed by this face. It wins over the other two lists.
+- **Void:**
+  - On a Pull or Push/Pull face, what it names is destroyed in the face's block, within the face's amount per transfer.
+    No destination is needed.
+  - On a Void entry, an amount means "keep this many". For example, "Cobblestone, 1,000" destroys only the cobblestone
+    over 1,000.
+  - On a Push or Push/Pull face, what it names that is sent to this face and doesn't fit in the block is destroyed.
+    The block is filled first, so with priority this is overflow trash: a priority-10 chest fills, then the rest is
+    voided.
+  - Void isn't used on Provide and Request faces.
+- **Allow:** only what it names passes; an empty Allow list lets everything through. Its amounts are how much to keep in
+  this block:
+  - pulling and providing faces only give what is over the amount;
+  - pushing faces fill up to it;
+  - Request faces keep it stocked.
+- **Fluids:** fluid faces use the same lists. An entry holding a fluid (a bucket, a cell, NEI's fluid) names it, and
+  amounts are in mB.
 
-**Exact transfers:** it takes out first (what really came out is what counts: some barrels and machines give a little
-more or less than they show), then puts in as a vanilla hopper does (stacks first, never past the block's stack limit).
-What nothing took goes back; if it can't, the face holds it and hands it on first next time (a few stacks at most,
-`pipeHeldStacks`; it drops if the pipe breaks). A double chest is one inventory, and a face never moves things into the
-block it takes them from. Slots and tanks follow the block's own rules for the side the pipe touches.
+**Priority and spread (2.1.0).**
+- Destinations always fill strictly by priority (higher first): a lower priority only gets what the higher ones can't
+  take.
+- Push faces come first, then Request faces short of it, then overflow Provide faces.
+- How equal priorities share is the pulling face's **spread** setting:
+  - **In order:** the first fills first, then the next, and so on. Equal priorities always go in the same order (by
+    place). To get "1, 2, 3", give them priorities 3, 2, 1.
+  - **Round robin** (default): they take turns, one transfer each.
+  - **Even split:** each transfer is shared equally, so 64 into three chests is 22, 21, 21. What one can't take goes to
+    the others, then to the next priority.
 
-**Tiers and recipes** (amounts and intervals in the config, `pipes` section):
+**Tags:** a face only trades with faces carrying the same tag (no tag with no tag).
+- On ordinary pipes that means channels within the pipes joined together.
+- On **Wireless** (and creative) pipes it means links: a tagged face trades with every Wireless face of the same tag,
+  anywhere, as long as both are in loaded chunks. "001 in, 001 out". Wireless pipes don't need to be joined by pipes.
+- Links work in any dimension (`pipeWirelessCrossDimension`).
+- Tags are private to the pipe owner's ServerUtilities team (or to the owner alone without a team), so nobody else can
+  send to or take from yours.
 
-| Tier | Per transfer | Every | Recipe |
-|---|---|---|---|
-| Basic | 8 items / 1,000 mB | 20 ticks | 6 bronze plates, 2 glass panes, a hopper (item) or bucket (fluid): 8 pipes |
-| Advanced | 32 / 4,000 mB | 10 ticks | 8 Basic around an LV conveyor (item) or LV pump (fluid): 8 |
-| Elite | 64 / 16,000 mB | 5 ticks | 8 Advanced around an MV conveyor or MV pump: 8 |
-| Wireless | 64 / 16,000 mB | 5 ticks | an Elite pipe, an ender pearl, an MV emitter and an MV sensor: 1 |
+**Exact transfers:**
+- It takes out first, and what really came out is what counts (some barrels and machines give a little more or less
+  than they show).
+- Then it puts in as a vanilla hopper does: stacks first, never past the block's stack limit.
+- What nothing took goes back. If it can't, the face holds it and hands it on first next time. It holds a few stacks at
+  most (`pipeHeldStacks`), and they drop if the pipe breaks.
+- A double chest is one inventory, and a face never moves things into the block it takes them from.
+- Slots and tanks follow the block's own rules for the side the pipe touches.
 
-Loot spawners and XP crafters work with them: pipes can take from both, and one with only a Valier pipe pulling from it
-(Extract or Provide) works (before, with nothing to push into, it would wait for "no output").
+**Tiers and recipes.** Amounts and intervals are in the config, `pipes` section. The "per second" figures are for one
+pulling or Request face.
+
+| Tier | Per transfer | Every | Per second (items / fluid) | Recipe |
+|---|---|---|---|---|
+| Basic | 8 items / 1,000 mB | 20 ticks | 8 / 1,000 L | 6 bronze plates, 2 glass panes, a hopper (item) or bucket (fluid): 8 pipes |
+| Advanced | 32 / 4,000 mB | 10 ticks | 64 / 8,000 L | 8 Basic around an LV conveyor (item) or LV pump (fluid): 8 |
+| Elite | 64 / 16,000 mB | 5 ticks | 256 / 64,000 L | 8 Advanced around an MV conveyor or MV pump: 8 |
+| Superior (2.1.0) | 160 / 40,000 mB | 5 ticks | 640 / 160,000 L | 8 Elite around an HV conveyor or HV pump: 8 |
+| Ultimate (2.1.0) | 320 / 160,000 mB | 5 ticks | 1,280 / 640,000 L | 8 Superior around an EV conveyor or EV pump: 8 |
+| Wireless | 64 / 16,000 mB | 5 ticks | 256 / 64,000 L | an Elite pipe, an ender pearl, an MV emitter and an MV sensor: 1 |
+| Creative (2.1.0) | 4,096 / 1,000,000 mB | 5 ticks | endless | none: creative tab and NEI only |
+
+For comparison, GregTech's fluid pipes (GTNH 2.9.0) carry a whole line's worth:
+
+| GregTech pipe | Per second |
+|---|---|
+| Huge Potin | 24,000 L |
+| Huge Dark Steel | 111,360 L |
+
+**Creative pipes (2.1.0).** A creative item or fluid pipe makes endless items or fluid.
+- **The source menu:** right-click the pipe's **centre**. It has:
+  - an Allow list of what to make (items; or buckets, cells or NEI fluids);
+  - a mode: Pull (pushes into Push and Request faces, by priority and spread), Provide (only Request faces take from
+    it) or Off;
+  - the amount, interval, spread and tag.
+- **Where it reaches:**
+  - Its sides work as ordinary faces too.
+  - With a tag it links wirelessly like a Wireless pipe (same team), so it needs no block beside it.
+  - What nobody takes simply isn't made.
+- **Who can use it:**
+  - Only ops and players in creative mode can place one, change its menus or wrench it up.
+  - It can't be broken in survival, and explosions can't break it.
+
+**Pipe Configurator (2.1.0)** copies settings, as EnderIO's conduit probe does.
+- **Recipe:** shapeless: a Basic item pipe, a Basic fluid pipe, redstone and paper.
+- **Copy:** sneak-right-click a pipe's arm. It copies that face's mode, amount, interval, priority, redstone, tag,
+  overflow, spread and all three lists, but never what the face holds.
+- **Paste:** right-click another face on the same kind of pipe (item to item, fluid to fluid). Claims are respected.
+  Amount and interval still keep to the target tier's limits.
+- **Creative pipes:** a creative pipe's centre copies and pastes its source settings, only onto another creative pipe's
+  centre.
+- **Clear:** sneak-right-click the air.
+- **Tooltip:** shows what the configurator holds.
+
+**WAILA (2.1.0, WAILA option "Valier pipes").**
+- **Looking at an arm where it touches a block:**
+  - that face's mode, tag, priority and spread;
+  - how many entries each list has;
+  - what it moved and voided over the last minute;
+  - the last thing it moved and when;
+  - anything it is holding back.
+- **Looking at the centre:**
+  - the network: pipes, working faces, and those waiting;
+  - **what is flowing through it**: the things its working faces moved most over the last minute;
+  - what was voided;
+  - a creative pipe's source.
+
+Pipes hold nothing in transit, so the flow is what's "in" the pipe system. The server sends the data only for pipes
+someone is looking at, every quarter second.
+
+Loot spawners and XP crafters work with pipes: pipes can take from both. One with only a Valier pipe pulling from it
+(Pull or Provide) works; before 2.0, with nothing to push into, it would wait for "no output".
 
 ## Lumber axes fell the whole tree
 
@@ -382,9 +512,9 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `xpCrafterCostPercent` | `100` | Every XP recipe's liquid XP, in percent of GTNH's XP bucket recipe (1 to 1000). |
 | `xpCrafterCosts` | (empty) | Items whose craft costs a set amount instead, as `item=mB`: an ore dictionary name (`dustTinyGallium=2000`) or `mod:item[:meta]`. Entries that set nothing are named in the server log. |
 | `macerator` / `chainArmourFullDust` | `true` | Chain helmets macerate into 1 steel dust, chain leggings into 2. |
-| `pipes` / `pipeItems` | `8, 32, 64, 64` | Items one Extract or Request face moves per transfer at most, per tier (Basic, Advanced, Elite, Wireless). |
-| `pipeFluids` | `1000, 4000, 16000, 16000` | The same for fluid (mB). |
-| `pipeTicks` | `20, 10, 5, 5` | Ticks between a working face's transfers, per tier. |
+| `pipes` / `pipeItems` | `8, 32, 64, 64, 160, 320, 4096` | Items one pulling or Request face moves per transfer at most, per tier in metadata order (Basic, Advanced, Elite, Wireless, Superior, Ultimate, Creative). A 2.0 config's four-value list gets the new tiers' defaults added. |
+| `pipeFluids` | `1000, 4000, 16000, 16000, 40000, 160000, 1000000` | The same for fluid (mB). |
+| `pipeTicks` | `20, 10, 5, 5, 5, 5, 5` | Ticks between a working face's transfers, per tier. |
 | `pipeMaxSleepTicks` | `100` | Longest wait of a face that keeps finding nothing to do (20 to 1200). |
 | `pipeBudgetMicros` | `2000` | Most time a tick spent on pipes, in microseconds; the rest waits a tick. |
 | `pipeNetworkMax` | `4096` | A network of more pipes than this does nothing (a safety limit). |
@@ -544,3 +674,22 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
     (mod 6, lootspawner 123, xpcrafter 70, pipes 18, pipeperf 2, railboiler 12, boilers 18, trees 12, peaceful 15).
     Converting a copy of the Valier world (3 loot spawners, 27 XP crafters) kept every setting, upgrade, paid block,
     crafter record and slot.
+- **2.1.0 pipe self-tests** (in `valiertweaks selftest pipes`, two and four blocks above the 2.0 rigs):
+  - **Priority and spread:** priority 10 before 0, in 4-item transfers, where 2.0 sent every other one to 0.
+    Round robin between two equal chests (12 / 8). Even split of one 64 transfer (22 / 21 / 21). In order (the first
+    takes all 30).
+  - **Lists and void:** three lists at once (allowed cobblestone moved, denied dirt neither moved nor voided, sticks
+    voided). A Pull face's Void list keeping 40 of 100 cobblestone, with nowhere to send anything. A Push face's Void
+    list filling its chest and destroying the 54 that don't fit. Liquid XP voided down to 4,000 mB, and Deny winning over
+    Void for fluids too.
+  - **Creative pipes:** Pull filling a chest, Provide keeping a Request face at 100, a tagged creative pipe reaching a
+    far Wireless pipe, and a creative fluid pipe filling an XP crafter. Only creative players and ops may change one,
+    and it can't be broken in survival.
+  - **Wrench, configurator, filters:** the wrench on a centre picking up the pipe and what it held back. The Pipe
+    Configurator copying a face onto another (which keeps what it holds). 2.0 whitelists and blacklists read as Allow
+    and Deny lists.
+  - **Tiers, recipes, WAILA:** the new tiers' amounts, the recipes (none for creative), and the WAILA lines for a face
+    and for the centre.
+  - **20 Nov 2026, Valier Tweaks 2.1.0 (as 2.1.0-pre1):** all nine steps, 300 checks, none failed (mod 6, lootspawner
+    123, xpcrafter 70, pipes 42, pipeperf 2, railboiler 12, boilers 18, trees 12, peaceful 15). Speed: 0.203 ms a tick
+    for 1,024 working faces, the same as 2.0.

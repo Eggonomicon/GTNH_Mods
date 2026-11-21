@@ -13,13 +13,19 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.common.util.ForgeDirection;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 
+import com.mojang.authlib.GameProfile;
 import com.valier.tweaks.pipe.BlockPipe;
 import com.valier.tweaks.pipe.FaceConfig;
 import com.valier.tweaks.pipe.FaceMode;
+import com.valier.tweaks.pipe.Fluids;
+import com.valier.tweaks.pipe.ItemPipeConfigurator;
+import com.valier.tweaks.pipe.PipeClicks;
+import com.valier.tweaks.pipe.PipeInfo;
 import com.valier.tweaks.pipe.PipeNetwork;
 import com.valier.tweaks.pipe.PipeNetworks;
 import com.valier.tweaks.pipe.PipeTier;
@@ -41,6 +47,10 @@ import cpw.mods.fml.common.gameevent.TickEvent;
  * <li>Wireless pipes with the same tag linked (same owner), another owner's left out;</li>
  * <li>a loot spawner with only a pipe pulling from it works; an idle face sleeps;</li>
  * <li>the {@code pipes} command answers.</li>
+ * <li>2.1 (two layers higher): priority strictly first, round robin, even split, in order; Deny over Allow and Void;
+ * Void on a pulling face (with an amount kept) and on a pushing face (overflow), for fluids too; creative pipes (Pull,
+ * Provide, wireless, fluid; only ops and creative players); the wrench picking a pipe up; the Pipe Configurator; 2.0
+ * filters read in; the new tiers; what WAILA is sent.</li>
  * </ul>
  */
 public final class PipeSelfTest { // public: Forge calls its tick handler from another class loader
@@ -70,6 +80,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         wireless();
         lootSpawner();
         filters();
+        v21();
         FMLCommonHandler.instance()
             .bus()
             .register(this);
@@ -171,7 +182,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         a.setInventorySlotContents(0, new ItemStack(Blocks.cobblestone, 20));
         a.setInventorySlotContents(1, new ItemStack(Items.iron_ingot, 5));
         TilePipe t1 = pipe(p1, ModBlocks.itemPipe, PipeTier.ELITE, OWNER), t2 = pipe(p2, ModBlocks.itemPipe, PipeTier.ELITE, OWNER);
-        t1.face(ForgeDirection.WEST.ordinal()).filter[0] = new ItemStack(Items.iron_ingot);
+        t1.face(ForgeDirection.WEST.ordinal()).allow.filter[0] = new ItemStack(Items.iron_ingot);
         mode(t1, ForgeDirection.WEST, FaceMode.EXTRACT);
         mode(t2, ForgeDirection.EAST, FaceMode.INSERT);
 
@@ -183,8 +194,8 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         c.setInventorySlotContents(0, new ItemStack(Items.iron_ingot, 64));
         TilePipe u1 = pipe(q1, ModBlocks.itemPipe, PipeTier.ELITE, OWNER), u2 = pipe(q2, ModBlocks.itemPipe, PipeTier.ELITE, OWNER);
         FaceConfig r = u2.face(ForgeDirection.EAST.ordinal());
-        r.filter[0] = new ItemStack(Items.iron_ingot);
-        r.count[0] = 10;
+        r.allow.filter[0] = new ItemStack(Items.iron_ingot);
+        r.allow.count[0] = 10;
         mode(u2, ForgeDirection.EAST, FaceMode.REQUEST);
         u1.faceChanged(); // its west face stays Provide
     }
@@ -280,8 +291,8 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         chest(stockSrc).setInventorySlotContents(0, new ItemStack(Items.iron_ingot, 20));
         chest(stockDst);
         TilePipe a = pipe(at(2, 15), ModBlocks.itemPipe, PipeTier.ELITE, OWNER), b = pipe(at(3, 15), ModBlocks.itemPipe, PipeTier.ELITE, OWNER);
-        a.face(ForgeDirection.WEST.ordinal()).filter[0] = new ItemStack(Items.iron_ingot);
-        a.face(ForgeDirection.WEST.ordinal()).count[0] = 5;
+        a.face(ForgeDirection.WEST.ordinal()).allow.filter[0] = new ItemStack(Items.iron_ingot);
+        a.face(ForgeDirection.WEST.ordinal()).allow.count[0] = 5;
         mode(a, ForgeDirection.WEST, FaceMode.EXTRACT);
         mode(b, ForgeDirection.EAST, FaceMode.INSERT);
         // Push filling its chest up to 8 cobblestone.
@@ -290,8 +301,8 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         chest(limSrc).setInventorySlotContents(0, new ItemStack(Blocks.cobblestone, 30));
         chest(limDst);
         TilePipe c = pipe(at(13, 6), ModBlocks.itemPipe, PipeTier.ELITE, OWNER), d = pipe(at(14, 6), ModBlocks.itemPipe, PipeTier.ELITE, OWNER);
-        d.face(ForgeDirection.EAST.ordinal()).filter[0] = new ItemStack(Blocks.cobblestone);
-        d.face(ForgeDirection.EAST.ordinal()).count[0] = 8;
+        d.face(ForgeDirection.EAST.ordinal()).allow.filter[0] = new ItemStack(Blocks.cobblestone);
+        d.face(ForgeDirection.EAST.ordinal()).allow.count[0] = 8;
         mode(c, ForgeDirection.WEST, FaceMode.EXTRACT);
         mode(d, ForgeDirection.EAST, FaceMode.INSERT);
         // Push taking only what its chest already holds (existing items).
@@ -302,7 +313,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         es.setInventorySlotContents(1, new ItemStack(Blocks.dirt, 10));
         chest(exDst).setInventorySlotContents(0, new ItemStack(Items.coal, 1));
         TilePipe e = pipe(at(13, 10), ModBlocks.itemPipe, PipeTier.ELITE, OWNER), g = pipe(at(14, 10), ModBlocks.itemPipe, PipeTier.ELITE, OWNER);
-        g.face(ForgeDirection.EAST.ordinal()).kind = FaceConfig.Kind.EXISTING;
+        g.face(ForgeDirection.EAST.ordinal()).allow.kind = FaceConfig.Kind.EXISTING;
         mode(e, ForgeDirection.WEST, FaceMode.EXTRACT);
         mode(g, ForgeDirection.EAST, FaceMode.INSERT);
         // Push/Pull: P's sticks go to Q (which takes only sticks); R's flint can only go into P, and stays there.
@@ -313,7 +324,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         chest(ppQ);
         chest(ppR).setInventorySlotContents(0, new ItemStack(Items.flint, 6));
         TilePipe p = pipe(at(13, 14), ModBlocks.itemPipe, PipeTier.ELITE, OWNER), q = pipe(at(14, 14), ModBlocks.itemPipe, PipeTier.ELITE, OWNER);
-        q.face(ForgeDirection.EAST.ordinal()).filter[0] = new ItemStack(Items.stick);
+        q.face(ForgeDirection.EAST.ordinal()).allow.filter[0] = new ItemStack(Items.stick);
         p.updateConnections();
         mode(p, ForgeDirection.WEST, FaceMode.PUSH_PULL);
         mode(p, ForgeDirection.SOUTH, FaceMode.EXTRACT);
@@ -336,13 +347,347 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
                 + "another face pulled (nowhere else would take it) (" + count(inv(ppQ), Items.stick) + " sticks there, "
                 + count(inv(ppP), Items.flint) + " flint in it)");
         FaceConfig f = new FaceConfig();
-        f.damage = FaceConfig.Damage.D50;
+        f.allow.damage = FaceConfig.Damage.D50;
         ItemStack worn = new ItemStack(Items.iron_pickaxe), fresh = new ItemStack(Items.iron_pickaxe);
         worn.setItemDamage(200);
-        f.kind = FaceConfig.Kind.MODS;
-        f.filter[0] = new ItemStack(Blocks.dirt);
+        f.allow.kind = FaceConfig.Kind.MODS;
+        f.allow.filter[0] = new ItemStack(Blocks.dirt);
         boolean mods = f.passes(worn, null) && !f.passes(fresh, null);
         SelfTest.check(mods, "damaged 50%+ passes a worn pickaxe, not a fresh one; a mod list of dirt passes any vanilla item");
+    }
+
+    // ---- 2.1 ---------------------------------------------------------------------------------------------------------
+
+    int y2, y4;
+    int[] prSrc, prHi, prLo, prPull, rrA, rrB, ev1, ev2, ev3, evSrc, io1, io2, lsSrc, lsDst, kvSrc, kvPipe, ovSrc, ovDst,
+        ovPipe, fvTank, fdTank, crChest, rqChest, wlChest, cfTank;
+    FakePlayer tester;
+
+    int[] at2(int dx, int dz) {
+        return new int[] { bx + dx, y2, bz + dz };
+    }
+
+    int[] at4(int dx, int dz) {
+        return new int[] { bx + dx, y4, bz + dz };
+    }
+
+    /** Pipes in a row from x0 to x1 (inclusive), on layer ly, row dz. */
+    TilePipe[] row(int ly, int x0, int x1, int dz, Block block, int tier) {
+        TilePipe[] out = new TilePipe[x1 - x0 + 1];
+        for (int x = x0; x <= x1; x++) out[x - x0] = pipe(new int[] { bx + x, ly, bz + dz }, block, tier, OWNER);
+        for (TilePipe t : out) t.updateConnections();
+        return out;
+    }
+
+    /** An item holding a fluid, as a player would put in a filter (a filled bucket, or GregTech's display item). */
+    static ItemStack fluidItem(String name) {
+        net.minecraftforge.fluids.Fluid f = FluidRegistry.getFluid(name);
+        if (f == null) return null;
+        FluidStack fs = new FluidStack(f, 1000);
+        ItemStack bucket = net.minecraftforge.fluids.FluidContainerRegistry.fillFluidContainer(fs, new ItemStack(Items.bucket));
+        if (bucket != null) return bucket;
+        try {
+            return (ItemStack) Class.forName("gregtech.api.util.GTUtility")
+                .getMethod("getFluidDisplay", FluidStack.class, boolean.class)
+                .invoke(null, fs, false);
+        } catch (Throwable e) {
+            return null;
+        }
+    }
+
+    TileXpCrafter crafter(int[] p, int mB) {
+        world.setBlock(p[0], p[1], p[2], ModBlocks.xpCrafter);
+        placed.add(p);
+        TileXpCrafter t = (TileXpCrafter) world.getTileEntity(p[0], p[1], p[2]);
+        if (mB > 0) t.fill(new FluidStack(FluidRegistry.getFluid("xpjuice"), mB), true);
+        return t;
+    }
+
+    static int mB(TileEntity te) {
+        return te instanceof TileXpCrafter && ((TileXpCrafter) te).getFluid() != null ? ((TileXpCrafter) te).getFluid().amount : 0;
+    }
+
+    void v21() {
+        y2 = y + 2;
+        y4 = y + 4;
+        tester = new FakePlayer(world, new GameProfile(UUID.fromString("00000000-0000-4000-8000-0000000000c3"), "PipeTester21")) {
+
+            @Override
+            public void addChatMessage(net.minecraft.util.IChatComponent message) {}
+        };
+        tester.setPosition(bx + 8.5, y4, bz + 0.5);
+        Block ip = ModBlocks.itemPipe, fp = ModBlocks.fluidPipe;
+        int n = ForgeDirection.NORTH.ordinal(), w = ForgeDirection.WEST.ordinal(), e = ForgeDirection.EAST.ordinal();
+        // Priority: all 40 go to the priority-10 chest, none to the priority-0 one (2.0 sent some to it).
+        prSrc = at2(1, 2);
+        prHi = at2(3, 1);
+        prLo = at2(5, 1);
+        chest(prSrc).setInventorySlotContents(0, new ItemStack(Blocks.cobblestone, 40));
+        chest(prHi);
+        chest(prLo);
+        TilePipe[] pr = row(y2, 2, 5, 2, ip, PipeTier.ELITE);
+        prPull = at2(2, 2);
+        pr[0].face(w).amount = 4; // ten transfers: 2.0's rotation would have sent every other one to priority 0
+        mode(pr[0], ForgeDirection.WEST, FaceMode.EXTRACT);
+        pr[1].face(n).priority = 10;
+        mode(pr[1], ForgeDirection.NORTH, FaceMode.INSERT);
+        mode(pr[3], ForgeDirection.NORTH, FaceMode.INSERT);
+        // Round robin, 4 a transfer: two equal chests take turns.
+        chest(at2(1, 6)).setInventorySlotContents(0, new ItemStack(Blocks.cobblestone, 20));
+        rrA = at2(3, 5);
+        rrB = at2(5, 5);
+        chest(rrA);
+        chest(rrB);
+        TilePipe[] rr = row(y2, 2, 5, 6, ip, PipeTier.ELITE);
+        rr[0].face(w).amount = 4;
+        mode(rr[0], ForgeDirection.WEST, FaceMode.EXTRACT);
+        mode(rr[1], ForgeDirection.NORTH, FaceMode.INSERT);
+        mode(rr[3], ForgeDirection.NORTH, FaceMode.INSERT);
+        // Even split: one transfer of 64 over three chests is 22, 21, 21.
+        evSrc = at2(1, 10);
+        chest(evSrc).setInventorySlotContents(0, new ItemStack(Blocks.cobblestone, 64));
+        ev1 = at2(3, 9);
+        ev2 = at2(5, 9);
+        ev3 = at2(7, 9);
+        chest(ev1);
+        chest(ev2);
+        chest(ev3);
+        TilePipe[] ev = row(y2, 2, 7, 10, ip, PipeTier.ELITE);
+        ev[0].face(w).spread = FaceConfig.Spread.EVEN;
+        mode(ev[0], ForgeDirection.WEST, FaceMode.EXTRACT);
+        mode(ev[1], ForgeDirection.NORTH, FaceMode.INSERT);
+        mode(ev[3], ForgeDirection.NORTH, FaceMode.INSERT);
+        mode(ev[5], ForgeDirection.NORTH, FaceMode.INSERT);
+        // In order, 5 a transfer: the first chest takes everything.
+        chest(at2(1, 14)).setInventorySlotContents(0, new ItemStack(Blocks.cobblestone, 30));
+        io1 = at2(3, 13);
+        io2 = at2(5, 13);
+        chest(io1);
+        chest(io2);
+        TilePipe[] io = row(y2, 2, 5, 14, ip, PipeTier.ELITE);
+        io[0].face(w).amount = 5;
+        io[0].face(w).spread = FaceConfig.Spread.IN_ORDER;
+        mode(io[0], ForgeDirection.WEST, FaceMode.EXTRACT);
+        mode(io[1], ForgeDirection.NORTH, FaceMode.INSERT);
+        mode(io[3], ForgeDirection.NORTH, FaceMode.INSERT);
+        // Three lists at once: allow cobble and dirt, deny dirt, void sticks and dirt.
+        lsSrc = at2(9, 2);
+        IInventory ls = chest(lsSrc);
+        ls.setInventorySlotContents(0, new ItemStack(Blocks.cobblestone, 10));
+        ls.setInventorySlotContents(1, new ItemStack(Blocks.dirt, 10));
+        ls.setInventorySlotContents(2, new ItemStack(Items.stick, 10));
+        lsDst = at2(12, 1);
+        chest(lsDst);
+        TilePipe[] lp = row(y2, 10, 13, 2, ip, PipeTier.ELITE);
+        FaceConfig lf = lp[0].face(w);
+        lf.allow.filter[0] = new ItemStack(Blocks.cobblestone);
+        lf.allow.filter[1] = new ItemStack(Blocks.dirt);
+        lf.deny.filter[0] = new ItemStack(Blocks.dirt);
+        lf.voids.filter[0] = new ItemStack(Items.stick);
+        lf.voids.filter[1] = new ItemStack(Blocks.dirt);
+        mode(lp[0], ForgeDirection.WEST, FaceMode.EXTRACT);
+        mode(lp[2], ForgeDirection.NORTH, FaceMode.INSERT);
+        // Void on a Pull face, keeping 40: no destination at all.
+        kvSrc = at2(9, 6);
+        IInventory kv = chest(kvSrc);
+        kv.setInventorySlotContents(0, new ItemStack(Blocks.cobblestone, 64));
+        kv.setInventorySlotContents(1, new ItemStack(Blocks.cobblestone, 36));
+        kvPipe = at2(10, 6);
+        TilePipe kp = pipe(kvPipe, ip, PipeTier.ELITE, OWNER);
+        kp.face(w).voids.filter[0] = new ItemStack(Blocks.cobblestone);
+        kp.face(w).voids.count[0] = 40;
+        mode(kp, ForgeDirection.WEST, FaceMode.EXTRACT);
+        // Void on a Push face: its chest has room for 10 cobblestone; the other 54 sent there are destroyed.
+        ovSrc = at2(9, 10);
+        chest(ovSrc).setInventorySlotContents(0, new ItemStack(Blocks.cobblestone, 64));
+        ovDst = at2(12, 9);
+        IInventory od = chest(ovDst);
+        for (int i = 0; i < 26; i++) od.setInventorySlotContents(i, new ItemStack(Blocks.dirt, 64));
+        od.setInventorySlotContents(26, new ItemStack(Blocks.cobblestone, 54));
+        TilePipe[] op = row(y2, 10, 12, 10, ip, PipeTier.ELITE);
+        ovPipe = at2(12, 10);
+        mode(op[0], ForgeDirection.WEST, FaceMode.EXTRACT);
+        op[2].face(n).voids.filter[0] = new ItemStack(Blocks.cobblestone);
+        mode(op[2], ForgeDirection.NORTH, FaceMode.INSERT);
+        // Fluids: void liquid XP keeping 4,000 mB; Deny wins over Void.
+        ItemStack xp = fluidItem("xpjuice");
+        SelfTest.check(xp != null && Fluids.of(xp) != null, "an item naming liquid XP for the fluid filters (" + xp + ")");
+        fvTank = at2(9, 14);
+        fdTank = at2(12, 14);
+        crafter(fvTank, 10000);
+        crafter(fdTank, 10000);
+        TilePipe fv = pipe(at2(10, 14), fp, PipeTier.ELITE, OWNER), fd = pipe(at2(13, 14), fp, PipeTier.ELITE, OWNER);
+        if (xp != null) {
+            fv.face(w).voids.filter[0] = xp.copy();
+            fv.face(w).voids.count[0] = 4000;
+            fd.face(w).deny.filter[0] = xp.copy();
+            fd.face(w).voids.filter[0] = xp.copy();
+        }
+        mode(fv, ForgeDirection.WEST, FaceMode.EXTRACT);
+        mode(fd, ForgeDirection.WEST, FaceMode.EXTRACT);
+        // Creative pipes: Pull fills a chest; Provide stocks a Request face; tagged, a far Wireless face; fluid.
+        crChest = at4(3, 2);
+        chest(crChest);
+        TilePipe cr = pipe(at4(2, 2), ip, PipeTier.CREATIVE, OWNER);
+        FaceConfig src = cr.face(TilePipe.SOURCE);
+        src.allow.filter[0] = new ItemStack(Items.iron_ingot);
+        src.mode = FaceMode.EXTRACT;
+        mode(cr, ForgeDirection.EAST, FaceMode.INSERT);
+        rqChest = at4(4, 6);
+        chest(rqChest);
+        TilePipe cq = pipe(at4(2, 6), ip, PipeTier.CREATIVE, OWNER), rq1 = pipe(at4(3, 6), ip, PipeTier.ELITE, OWNER);
+        cq.updateConnections();
+        cq.face(TilePipe.SOURCE).allow.filter[0] = new ItemStack(Items.gold_ingot);
+        cq.face(TilePipe.SOURCE).mode = FaceMode.PROVIDE;
+        cq.faceChanged();
+        rq1.face(e).allow.filter[0] = new ItemStack(Items.gold_ingot);
+        rq1.face(e).allow.count[0] = 100;
+        mode(rq1, ForgeDirection.EAST, FaceMode.REQUEST);
+        wlChest = at4(7, 10);
+        chest(wlChest);
+        TilePipe cw = pipe(at4(2, 10), ip, PipeTier.CREATIVE, OWNER), ww = pipe(at4(6, 10), ip, PipeTier.WIRELESS, OWNER);
+        cw.face(TilePipe.SOURCE).allow.filter[0] = new ItemStack(Items.diamond);
+        cw.face(TilePipe.SOURCE).tag = "c21";
+        cw.face(TilePipe.SOURCE).mode = FaceMode.EXTRACT;
+        cw.faceChanged();
+        ww.face(e).tag = "c21";
+        mode(ww, ForgeDirection.EAST, FaceMode.INSERT);
+        cfTank = at4(3, 14);
+        crafter(cfTank, 0);
+        TilePipe cf = pipe(at4(2, 14), fp, PipeTier.CREATIVE, OWNER);
+        if (xp != null) cf.face(TilePipe.SOURCE).allow.filter[0] = xp.copy();
+        cf.face(TilePipe.SOURCE).mode = FaceMode.EXTRACT;
+        mode(cf, ForgeDirection.EAST, FaceMode.INSERT);
+        // Who may touch a creative pipe.
+        SelfTest.check(!PipeClicks.may(cr, tester), "a survival player who isn't an op can't change a creative pipe");
+        tester.capabilities.isCreativeMode = true;
+        SelfTest.check(PipeClicks.may(cr, tester), "a player in creative mode can");
+        tester.capabilities.isCreativeMode = false;
+        SelfTest.check(ip.getBlockHardness(world, cr.xCoord, cr.yCoord, cr.zCoord) < 0
+            && ip.getBlockHardness(world, rq1.xCoord, rq1.yCoord, rq1.zCoord) > 0,
+            "a creative pipe can't be broken in survival; other pipes can");
+        // The wrench on a pipe's centre: the pipe and what its face held go to the player.
+        int[] wp = at4(10, 2);
+        chest(at4(11, 2));
+        TilePipe wt = pipe(wp, ip, PipeTier.SUPERIOR, OWNER);
+        wt.face(e).heldItems.add(new ItemStack(Items.flint, 5));
+        PipeClicks.pickUp(wt, tester, null);
+        int pipes = 0, flint = 0;
+        for (ItemStack s : tester.inventory.mainInventory) {
+            if (s == null) continue;
+            if (s.getItem() == Item.getItemFromBlock(ip) && s.getItemDamage() == PipeTier.SUPERIOR) pipes += s.stackSize;
+            if (s.getItem() == Items.flint) flint += s.stackSize;
+        }
+        SelfTest.check(world.isAirBlock(wp[0], wp[1], wp[2]) && pipes == 1 && flint == 5,
+            "the wrench on a pipe's centre picks it up (" + pipes + " Superior pipe) with what it held back (" + flint + " flint)");
+        // The Pipe Configurator: copy a face, paste it onto another pipe's face; the other keeps what it holds.
+        chest(at4(11, 6));
+        chest(at4(14, 6));
+        TilePipe k1 = pipe(at4(10, 6), ip, PipeTier.ELITE, OWNER), k2 = pipe(at4(13, 6), ip, PipeTier.ULTIMATE, OWNER);
+        FaceConfig a = k1.face(e);
+        a.mode = FaceMode.EXTRACT;
+        a.priority = 3;
+        a.tag = "cf";
+        a.spread = FaceConfig.Spread.EVEN;
+        a.allow.filter[0] = new ItemStack(Items.iron_ingot);
+        a.deny.filter[0] = new ItemStack(Blocks.dirt);
+        a.voids.filter[0] = new ItemStack(Items.stick);
+        a.voids.count[0] = 7;
+        k1.faceChanged();
+        k2.face(e).heldItems.add(new ItemStack(Items.flint, 3));
+        ItemStack tool = new ItemStack(ModBlocks.pipeConfigurator);
+        ItemPipeConfigurator.use(tool, tester, k1, e, true);
+        ItemPipeConfigurator.use(tool, tester, k2, e, false);
+        FaceConfig b = k2.face(e);
+        boolean same = b.mode == FaceMode.EXTRACT && b.priority == 3 && "cf".equals(b.tag) && b.spread == FaceConfig.Spread.EVEN
+            && b.allow.filter[0] != null && b.allow.filter[0].getItem() == Items.iron_ingot && b.deny.filter[0] != null
+            && b.voids.filter[0] != null && b.voids.count[0] == 7 && b.heldItems.size() == 1 && b.heldItems.get(0).stackSize == 3;
+        SelfTest.check(same, "the Pipe Configurator copies a face (mode, priority, tag, spread, all three lists) onto another; "
+            + "that one keeps what it holds");
+        mode(k1, ForgeDirection.EAST, FaceMode.OFF);
+        mode(k2, ForgeDirection.EAST, FaceMode.OFF);
+        // 2.0 filters read in: a whitelist is the Allow list, a blacklist the Deny list (the wear setting on both).
+        net.minecraft.nbt.NBTTagCompound old = new net.minecraft.nbt.NBTTagCompound();
+        net.minecraft.nbt.NBTTagList list = new net.minecraft.nbt.NBTTagList();
+        net.minecraft.nbt.NBTTagCompound entry = new ItemStack(Blocks.dirt).writeToNBT(new net.minecraft.nbt.NBTTagCompound());
+        entry.setByte("Slot", (byte) 0);
+        list.appendTag(entry);
+        old.setTag("Filter", list);
+        old.setBoolean("Blacklist", true);
+        old.setByte("Damage", (byte) FaceConfig.Damage.ANY.ordinal());
+        FaceConfig black = FaceConfig.read(old);
+        old.removeTag("Blacklist");
+        FaceConfig white = FaceConfig.read(old);
+        ItemStack dirt = new ItemStack(Blocks.dirt), cobble = new ItemStack(Blocks.cobblestone);
+        SelfTest.check(!black.passes(dirt, null) && black.passes(cobble, null) && black.deny.hasEntries() && !black.allow.hasEntries()
+            && white.passes(dirt, null) && !white.passes(cobble, null) && white.allow.hasEntries() && !white.deny.hasEntries(),
+            "a 2.0 blacklist reads as the Deny list, a whitelist as the Allow list");
+        // The new tiers.
+        SelfTest.check(PipeTier.maxItems(PipeTier.SUPERIOR) == 160 && PipeTier.maxItems(PipeTier.ULTIMATE) == 320
+            && PipeTier.maxFluid(PipeTier.SUPERIOR) == 40000 && PipeTier.maxFluid(PipeTier.ULTIMATE) == 160000
+            && PipeTier.interval(PipeTier.ULTIMATE) == 5 && PipeTier.maxItems(PipeTier.WIRELESS) == 64,
+            "Superior moves 160 items / 40,000 mB and Ultimate 320 / 160,000 every 5 ticks; Wireless stays at Elite's 64");
+        int found = 0;
+        for (Object r : net.minecraft.item.crafting.CraftingManager.getInstance()
+            .getRecipeList()) {
+            ItemStack out = ((net.minecraft.item.crafting.IRecipe) r).getRecipeOutput();
+            if (out == null) continue;
+            if (out.getItem() == Item.getItemFromBlock(ip) && (out.getItemDamage() == PipeTier.SUPERIOR || out.getItemDamage() == PipeTier.ULTIMATE)) found++;
+            if (out.getItem() == ModBlocks.pipeConfigurator) found++;
+            if (out.getItemDamage() == PipeTier.CREATIVE && out.getItem() == Item.getItemFromBlock(ip)) found -= 100;
+        }
+        SelfTest.check(found == 3, "recipes for Superior and Ultimate item pipes and the Pipe Configurator, none for creative ("
+            + found + ")");
+    }
+
+    void checkV21() {
+        Item cobble = Item.getItemFromBlock(Blocks.cobblestone), dirt = Item.getItemFromBlock(Blocks.dirt);
+        SelfTest.check(count(inv(prHi), cobble) == 40 && count(inv(prLo), cobble) == 0,
+            "priority: all 40 go to the priority-10 chest, none to priority 0 (" + count(inv(prHi), cobble) + " / "
+                + count(inv(prLo), cobble) + ")");
+        int ra = count(inv(rrA), cobble), rb = count(inv(rrB), cobble);
+        SelfTest.check(ra + rb == 20 && ra > 0 && rb > 0 && Math.abs(ra - rb) <= 4,
+            "round robin: two equal chests take turns (" + ra + " / " + rb + ")");
+        int[] even = { count(inv(ev1), cobble), count(inv(ev2), cobble), count(inv(ev3), cobble) };
+        java.util.Arrays.sort(even);
+        SelfTest.check(even[0] == 21 && even[1] == 21 && even[2] == 22 && count(inv(evSrc), cobble) == 0,
+            "even split: one transfer of 64 shares 22/21/21 (" + even[0] + " " + even[1] + " " + even[2] + ")");
+        SelfTest.check(count(inv(io1), cobble) == 30 && count(inv(io2), cobble) == 0,
+            "in order: the first chest takes all 30 (" + count(inv(io1), cobble) + " / " + count(inv(io2), cobble) + ")");
+        IInventory ls = inv(lsSrc), ld = inv(lsDst);
+        SelfTest.check(count(ld, cobble) == 10 && count(ls, cobble) == 0 && count(ls, dirt) == 10 && count(ld, dirt) == 0
+            && count(ls, Items.stick) == 0 && count(ld, Items.stick) == 0,
+            "three lists: allowed cobblestone moved, denied dirt neither moved nor voided, sticks voided (" + count(ld, cobble)
+                + " cobble there, " + count(ls, dirt) + " dirt left, " + (count(ls, Items.stick) + count(ld, Items.stick)) + " sticks)");
+        long voided = PipeInfo.snapshot(world, kvPipe[0], kvPipe[1], kvPipe[2]) == null ? -1
+            : pipeAt(kvPipe).face(ForgeDirection.WEST.ordinal()).flow.voidedPerMinute(world.getTotalWorldTime());
+        SelfTest.check(count(inv(kvSrc), cobble) == 40 && voided == 60,
+            "a Pull face's Void list with an amount of 40 destroys the other 60 cobblestone, with nowhere to send anything ("
+                + count(inv(kvSrc), cobble) + " left, " + voided + " voided)");
+        long over = pipeAt(ovPipe).face(ForgeDirection.NORTH.ordinal()).flow.voidedPerMinute(world.getTotalWorldTime());
+        SelfTest.check(count(inv(ovDst), cobble) == 64 && count(inv(ovSrc), cobble) == 0 && over == 54,
+            "a Push face's Void list: its chest is filled, the 54 that don't fit are destroyed (" + count(inv(ovDst), cobble)
+                + " there, " + over + " voided)");
+        SelfTest.check(mB(world.getTileEntity(fvTank[0], fvTank[1], fvTank[2])) == 4000,
+            "a fluid Pull face voids liquid XP down to its 4,000 mB (" + mB(world.getTileEntity(fvTank[0], fvTank[1], fvTank[2])) + " mB)");
+        SelfTest.check(mB(world.getTileEntity(fdTank[0], fdTank[1], fdTank[2])) == 10000,
+            "Deny wins over Void for fluids too (" + mB(world.getTileEntity(fdTank[0], fdTank[1], fdTank[2])) + " mB kept)");
+        SelfTest.check(count(inv(crChest), Items.iron_ingot) == 27 * 64,
+            "a creative pipe (Pull) fills a chest with iron (" + count(inv(crChest), Items.iron_ingot) + ")");
+        SelfTest.check(count(inv(rqChest), Items.gold_ingot) == 100,
+            "a creative pipe (Provide) keeps a Request face's chest at 100 gold (" + count(inv(rqChest), Items.gold_ingot) + ")");
+        SelfTest.check(count(inv(wlChest), Items.diamond) == 27 * 64,
+            "a creative pipe tagged c21 fills a far Wireless pipe's chest with the same tag (" + count(inv(wlChest), Items.diamond) + ")");
+        SelfTest.check(mB(world.getTileEntity(cfTank[0], cfTank[1], cfTank[2])) > 0,
+            "a creative fluid pipe fills an XP crafter (" + mB(world.getTileEntity(cfTank[0], cfTank[1], cfTank[2])) + " mB)");
+        net.minecraft.nbt.NBTTagCompound info = PipeInfo.snapshot(world, prPull[0], prPull[1], prPull[2]);
+        List<String> atFace = info == null ? new ArrayList<>() : com.valier.tweaks.client.PipeHud.lines(info, ForgeDirection.WEST.ordinal());
+        List<String> atCore = info == null ? new ArrayList<>() : com.valier.tweaks.client.PipeHud.lines(info, 6);
+        String face = String.join(" | ", atFace).replaceAll("\u00a7.", ""), core = String.join(" | ", atCore).replaceAll("\u00a7.", "");
+        SelfTest.check(face.contains("Pull") && face.contains("Moved: 40/min") && face.contains("Cobblestone"),
+            "WAILA on a Pull face: its mode, 40 moved this minute, the last thing (" + face + ")");
+        SelfTest.check(core.contains("Network: 4 pipes") && core.contains("Flowing") && core.contains("Cobblestone"),
+            "WAILA on the centre: the network and what flows through it (" + core + ")");
     }
 
     // ---- later -------------------------------------------------------------------------------------------------------
@@ -403,6 +748,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         SelfTest.check(net != null && net.pipeCount() == 1 && net.faceCount() == 2 && !net.isTooBig(),
             "the network knows its pipe and two faces");
         checkFilters();
+        checkV21();
         List<String> stats = PipeNetworks.stats();
         SelfTest.check(stats.size() >= 2 && stats.get(0)
             .contains("pipe networks"), "/valiertweaks pipes answers (" + stats.get(0) + ")");
@@ -410,7 +756,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
     }
 
     void clear() {
-        for (int x = bx; x < bx + 16; x++) for (int z = bz; z < bz + 16; z++) for (int yy = y; yy < y + 3; yy++) {
+        for (int x = bx; x < bx + 16; x++) for (int z = bz; z < bz + 16; z++) for (int yy = y; yy < y + 6; yy++) {
             TileEntity te = world.getTileEntity(x, yy, z);
             if (te instanceof IInventory && !(te instanceof TileXpCrafter)) {
                 IInventory i = (IInventory) te;

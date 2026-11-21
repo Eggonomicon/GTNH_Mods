@@ -128,9 +128,13 @@ def xp_crafter_bottom():
     return lambda x, y: casing(x, y, n) + (255,)
 
 
-# Pipe tiers: Basic bronze, Advanced steel, Elite aluminium blue, Wireless ender violet.
+# Pipe tiers (metadata order): Basic bronze, Advanced steel, Elite aluminium blue, Wireless ender violet, Superior
+# emerald, Ultimate crimson, Creative (its colours come in diagonal bands, see pipe()).
 TIER_METAL = [((150, 98, 48), (222, 168, 96)), ((86, 90, 98), (170, 176, 186)), ((70, 110, 160), (150, 196, 240)),
-              ((88, 52, 120), (186, 130, 230))]
+              ((88, 52, 120), (186, 130, 230)), ((34, 104, 70), (120, 215, 160)), ((116, 28, 44), (226, 96, 112)),
+              ((70, 70, 78), (235, 235, 240))]
+CREATIVE = 6
+CREATIVE_BANDS = [((150, 40, 150), (245, 130, 235)), ((30, 120, 150), (120, 225, 245)), ((150, 120, 30), (245, 220, 110))]
 
 
 def pipe(tier, fluid):
@@ -149,6 +153,9 @@ def pipe(tier, fluid):
         if not fluid and y in (7, 8):
             return shade(lo, 0.75) + (255,)
         t = 0.35 + (1 - abs(y - 7.5) / 7.5) * 0.45 + (n[y][x] - 0.5) * 0.12
+        if tier == CREATIVE:
+            blo, bhi = CREATIVE_BANDS[((x + y) // 3) % 3]
+            return mix(blo, bhi, t) + (255,)
         return mix(lo, hi, t) + (255,)
 
     return px
@@ -169,17 +176,55 @@ def pipe_plate():
     return px
 
 
+def pipe_configurator():
+    """The Pipe Configurator: a clipboard (wooden board, steel clip) with a short Elite-blue pipe drawn on its paper and
+    two lines of notes under it."""
+    n = noise(61)
+    K = (24, 24, 28)
+
+    def px(x, y):
+        if 6 <= x <= 9 and 1 <= y <= 3:  # the clip
+            if x in (6, 9) or y == 1:
+                return K + (255,)
+            return shade((170, 176, 186), 1.1 if y == 2 else 0.85) + (255,)
+        if 2 <= x <= 13 and 2 <= y <= 15:
+            if x in (2, 13) or y in (2, 15):
+                return K + (255,)
+            if 4 <= x <= 11 and 4 <= y <= 13:  # paper
+                if 6 <= y <= 8 and 5 <= x <= 10:  # the pipe on it
+                    if y == 6:
+                        return (150, 196, 240, 255)
+                    if y == 8:
+                        return (50, 80, 125, 255)
+                    return (70, 110, 160, 255) if x not in (5, 10) else (40, 60, 95, 255)
+                if y in (10, 12) and 5 <= x <= (10 if y == 10 else 8):
+                    return (120, 120, 130, 255)
+                return shade((236, 232, 220), 0.97 + n[y][x] * 0.06) + (255,)
+            wood = mix((120, 78, 40), (170, 118, 66), n[y][x])  # the board
+            return wood + (255,)
+        return (0, 0, 0, 0)
+
+    return px
+
+
 # name -> (folder, function)
 TEXTURES = {
+    'pipe_configurator': ('items', pipe_configurator),
     'pipe_plate': ('blocks', pipe_plate),
     'item_pipe_0': ('blocks', lambda: pipe(0, False)),
     'item_pipe_1': ('blocks', lambda: pipe(1, False)),
     'item_pipe_2': ('blocks', lambda: pipe(2, False)),
     'item_pipe_3': ('blocks', lambda: pipe(3, False)),
+    'item_pipe_4': ('blocks', lambda: pipe(4, False)),
+    'item_pipe_5': ('blocks', lambda: pipe(5, False)),
+    'item_pipe_6': ('blocks', lambda: pipe(6, False)),
     'fluid_pipe_0': ('blocks', lambda: pipe(0, True)),
     'fluid_pipe_1': ('blocks', lambda: pipe(1, True)),
     'fluid_pipe_2': ('blocks', lambda: pipe(2, True)),
     'fluid_pipe_3': ('blocks', lambda: pipe(3, True)),
+    'fluid_pipe_4': ('blocks', lambda: pipe(4, True)),
+    'fluid_pipe_5': ('blocks', lambda: pipe(5, True)),
+    'fluid_pipe_6': ('blocks', lambda: pipe(6, True)),
     'loot_spawner': ('blocks', loot_spawner),
     'xp_crafter_side': ('blocks', xp_crafter_side),
     'xp_crafter_top': ('blocks', xp_crafter_top),

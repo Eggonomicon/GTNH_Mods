@@ -831,7 +831,7 @@ public final class LootSpawners {
     }
 
     /** Into the player's inventory, or dropped at their feet if it doesn't fit. */
-    static void give(EntityPlayer player, ItemStack stack) {
+    public static void give(EntityPlayer player, ItemStack stack) {
         player.inventory.addItemStackToInventory(stack);
         if (stack.stackSize > 0) player.dropPlayerItemWithRandomChoice(stack, false);
         player.inventoryContainer.detectAndSendChanges();

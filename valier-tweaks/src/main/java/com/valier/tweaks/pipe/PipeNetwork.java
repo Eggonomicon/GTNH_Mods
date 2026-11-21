@@ -37,7 +37,15 @@ public final class PipeNetwork {
         return tooBig;
     }
 
-    static final Comparator<Face> BY_PRIORITY = (a, b) -> Integer.compare(b.cfg.priority, a.cfg.priority);
+    /** Higher priority first; equal priorities always in the same order (by place), for the "in order" spread. */
+    static final Comparator<Face> BY_PRIORITY = (a, b) -> {
+        int c = Integer.compare(b.cfg.priority, a.cfg.priority);
+        if (c != 0) return c;
+        if (a.pipe.xCoord != b.pipe.xCoord) return Integer.compare(a.pipe.xCoord, b.pipe.xCoord);
+        if (a.pipe.zCoord != b.pipe.zCoord) return Integer.compare(a.pipe.zCoord, b.pipe.zCoord);
+        if (a.pipe.yCoord != b.pipe.yCoord) return Integer.compare(a.pipe.yCoord, b.pipe.yCoord);
+        return Integer.compare(a.side, b.side);
+    };
 
     void sort() {
         for (Face f : all) {
@@ -86,10 +94,10 @@ public final class PipeNetwork {
         boolean dead;
         /** In the timer queue (not waiting for a chunk, not being run). */
         boolean queued;
-        /** Round robin over equal priorities. */
-        int turn;
         /** The wireless scope its tag lives in (its owner's team), when it is a Wireless face with a tag. */
         Object scope;
+        /** A creative pipe's centre: the endless inventory or tank it draws from (else null: the block it touches). */
+        final CreativeSource source;
 
         Face(PipeNetwork net, TilePipe pipe, int side) {
             this.net = net;
@@ -104,10 +112,11 @@ public final class PipeNetwork {
             this.cfg = pipe.face(side);
             this.tier = pipe.tier();
             this.owner = pipe.owner();
+            this.source = side == TilePipe.SOURCE ? new CreativeSource(cfg, pipe.kind(), tier) : null;
         }
 
         boolean wireless() {
-            return tier == PipeTier.WIRELESS && !cfg.tag.isEmpty();
+            return PipeTier.wireless(tier) && !cfg.tag.isEmpty();
         }
 
         /** Faces trade only with faces of the same tag. */
@@ -124,7 +133,8 @@ public final class PipeNetwork {
         }
 
         String where() {
-            return pipe.xCoord + " " + pipe.yCoord + " " + pipe.zCoord + " " + ForgeDirection.getOrientation(side);
+            return pipe.xCoord + " " + pipe.yCoord + " " + pipe.zCoord + " "
+                + (side == TilePipe.SOURCE ? "source" : ForgeDirection.getOrientation(side).toString());
         }
     }
 }

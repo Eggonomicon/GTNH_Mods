@@ -31,7 +31,8 @@ import cpw.mods.fml.relauncher.SideOnly;
 /**
  * Item pipes and fluid pipes ({@link PipeKind}), metadata = tier ({@link PipeTier}). Thin connected pipes: a core and
  * an arm to each joined side, with a coloured plate where an arm touches a block (the face's mode). Right-click an arm
- * touching a block for its menu; sneak-right-click it with a wrench to shut or open that side.
+ * touching a block for its menu; sneak-right-click it with a wrench to shut or open that side. A creative pipe's centre
+ * opens its source menu.
  */
 public class BlockPipe extends BlockContainer {
 
@@ -86,7 +87,20 @@ public class BlockPipe extends BlockContainer {
     @SideOnly(Side.CLIENT)
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void getSubBlocks(Item item, CreativeTabs tab, List list) {
-        for (int t = 0; t < PipeTier.COUNT; t++) list.add(new ItemStack(item, 1, t));
+        for (int t : PipeTier.ORDER) list.add(new ItemStack(item, 1, t));
+    }
+
+    /** Creative pipes can't be broken in survival (only creative players, or an op's wrench). */
+    @Override
+    public float getBlockHardness(World world, int x, int y, int z) {
+        return world.getBlockMetadata(x, y, z) == PipeTier.CREATIVE ? -1.0F : super.getBlockHardness(world, x, y, z);
+    }
+
+    @Override
+    public float getExplosionResistance(net.minecraft.entity.Entity e, World world, int x, int y, int z, double ex, double ey,
+        double ez) {
+        return world.getBlockMetadata(x, y, z) == PipeTier.CREATIVE ? 6_000_000.0F
+            : super.getExplosionResistance(e, world, x, y, z, ex, ey, ez);
     }
 
     @Override
@@ -177,6 +191,7 @@ public class BlockPipe extends BlockContainer {
         if (world.isRemote) return true; // the server decides (which arm was hit, from where the player looks)
         TilePipe p = (TilePipe) te;
         int arm = armLookedAt(world, x, y, z, player);
+        if (arm == 6 && p.creative()) return PipeClicks.activated(p, TilePipe.SOURCE, player);
         if (arm < 0 || arm > 5) arm = side; // the core: the side of it that was clicked
         return PipeClicks.activated(p, arm, player);
     }

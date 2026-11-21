@@ -19,7 +19,8 @@ import io.netty.buffer.ByteBuf;
 public class PipeActionMessage implements IMessage {
 
     public static final int MODE = 0, REDSTONE = 1, AMOUNT = 2, TICKS = 3, PRIORITY = 4, OVERFLOW = 5, KIND = 6, BLACKLIST = 7,
-        DAMAGE = 8, NBT = 9, ORE = 10, SNAPSHOT = 11, CLEAR = 12, COUNT = 13, SET_SLOT = 14, TAG = 15, FACE = 16;
+        DAMAGE = 8, NBT = 9, ORE = 10, SNAPSHOT = 11, CLEAR = 12, COUNT = 13, SET_SLOT = 14, TAG = 15, FACE = 16, LIST = 17,
+        SPREAD = 18;
 
     /** Work handed from netty's thread to the server thread ({@link PipeNetworks} runs it each server tick). */
     static final ConcurrentLinkedQueue<Runnable> TASKS = new ConcurrentLinkedQueue<>();

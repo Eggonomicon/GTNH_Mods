@@ -99,6 +99,7 @@ public class ValierTweaks {
             Side.SERVER);
         com.valier.tweaks.pipe.PipeNetworks pipes = new com.valier.tweaks.pipe.PipeNetworks.Events();
         MinecraftForge.EVENT_BUS.register(pipes); // chunk loads, world unloads
+        MinecraftForge.EVENT_BUS.register(new com.valier.tweaks.pipe.PipeClicks.Events()); // sneak + wrench on pipes
         FMLCommonHandler.instance()
             .bus()
             .register(pipes); // the pipe timer, on world ticks
@@ -119,6 +120,12 @@ public class ValierTweaks {
     public void init(FMLInitializationEvent event) {
         if (Loader.isModLoaded("gregtech")) XpCrafters.register(); // GregTech tanks; its recipe and crafting
         com.valier.tweaks.pipe.PipeRecipes.register();
+        if (Loader.isModLoaded("Waila")) { // what pipes are doing, for WAILA (server data; players' lines)
+            cpw.mods.fml.common.event.FMLInterModComms.sendMessage("Waila", "register",
+                "com.valier.tweaks.pipe.PipeWaila.callbackRegister");
+            cpw.mods.fml.common.event.FMLInterModComms.sendMessage("Waila", "register",
+                "com.valier.tweaks.client.PipeHud.callbackRegister");
+        }
         cpw.mods.fml.common.network.NetworkRegistry.INSTANCE.registerGuiHandler(this, new com.valier.tweaks.pipe.PipeGui());
         proxy.init(event);
     }

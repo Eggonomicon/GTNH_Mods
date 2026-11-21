@@ -198,6 +198,11 @@ public class PipeNetworks {
                 if (!p.blockOn(s) || p.face(s) == null || p.face(s).mode == FaceMode.OFF) continue;
                 net.all.add(new PipeNetwork.Face(net, p, s));
             }
+            if (p.creative()) {
+                FaceConfig src = p.face(TilePipe.SOURCE);
+                src.acceptOverflow = false; // a source never takes anything in
+                if (src.mode == FaceMode.EXTRACT || src.mode == FaceMode.PROVIDE) net.all.add(new PipeNetwork.Face(net, p, TilePipe.SOURCE));
+            }
         }
         net.sort();
         for (PipeNetwork.Face f : net.all) {
@@ -339,6 +344,8 @@ public class PipeNetworks {
                 ValierTweaks.LOG.warn("A pipe menu change failed", t);
             }
         }
+        net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
+        if (server != null) PipeInfo.refresh(server.getTickCounter()); // WAILA's view of the pipes being looked at
     }
 
     @SubscribeEvent

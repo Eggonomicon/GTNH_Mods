@@ -4,30 +4,28 @@ import java.util.ArrayList;
 import java.util.List;
 
 import net.minecraft.inventory.IInventory;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.oredict.OreDictionary;
 
-import cpw.mods.fml.common.registry.GameRegistry;
 
 /**
  * The settings of one pipe face touching a block, and the little it holds (what it couldn't hand on or give back: a
  * machine or barrel that took less than it said, or gave more). Saved with the pipe.
  * <p>
- * Its filter is built in (no filter items), with what EnderIO's filters can do:
+ * Its filter is built in (no filter items): three lists at once, each a whole filter ({@link FilterList}: item list,
+ * mod list or the block's existing items; damage, NBT, ore dictionary; amounts):
  * <ul>
- * <li><b>Kind:</b> {@link Kind#ITEMS} (the listed items), {@link Kind#MODS} (anything from the listed items' mods),
- * {@link Kind#EXISTING} (anything the block on this face already holds).</li>
- * <li>Whitelist or blacklist; damage: match exactly, ignore, or only undamaged / damaged / damaged by 25, 50 or 75% or
- * more (these work with an empty list too); NBT matched or ignored; ore dictionary.</li>
- * <li><b>Amounts</b> (item lists): a number on a filter slot is how many of that item to keep in this block. Extract
- * and Provide faces only give what is over it; Insert faces fill up to it; Request faces keep it stocked (a stack, or
- * 1,000 mB, when it is 0).</li>
+ * <li><b>Deny</b> wins over everything: what it names is never moved or voided by this face.</li>
+ * <li><b>Void</b>: a pulling face destroys what it names in its block (over the entry's amount, if one is set), within
+ * its per-transfer amount; a pushing face destroys what it names that is sent to it and doesn't fit.</li>
+ * <li><b>Allow</b>: only what it names may pass (empty: everything). Its amounts are how many to keep in this block:
+ * pulling and providing faces only give what is over it; pushing faces fill up to it; Request faces keep it stocked (a
+ * stack, or 1,000 mB, when it is 0).</li>
  * </ul>
- * An empty item or mod list lets everything through, so a new face needs no setup.
+ * A new face has empty lists, so it needs no setup. A 2.0 face's one list becomes its Allow list (whitelist) or its
+ * Deny list (blacklist).
  */
 public final class FaceConfig {
 
@@ -38,7 +36,7 @@ public final class FaceConfig {
 
     public enum Kind {
 
-        ITEMS("Item list", "Only the items in the list (or all but them)"),
+        ITEMS("Item list", "The items in the list"),
         MODS("Mod list", "Anything from the mods of the items in the list"),
         EXISTING("Existing items", "Anything the block on this face already holds");
 
@@ -91,6 +89,25 @@ public final class FaceConfig {
         }
     }
 
+    /** How a pulling face shares what it moves between destinations of the same priority. */
+    public enum Spread {
+
+        IN_ORDER("In order", "The highest priority fills first; equal priorities fill one after another, always in the same order"),
+        ROUND_ROBIN("Round robin", "The highest priority fills first; equal priorities take turns"),
+        EVEN("Even split", "The highest priority fills first; each transfer is shared equally between equal priorities");
+
+        public final String words, explain;
+
+        Spread(String words, String explain) {
+            this.words = words;
+            this.explain = explain;
+        }
+    }
+
+    /** Which list: the face's three filters, all at once. */
+    public static final int ALLOW = 0, DENY = 1, VOID = 2;
+    public static final String[] LIST_NAMES = { "Allow", "Deny", "Void" };
+
     public FaceMode mode = FaceMode.PROVIDE;
     /** Items (or mB) one transfer moves, up to the tier's most; 0: the tier's most. */
     public int amount;
@@ -98,15 +115,10 @@ public final class FaceConfig {
     public int priority;
     /** Ticks between this face's transfers; 0 or less than the tier's interval: the tier's (it can only be slower). */
     public int ticks;
-    /** Filter items (ghost copies, stack size 1); null slots are empty. */
-    public final ItemStack[] filter = new ItemStack[FILTER];
-    /** How many of each listed item to keep in this block (0: no amount; see the class comment). */
-    public final int[] count = new int[FILTER];
-    public Kind kind = Kind.ITEMS;
-    public boolean blacklist;
-    public Damage damage = Damage.EXACT;
-    public boolean matchNbt;
-    public boolean oreDict;
+    /** What may pass (empty: everything), what never does (wins over both others), what is destroyed. */
+    public final FilterList allow = new FilterList(), deny = new FilterList(), voids = new FilterList();
+    public final FilterList[] lists = { allow, deny, voids };
+    public Spread spread = Spread.ROUND_ROBIN;
     public int redstone = ALWAYS;
     /** Faces only trade with faces of the same tag ("" with ""): channels, and on Wireless pipes, links. */
     public String tag = "";
@@ -117,112 +129,48 @@ public final class FaceConfig {
     public final List<ItemStack> heldItems = new ArrayList<>();
     public FluidStack heldFluid;
 
-    public boolean hasEntries() {
-        for (ItemStack s : filter) if (s != null) return true;
-        return false;
+    /** Not saved: whose turn it is (round robin), and what it moved lately (WAILA). */
+    int turn;
+    public final Flow flow = new Flow();
+
+    public FilterList list(int i) {
+        return lists[Math.max(0, Math.min(lists.length - 1, i))];
     }
 
     // ---- items ------------------------------------------------------------------------------------------------------
 
     /**
-     * Whether an item passes this face's filter. {@code own} is the face's block (for {@link Kind#EXISTING}; may be
-     * null when not known, then nothing counts as already there).
+     * Whether an item may pass this face: not denied, and allowed. {@code own} is the face's block (for the "existing
+     * items" lists; may be null when not known, then nothing counts as already there).
      */
     public boolean passes(ItemStack s, IInventory own) {
-        if (s == null || !damage.fits(s)) return false;
-        boolean match;
-        if (kind == Kind.EXISTING) match = own != null && holds(own, s);
-        else {
-            if (!hasEntries()) return true;
-            match = indexOf(s) >= 0;
-        }
-        return blacklist != match;
+        return s != null && !deny.matches(s, own) && allow.allows(s, own);
     }
 
-    /** The filter slot this item matches (by this face's rules), or -1. */
-    public int indexOf(ItemStack s) {
-        for (int i = 0; i < FILTER; i++) if (filter[i] != null && same(filter[i], s)) return i;
-        return -1;
+    /** Whether this face destroys the item (its Void list names it and its Deny list doesn't). */
+    public boolean voids(ItemStack s, IInventory own) {
+        return s != null && voids.active() && !deny.matches(s, own) && voids.matches(s, own);
     }
 
-    /** Whether s matches entry f: the same item (by the damage, NBT and ore dictionary settings), or the same mod. */
-    public boolean same(ItemStack f, ItemStack s) {
-        if (f == null || s == null) return false;
-        if (kind == Kind.MODS) return modOf(f) != null && modOf(f).equals(modOf(s));
-        if (f.getItem() == s.getItem() && (damage != Damage.EXACT || f.getItemDamage() == s.getItemDamage())
-            && (!matchNbt || ItemStack.areItemStackTagsEqual(f, s))) return true;
-        if (!oreDict) return false;
-        int[] a = OreDictionary.getOreIDs(f), b = OreDictionary.getOreIDs(s);
-        for (int x : a) for (int y : b) if (x == y) return true;
-        return false;
-    }
-
-    static String modOf(ItemStack s) {
-        if (s == null || s.getItem() == null) return null;
-        GameRegistry.UniqueIdentifier id = GameRegistry.findUniqueIdentifierFor(s.getItem());
-        if (id != null) return id.modId;
-        Object name = Item.itemRegistry.getNameForObject(s.getItem());
-        String n = name == null ? null : name.toString();
-        return n == null ? null : n.contains(":") ? n.substring(0, n.indexOf(':')) : "minecraft";
-    }
-
-    /** Whether the inventory holds an item like s (by this face's matching rules, as if s were listed). */
-    boolean holds(IInventory inv, ItemStack s) {
-        Kind k = kind;
-        kind = Kind.ITEMS;
-        try {
-            for (int i = 0; i < inv.getSizeInventory(); i++) {
-                ItemStack in = inv.getStackInSlot(i);
-                if (in != null && same(in, s)) return true;
-            }
-            return false;
-        } finally {
-            kind = k;
-        }
-    }
-
-    /** How many of this item to keep in the block (0: no amount), from the slot it matches (item lists only). */
+    /** How many of this item to keep in the block (0: no amount), from the Allow list. */
     public int stockOf(ItemStack s) {
-        if (kind != Kind.ITEMS) return 0;
-        int i = indexOf(s);
-        return i < 0 ? 0 : count[i];
+        return allow.stockOf(s);
     }
 
-    /** A Request face: how many of slot i to keep stocked (its amount, else a stack). */
-    public int requestOf(int i) {
-        return count[i] > 0 ? count[i] : (filter[i] == null ? 64 : filter[i].getMaxStackSize());
-    }
+    // ---- fluids -----------------------------------------------------------------------------------------------------
 
-    // ---- fluids ---------------------------------------------------------------------------------------------------
-
-    /** Whether a fluid passes: filter items holding a fluid (buckets, cells, NEI's fluid drops) name it. */
+    /** Whether a fluid may pass: not denied, and allowed (entries holding a fluid name it). */
     public boolean passes(FluidStack fluid, List<FluidStack> own) {
-        if (fluid == null) return false;
-        boolean match;
-        if (kind == Kind.EXISTING) {
-            match = false;
-            if (own != null) for (FluidStack f : own) if (f.getFluid() == fluid.getFluid()) match = true;
-        } else {
-            boolean any = false;
-            match = false;
-            for (ItemStack s : filter) {
-                FluidStack f = Fluids.of(s);
-                if (f == null) continue;
-                any = true;
-                if (f.getFluid() == fluid.getFluid()) match = true;
-            }
-            if (!any) return true;
-        }
-        return blacklist != match;
+        return fluid != null && !deny.matches(fluid, own) && allow.allows(fluid, own);
     }
 
-    /** mB of this fluid to keep in the tank (0: no amount). */
+    public boolean voids(FluidStack fluid, List<FluidStack> own) {
+        return fluid != null && !deny.matches(fluid, own) && voids.matches(fluid, own);
+    }
+
+    /** mB of this fluid to keep in the tank (0: no amount), from the Allow list. */
     public int stockOf(FluidStack fluid) {
-        for (int i = 0; i < FILTER; i++) {
-            FluidStack f = Fluids.of(filter[i]);
-            if (f != null && fluid != null && f.getFluid() == fluid.getFluid()) return count[i];
-        }
-        return 0;
+        return allow.stockOf(fluid);
     }
 
     // ---- other ----------------------------------------------------------------------------------------------------
@@ -255,20 +203,18 @@ public final class FaceConfig {
         if (amount > 0) t.setInteger("Amount", amount);
         if (priority != 0) t.setInteger("Priority", priority);
         if (ticks > 0) t.setInteger("Ticks", ticks);
-        NBTTagList list = new NBTTagList();
-        for (int i = 0; i < FILTER; i++) {
-            if (filter[i] == null && count[i] == 0) continue;
-            NBTTagCompound s = filter[i] == null ? new NBTTagCompound() : filter[i].writeToNBT(new NBTTagCompound());
-            s.setByte("Slot", (byte) i);
-            if (count[i] > 0) s.setInteger("Keep", count[i]); // not "Count": the item's own stack size is saved under that
-            list.appendTag(s);
+        allow.write(t); // at the top level, as 2.0 saved its one list: a 2.0 whitelist reads as the Allow list
+        if (deny.active() || deny.hasEntries()) {
+            NBTTagCompound d = new NBTTagCompound();
+            deny.write(d);
+            t.setTag("Deny", d);
         }
-        if (list.tagCount() > 0) t.setTag("Filter", list);
-        if (kind != Kind.ITEMS) t.setByte("Kind", (byte) kind.ordinal());
-        if (blacklist) t.setBoolean("Blacklist", true);
-        if (damage != Damage.EXACT) t.setByte("Damage", (byte) damage.ordinal());
-        if (matchNbt) t.setBoolean("MatchNbt", true);
-        if (oreDict) t.setBoolean("OreDict", true);
+        if (voids.active() || voids.hasEntries()) {
+            NBTTagCompound v = new NBTTagCompound();
+            voids.write(v);
+            t.setTag("Void", v);
+        }
+        if (spread != Spread.ROUND_ROBIN) t.setByte("Spread", (byte) spread.ordinal());
         if (redstone != ALWAYS) t.setByte("Redstone", (byte) redstone);
         if (!tag.isEmpty()) t.setString("Tag", tag);
         if (acceptOverflow) t.setBoolean("Overflow", true);
@@ -285,22 +231,19 @@ public final class FaceConfig {
         f.amount = Math.max(0, t.getInteger("Amount"));
         f.priority = t.getInteger("Priority");
         f.ticks = Math.max(0, t.getInteger("Ticks"));
-        NBTTagList list = t.getTagList("Filter", 10);
-        for (int i = 0; i < list.tagCount(); i++) {
-            NBTTagCompound s = list.getCompoundTagAt(i);
-            int slot = s.getByte("Slot");
-            if (slot < 0 || slot >= FILTER) continue;
-            f.filter[slot] = s.hasKey("id") ? ItemStack.loadItemStackFromNBT(s) : null;
-            if (f.filter[slot] != null) f.filter[slot].stackSize = 1;
-            f.count[slot] = Math.max(0, s.getInteger("Keep"));
+        f.allow.read(t);
+        if (t.getBoolean("Blacklist")) {
+            // 2.0's blacklist: its list becomes the Deny list; the wear setting stays on both (2.0 checked it first).
+            f.deny.copyFrom(f.allow);
+            f.allow.clear();
+            f.allow.kind = Kind.ITEMS;
+            f.allow.matchNbt = false;
+            f.allow.oreDict = false;
         }
-        Kind[] kinds = Kind.values();
-        f.kind = kinds[Math.max(0, Math.min(kinds.length - 1, t.getByte("Kind")))];
-        f.blacklist = t.getBoolean("Blacklist");
-        Damage[] damages = Damage.values();
-        f.damage = damages[Math.max(0, Math.min(damages.length - 1, t.getByte("Damage")))];
-        f.matchNbt = t.getBoolean("MatchNbt");
-        f.oreDict = t.getBoolean("OreDict");
+        if (t.hasKey("Deny", 10)) f.deny.read(t.getCompoundTag("Deny"));
+        if (t.hasKey("Void", 10)) f.voids.read(t.getCompoundTag("Void"));
+        Spread[] spreads = Spread.values();
+        f.spread = t.hasKey("Spread") ? spreads[Math.max(0, Math.min(spreads.length - 1, t.getByte("Spread")))] : Spread.ROUND_ROBIN;
         f.redstone = Math.max(0, Math.min(2, t.getByte("Redstone")));
         f.tag = cleanTag(t.getString("Tag"));
         f.acceptOverflow = t.getBoolean("Overflow");
@@ -311,5 +254,27 @@ public final class FaceConfig {
         }
         f.heldFluid = t.hasKey("HeldFluid", 10) ? FluidStack.loadFluidStackFromNBT(t.getCompoundTag("HeldFluid")) : null;
         return f;
+    }
+
+    /** Everything but what it holds and its live state: for the Pipe Configurator. */
+    public NBTTagCompound settings() {
+        NBTTagCompound t = write();
+        t.removeTag("Held");
+        t.removeTag("HeldFluid");
+        return t;
+    }
+
+    /** Takes over another face's settings (not what this one holds). */
+    public void applySettings(NBTTagCompound t) {
+        FaceConfig o = read(t);
+        mode = o.mode;
+        amount = o.amount;
+        priority = o.priority;
+        ticks = o.ticks;
+        for (int i = 0; i < lists.length; i++) lists[i].copyFrom(o.lists[i]);
+        spread = o.spread;
+        redstone = o.redstone;
+        tag = o.tag;
+        acceptOverflow = o.acceptOverflow;
     }
 }

@@ -102,17 +102,22 @@ public final class DevScene {
         if (fa != null) fa.mode = left;
         if (fb != null) {
             fb.mode = right;
-            fb.filter[0] = new ItemStack(Blocks.cobblestone);
-            fb.count[0] = 32;
+            fb.allow.filter[0] = new ItemStack(Blocks.cobblestone);
+            fb.allow.count[0] = 32;
         }
         if (fa != null && left == FaceMode.EXTRACT) { // something to see in the menu's filter
-            fa.filter[0] = new ItemStack(Blocks.cobblestone);
-            fa.filter[1] = new ItemStack(net.minecraft.init.Items.iron_ingot);
-            fa.count[1] = 16;
-            fa.filter[2] = new ItemStack(net.minecraft.init.Items.diamond_pickaxe);
-            fa.filter[3] = new ItemStack(Blocks.log, 1, 2);
-            fa.count[3] = 128;
-            fa.oreDict = true;
+            fa.allow.filter[0] = new ItemStack(Blocks.cobblestone);
+            fa.allow.filter[1] = new ItemStack(net.minecraft.init.Items.iron_ingot);
+            fa.allow.count[1] = 16;
+            fa.allow.filter[2] = new ItemStack(net.minecraft.init.Items.diamond_pickaxe);
+            fa.allow.filter[3] = new ItemStack(Blocks.log, 1, 2);
+            fa.allow.count[3] = 128;
+            fa.allow.oreDict = true;
+            fa.deny.filter[0] = new ItemStack(Blocks.dirt);
+            fa.voids.filter[0] = new ItemStack(net.minecraft.init.Items.rotten_flesh);
+            fa.voids.filter[1] = new ItemStack(Blocks.cobblestone);
+            fa.voids.count[1] = 1000;
+            fa.spread = FaceConfig.Spread.EVEN;
             fa.tag = "001";
         }
         a.faceChanged();
