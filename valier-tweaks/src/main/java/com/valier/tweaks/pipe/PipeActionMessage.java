@@ -12,7 +12,7 @@ import cpw.mods.fml.common.network.simpleimpl.MessageContext;
 import io.netty.buffer.ByteBuf;
 
 /**
- * Player to server: something done in a pipe face's menu (a button, the mouse wheel on a filter slot, an item dragged
+ * Player to server: something done in a Valier menu ({@link ValierMenu}: a pipe face's, a loot spawner's) (a button, the mouse wheel on a filter slot, an item dragged
  * in from NEI, the tag typed). The server only takes it for the menu that player has open (same window id, still in
  * reach, allowed by claims) and checks every value ({@link ContainerPipeFace#apply}).
  */
@@ -23,7 +23,7 @@ public class PipeActionMessage implements IMessage {
         SPREAD = 18;
 
     /** Work handed from netty's thread to the server thread ({@link PipeNetworks} runs it each server tick). */
-    static final ConcurrentLinkedQueue<Runnable> TASKS = new ConcurrentLinkedQueue<>();
+    public static final ConcurrentLinkedQueue<Runnable> TASKS = new ConcurrentLinkedQueue<>();
 
     int window, action, a, b;
     ItemStack stack;
@@ -69,8 +69,8 @@ public class PipeActionMessage implements IMessage {
         public IMessage onMessage(PipeActionMessage m, MessageContext ctx) {
             EntityPlayerMP p = ctx.getServerHandler().playerEntity;
             TASKS.add(() -> {
-                if (p.openContainer instanceof ContainerPipeFace && p.openContainer.windowId == m.window
-                    && p.openContainer.canInteractWith(p)) ((ContainerPipeFace) p.openContainer).apply(p, m.action, m.a, m.b, m.stack, m.text);
+                if (p.openContainer instanceof ValierMenu && p.openContainer.windowId == m.window
+                    && p.openContainer.canInteractWith(p)) ((ValierMenu) p.openContainer).apply(p, m.action, m.a, m.b, m.stack, m.text);
             });
             return null;
         }

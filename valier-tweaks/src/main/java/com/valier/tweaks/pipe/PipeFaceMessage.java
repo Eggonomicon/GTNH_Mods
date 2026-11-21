@@ -9,7 +9,7 @@ import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
 import cpw.mods.fml.common.network.simpleimpl.MessageContext;
 import io.netty.buffer.ByteBuf;
 
-/** Server to player: the settings of the pipe face whose menu is open (window id), all at once. */
+/** Server to player: the state of the Valier menu that is open (window id; {@link ValierMenu}), all at once. */
 public class PipeFaceMessage implements IMessage {
 
     int window;
@@ -17,7 +17,7 @@ public class PipeFaceMessage implements IMessage {
 
     public PipeFaceMessage() {}
 
-    PipeFaceMessage(int window, NBTTagCompound tag) {
+    public PipeFaceMessage(int window, NBTTagCompound tag) {
         this.window = window;
         this.tag = tag;
     }
@@ -51,8 +51,8 @@ public class PipeFaceMessage implements IMessage {
             Minecraft mc = Minecraft.getMinecraft();
             mc.func_152344_a(() -> { // netty's thread: hand it to the game's
                 if (mc.thePlayer == null || m.tag == null) return;
-                if (mc.thePlayer.openContainer instanceof ContainerPipeFace && mc.thePlayer.openContainer.windowId == m.window)
-                    ((ContainerPipeFace) mc.thePlayer.openContainer).receive(m.tag);
+                if (mc.thePlayer.openContainer instanceof ValierMenu && mc.thePlayer.openContainer.windowId == m.window)
+                    ((ValierMenu) mc.thePlayer.openContainer).receive(m.tag);
             });
         }
     }

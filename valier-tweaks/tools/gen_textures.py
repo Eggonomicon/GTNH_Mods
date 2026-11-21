@@ -207,6 +207,256 @@ def pipe_configurator():
     return px
 
 
+# Barrel tiers (metadata order): Basic iron bands, then the GregTech hull metal of each tier: LV steel, MV aluminium,
+# HV stainless steel, EV titanium, IV tungstensteel, LuV chrome.
+BARREL_METAL = [(IRON, IRON_HI), ((86, 90, 98), (170, 176, 186)), ((118, 148, 186), (198, 222, 248)),
+                ((140, 146, 156), (222, 228, 236)), ((136, 96, 156), (216, 176, 236)), ((58, 58, 98), (128, 128, 188)),
+                ((186, 156, 156), (255, 228, 228))]
+WOOD_LO = (84, 56, 30)
+WOOD = (128, 88, 48)
+WOOD_HI = (178, 130, 76)
+
+
+def barrel_wood(x, y, n):
+    """Vertical staves, a dark seam every 4 px, grain from the noise."""
+    if x % 4 == 0:
+        return shade(WOOD_LO, 0.95)
+    t = 0.3 + n[y][x] * 0.45 + (0.1 if x % 4 == 1 else 0.0)
+    return mix(WOOD, WOOD_HI, t)
+
+
+def barrel_side(tier, label=False):
+    """Wooden staves held by two metal bands (the tier's metal) and a metal rim; the front has a recessed label panel
+    where the item and its count are drawn."""
+    lo, hi = BARREL_METAL[tier]
+    n = noise(71 + tier * 5 + (2 if label else 0))
+
+    def px(x, y):
+        if x in (0, 15) or y in (0, 15):
+            return shade(hi if (x == 0 or y == 0) else lo, 1.05 if (x == 0 or y == 0) else 0.8) + (255,)
+        if label and 3 <= x <= 12 and 3 <= y <= 12:
+            if x in (3, 12) or y in (3, 12):
+                return shade(hi if (x == 3 or y == 3) else lo, 1.0) + (255,)
+            return shade(mix(WOOD_LO, WOOD, 0.3 + n[y][x] * 0.2), 0.75) + (255,)
+        if y in (2, 13) or (not label and y in (7, 8)):
+            if x in (2, 13) and y in (2, 13):
+                return shade(hi, 1.2) + (255,)  # rivets
+            return shade(mix(lo, hi, 0.45 + n[y][x] * 0.2), 1.1 if y in (2, 7) else 0.85) + (255,)
+        return barrel_wood(x, y, n) + (255,)
+
+    return px
+
+
+def barrel_top(tier):
+    """The lid: a 2 px metal rim, planks across, and a small metal plate in the middle."""
+    lo, hi = BARREL_METAL[tier]
+    n = noise(97 + tier * 5)
+
+    def px(x, y):
+        if x in (0, 15) or y in (0, 15):
+            return shade(hi if (x == 0 or y == 0) else lo, 1.05 if (x == 0 or y == 0) else 0.8) + (255,)
+        if x in (1, 14) or y in (1, 14):
+            return shade(mix(lo, hi, 0.5), 0.95) + (255,)
+        if 6 <= x <= 9 and 6 <= y <= 9:
+            return shade(mix(lo, hi, 0.6), 1.15 if (x == 6 or y == 6) else 0.9) + (255,)
+        return barrel_wood(y, x, n) + (255,)
+
+    return px
+
+
+def barrel_upgrade(tier):
+    """A Barrel Upgrade: a band of the tier's metal (a ring, lit from the top left) around an up arrow."""
+    lo, hi = BARREL_METAL[tier]
+
+    def px(x, y):
+        dx, dy = x - 7.5, y - 7.5
+        d = (dx * dx + dy * dy) ** 0.5
+        if 5.0 <= d <= 7.4:
+            lit = (dx + dy) < 0
+            return shade(mix(lo, hi, 0.55), 1.2 if lit else 0.8) + (255,)
+        arrow = (y >= 4 and y <= 11 and x in (7, 8)) or (y >= 4 and abs(x - 7.5) <= (y - 3) and y <= 7)
+        if arrow:
+            return ((120, 230, 110) if x <= 7 else (70, 170, 60)) + (255,)
+        return (0, 0, 0, 0)
+
+    return px
+
+
+# Satchel and Flask tiers (metadata order): LV to LuV in the barrels' hull metals, then Creative's bands.
+LEATHER_LO = (92, 54, 30)
+LEATHER = (138, 86, 48)
+LEATHER_HI = (184, 128, 80)
+
+
+def tier_metal(t, x=0, y=0):
+    """(lo, hi) of a Satchel/Flask tier; Creative's come in diagonal bands."""
+    if t >= 6:
+        return CREATIVE_BANDS[((x + y) // 3) % 3]
+    return BARREL_METAL[t + 1]
+
+
+def satchel(t):
+    """A leather satchel: a rounded body, a flap over its top half with a clasp of the tier's metal, a strap loop."""
+    n = noise(131 + t)
+
+    def px(x, y):
+        lo, hi = tier_metal(t, x, y)
+        if y in (1, 2) and 5 <= x <= 10 and not (y == 2 and 6 <= x <= 9):  # the strap loop
+            return shade(LEATHER_LO, 1.1 if y == 1 else 0.9) + (255,)
+        body = 3 <= y <= 14 and 2 <= x <= 13 and not ((x in (2, 13)) and y in (3, 14))
+        if not body:
+            return (0, 0, 0, 0)
+        edge = x in (2, 13) or y in (3, 14) or (x in (3, 12) and y in (3, 14))
+        if edge:
+            return shade(LEATHER_LO, 0.85) + (255,)
+        if 7 <= x <= 8 and 7 <= y <= 9:  # the clasp
+            return shade(hi if (x == 7 and y == 7) else mix(lo, hi, 0.5), 1.15 if y == 7 else 0.9) + (255,)
+        if y <= 8:  # the flap
+            if y == 8:  # the flap's edge, in the tier's metal so tiers tell apart
+                return shade(mix(lo, hi, 0.5), 1.0) + (255,)
+            return mix(LEATHER, LEATHER_HI, 0.35 + n[y][x] * 0.35 + (0.15 if y == 4 else 0.0)) + (255,)
+        return mix(LEATHER_LO, LEATHER, 0.45 + n[y][x] * 0.4) + (255,)
+
+    return px
+
+
+def flask(t):
+    """A glass flask: a round body with a fluid in it, a neck, and a band and cap of the tier's metal."""
+    n = noise(151 + t)
+
+    def px(x, y):
+        lo, hi = tier_metal(t, x, y)
+        if 6 <= x <= 9 and y in (1, 2):  # cap
+            return shade(hi if y == 1 else lo, 1.1 if x == 6 else 0.9) + (255,)
+        if 6 <= x <= 9 and y == 4:  # band round the neck
+            return shade(mix(lo, hi, 0.6), 1.0) + (255,)
+        if 7 <= x <= 8 and y in (3, 5):  # neck
+            return (200, 225, 240, 255)
+        dx, dy = x - 7.5, y - 10.0
+        d = (dx * dx + dy * dy) ** 0.5
+        if d > 5.4:
+            return (0, 0, 0, 0)
+        if d > 4.5:
+            return (190, 215, 235, 255) if (dx + dy) < 0 else (110, 140, 170, 255)
+        if y >= 9:
+            return mix((40, 90, 200), (110, 170, 245), 0.3 + n[y][x] * 0.3 + (0.25 if x < 7 and y < 12 else 0.0)) + (255,)
+        return (215, 235, 250, 255) if (x + y) % 4 == 0 else (175, 205, 230, 255)
+
+    return px
+
+
+def storage_upgrade(t, fluid):
+    """Satchel/Flask Upgrades: the barrel upgrade's band (of the tier's metal) around a small satchel or a drop."""
+    lo, hi = BARREL_METAL[t + 1]
+
+    def px(x, y):
+        dx, dy = x - 7.5, y - 7.5
+        d = (dx * dx + dy * dy) ** 0.5
+        if 5.0 <= d <= 7.4:
+            return shade(mix(lo, hi, 0.55), 1.2 if (dx + dy) < 0 else 0.8) + (255,)
+        if fluid:
+            ddx, ddy = x - 7.5, y - 8.5
+            if (ddx * ddx + ddy * ddy) ** 0.5 <= 2.6 or (y in (5, 6) and abs(ddx) <= (y - 4) * 0.8):
+                return ((120, 180, 250) if x <= 7 and y <= 8 else (50, 100, 210)) + (255,)
+            return (0, 0, 0, 0)
+        if 5 <= x <= 10 and 6 <= y <= 10:
+            if y == 6 or x in (5, 10) or y == 10:
+                return shade(LEATHER_LO, 0.9) + (255,)
+            return (LEATHER_HI if y == 7 else LEATHER) + (255,)
+        return (0, 0, 0, 0)
+
+    return px
+
+
+STEEL_LO, STEEL_HI = BARREL_METAL[1]
+
+
+def dock(face, holds=None):
+    """The Satchel Dock: a steel casing; its top a recessed tray, showing a satchel or a flask when one is docked."""
+    n = noise(171 + (0 if face == 'side' else 1 if face == 'bottom' else 2))
+
+    def px(x, y):
+        if x in (0, 15) or y in (0, 15):
+            return shade(STEEL_HI if (x == 0 or y == 0) else STEEL_LO, 1.1 if (x == 0 or y == 0) else 0.7) + (255,)
+        if (x, y) in ((2, 2), (13, 2), (2, 13), (13, 13)):
+            return STEEL_HI + (255,)
+        if face == 'top' and 3 <= x <= 12 and 3 <= y <= 12:
+            if x in (3, 12) or y in (3, 12):
+                return shade(STEEL_LO, 0.8 if (x == 3 or y == 3) else 1.2) + (255,)
+            if holds is not None:
+                c = (satchel if holds == 'satchel' else flask)(0)(x, y)
+                if c[3] > 0:
+                    return c
+            return shade(STEEL_LO, 0.55 + n[y][x] * 0.1) + (255,)
+        if face == 'side' and y in (7, 8) and 3 <= x <= 12:
+            return (90, 200, 120, 255) if y == 7 else (50, 140, 80, 255)  # a green status strip
+        return shade(mix(STEEL_LO, STEEL_HI, 0.25 + n[y][x] * 0.2), 1.0) + (255,)
+
+    return px
+
+
+# Valier Grid tiers (LV to UV) in GregTech's voltage colours, a bit brighter so they read on the dark casing.
+GRID_COLOURS = [(190, 190, 190), (85, 235, 235), (255, 170, 0), (190, 60, 200), (90, 90, 255), (255, 100, 255), (255, 85, 85),
+                (0, 190, 190)]
+GRID_CASE = (40, 44, 52)
+GRID_CASE_HI = (88, 94, 106)
+
+
+def grid(kind, tier):
+    """Grid blocks: a dark casing with a bevelled rim and corner rivets, and in the middle, in the tier's colour: a plug's
+    socket (two prongs pointing in), a point's emitter (a dot with four rays), a cell's charge bars, or the controller's
+    ring around a dot."""
+    c = GRID_COLOURS[tier]
+    n = noise(191 + {'plug': 0, 'point': 1, 'cell': 2}.get(kind, 3) * 11 + tier)
+
+    def px(x, y):
+        if x in (0, 15) or y in (0, 15):
+            return shade(GRID_CASE_HI if (x == 0 or y == 0) else GRID_CASE, 1.2 if (x == 0 or y == 0) else 0.7) + (255,)
+        if (x, y) in ((2, 2), (13, 2), (2, 13), (13, 13)):
+            return shade(c, 0.8) + (255,)
+        dx, dy = x - 7.5, y - 7.5
+        if kind == 'plug':
+            if 4 <= x <= 11 and 4 <= y <= 11 and (x in (4, 11) or y in (4, 11)):
+                return shade(c, 0.9) + (255,)
+            if x in (6, 9) and 5 <= y <= 9:
+                return shade(c, 1.15 if y < 8 else 0.85) + (255,)
+        elif kind == 'point':
+            d = (dx * dx + dy * dy) ** 0.5
+            if d <= 1.8:
+                return shade(c, 1.2) + (255,)
+            if (abs(dx) < 1 and 3 <= abs(dy) <= 6) or (abs(dy) < 1 and 3 <= abs(dx) <= 6):
+                return shade(c, 0.95) + (255,)
+        elif kind == 'cell':
+            if 4 <= x <= 11 and 3 <= y <= 12:
+                if x in (4, 11) or y in (3, 12):
+                    return shade(GRID_CASE_HI, 1.1) + (255,)
+                if y in (5, 7, 9, 11) and 5 <= x <= 10:
+                    return shade(c, 1.15 - (y - 5) * 0.05) + (255,)
+                return shade(GRID_CASE, 0.6) + (255,)
+            if 6 <= x <= 9 and y == 2:
+                return shade(GRID_CASE_HI, 1.0) + (255,)
+        else:
+            d = (dx * dx + dy * dy) ** 0.5
+            if 4.2 <= d <= 5.4 or d <= 1.5:
+                return shade(c, 1.2 if dx + dy < 0 else 0.85) + (255,)
+        return shade(mix(GRID_CASE, GRID_CASE_HI, 0.15 + n[y][x] * 0.2), 1.0) + (255,)
+
+    return px
+
+
+def grid_light():
+    """The ring of light a Grid block shows in its network's colour: one pixel inside the rim, white (the game tints it),
+    brighter on the lit top and left; transparent elsewhere."""
+
+    def px(x, y):
+        if not (1 <= x <= 14 and 1 <= y <= 14) or not (x in (1, 14) or y in (1, 14)):
+            return (0, 0, 0, 0)
+        v = 255 if (x == 1 or y == 1) and not (x == 14 or y == 14) else 185 if (x == 14 or y == 14) and not (x == 1 or y == 1) else 220
+        return (v, v, v, 255)
+
+    return px
+
+
 # name -> (folder, function)
 TEXTURES = {
     'pipe_configurator': ('items', pipe_configurator),
@@ -230,6 +480,28 @@ TEXTURES = {
     'xp_crafter_top': ('blocks', xp_crafter_top),
     'xp_crafter_bottom': ('blocks', xp_crafter_bottom),
 }
+for _t in range(7):
+    TEXTURES['barrel_side_%d' % _t] = ('blocks', (lambda t: lambda: barrel_side(t))(_t))
+    TEXTURES['barrel_front_%d' % _t] = ('blocks', (lambda t: lambda: barrel_side(t, True))(_t))
+    TEXTURES['barrel_top_%d' % _t] = ('blocks', (lambda t: lambda: barrel_top(t))(_t))
+for _t in range(1, 7):
+    TEXTURES['barrel_upgrade_%d' % _t] = ('items', (lambda t: lambda: barrel_upgrade(t))(_t))
+for _t in range(7):
+    TEXTURES['satchel_%d' % _t] = ('items', (lambda t: lambda: satchel(t))(_t))
+    TEXTURES['flask_%d' % _t] = ('items', (lambda t: lambda: flask(t))(_t))
+for _t in range(1, 6):
+    TEXTURES['satchel_upgrade_%d' % _t] = ('items', (lambda t: lambda: storage_upgrade(t, False))(_t))
+    TEXTURES['flask_upgrade_%d' % _t] = ('items', (lambda t: lambda: storage_upgrade(t, True))(_t))
+TEXTURES['satchel_dock_side'] = ('blocks', lambda: dock('side'))
+TEXTURES['satchel_dock_bottom'] = ('blocks', lambda: dock('bottom'))
+TEXTURES['satchel_dock_top'] = ('blocks', lambda: dock('top'))
+TEXTURES['satchel_dock_top_satchel'] = ('blocks', lambda: dock('top', 'satchel'))
+TEXTURES['satchel_dock_top_flask'] = ('blocks', lambda: dock('top', 'flask'))
+for _t in range(8):
+    for _k in ('plug', 'point', 'cell'):
+        TEXTURES['grid_%s_%d' % (_k, _t)] = ('blocks', (lambda k, t: lambda: grid(k, t))(_k, _t))
+TEXTURES['grid_controller'] = ('blocks', lambda: grid('controller', 1))
+TEXTURES['grid_light'] = ('blocks', grid_light)
 
 
 def render(fn):

@@ -695,6 +695,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
     @SubscribeEvent
     public void onTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
+        SelfTest.keepLoaded(world, (bx >> 4) - 1, (bz >> 4) - 1, (bx >> 4) + 2, (bz >> 4) + 2);
         if (++ticks < 80) return;
         FMLCommonHandler.instance()
             .bus()

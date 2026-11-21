@@ -20,4 +20,24 @@ public class CommonProxy {
     public Object pipeGui(com.valier.tweaks.pipe.ContainerPipeFace container) {
         return null;
     }
+
+    /** A loot spawner's menu screen (players' computers only). */
+    public Object lootGui(LootMenu container) {
+        return null;
+    }
+
+    /** A Satchel's or Flask's menu screen (players' computers only). */
+    public Object satchelGui(com.valier.tweaks.storage.SatchelMenu container) {
+        return null;
+    }
+
+    /** A Grid block's menu screen (players' computers only). */
+    public Object gridGui(com.valier.tweaks.grid.GridMenu container) {
+        return null;
+    }
+
+    /** A barrel's menu screen (players' computers only). */
+    public Object barrelGui(com.valier.tweaks.storage.BarrelMenu container) {
+        return null;
+    }
 }

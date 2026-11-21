@@ -10,6 +10,8 @@ import net.minecraft.tileentity.TileEntityChest;
 import net.minecraft.tileentity.TileEntityHopper;
 import net.minecraft.world.World;
 
+import com.valier.tweaks.storage.BigStorage;
+
 import com.valier.tweaks.TweaksConfig;
 
 /**
@@ -64,13 +66,13 @@ final class ItemMover {
         int[] slots = slots(src, f.access);
         for (int k = 0; k < slots.length && moved < budget; k++) {
             int slot = slots[k];
-            ItemStack s = src.getStackInSlot(slot);
+            ItemStack s = peek(src, slot);
             if (s == null || s.stackSize <= 0) continue;
             if (src instanceof ISidedInventory && !((ISidedInventory) src).canExtractItem(slot, s, f.access)) continue;
             if (voiding && f.cfg.voids(s, src)) {
                 int n = Math.min(budget - moved, Math.min(s.stackSize, voidSpare(f.cfg, src, s)));
                 if (n <= 0) continue;
-                ItemStack gone = src.decrStackSize(slot, n);
+                ItemStack gone = take(src, slot, n);
                 if (gone == null || gone.stackSize <= 0) continue;
                 src.markDirty();
                 f.cfg.flow.add(gone, gone.stackSize, true, tick);
@@ -83,7 +85,7 @@ final class ItemMover {
             int room = room(srcKey, s, want, inserts, requests, overflow);
             int n = Math.min(want, room);
             if (n <= 0) continue;
-            ItemStack got = src.decrStackSize(slot, n);
+            ItemStack got = take(src, slot, n);
             if (got == null || got.stackSize <= 0) continue;
             int took = got.stackSize;
             ItemStack left = deliver(f, srcKey, got, inserts, requests, overflow);
@@ -258,12 +260,12 @@ final class ItemMover {
                 int[] slots = slots(src, p.access);
                 for (int k = 0; k < slots.length && need > 0; k++) {
                     int slot = slots[k];
-                    ItemStack s = src.getStackInSlot(slot);
+                    ItemStack s = peek(src, slot);
                     if (s == null || s.stackSize <= 0 || !f.cfg.allow.same(want, s) || !p.cfg.passes(s, src)) continue;
                     if (src instanceof ISidedInventory && !((ISidedInventory) src).canExtractItem(slot, s, p.access)) continue;
                     int n = Math.min(need, Math.min(s.stackSize, Math.min(spare(p.cfg, src, s), space(dst, f.access, s, need))));
                     if (n <= 0) continue;
-                    ItemStack got = src.decrStackSize(slot, n);
+                    ItemStack got = take(src, slot, n);
                     if (got == null || got.stackSize <= 0) continue;
                     int took = got.stackSize;
                     ItemStack left = insert(dst, f.access, got);
@@ -361,6 +363,17 @@ final class ItemMover {
         return a != null && a == b;
     }
 
+    /** A slot as the pipes see it: a barrel's whole store is one big stack in its output slot ({@link BigStorage}). */
+    static ItemStack peek(IInventory inv, int slot) {
+        if (inv instanceof BigStorage) return slot == BigStorage.OUT_SLOT ? ((BigStorage) inv).bigPeek() : null;
+        return inv.getStackInSlot(slot);
+    }
+
+    static ItemStack take(IInventory inv, int slot, int n) {
+        if (inv instanceof BigStorage) return slot == BigStorage.OUT_SLOT ? ((BigStorage) inv).bigExtract(n) : null;
+        return inv.decrStackSize(slot, n);
+    }
+
     static int[] slots(IInventory inv, int side) {
         if (inv instanceof ISidedInventory) {
             int[] s = ((ISidedInventory) inv).getAccessibleSlotsFromSide(side);
@@ -383,6 +396,7 @@ final class ItemMover {
     /** How many of s (up to max) fit, by the inventory's rules for that side, without changing anything. */
     static int space(IInventory inv, int side, ItemStack s, int max) {
         if (max <= 0) return 0;
+        if (inv instanceof BigStorage) return Math.min(max, ((BigStorage) inv).bigRoom(s, max));
         int limit = Math.min(s.getMaxStackSize(), inv.getInventoryStackLimit());
         int room = 0;
         for (int slot : slots(inv, side)) {
@@ -398,6 +412,10 @@ final class ItemMover {
     /** Puts s in as a hopper does (stacks first, then empty slots); returns what didn't fit. */
     static ItemStack insert(IInventory inv, int side, ItemStack s) {
         if (inv == null || s == null) return s;
+        if (inv instanceof BigStorage) {
+            s.stackSize -= ((BigStorage) inv).bigInsert(s, s.stackSize);
+            return s.stackSize <= 0 ? null : s;
+        }
         int limit = Math.min(s.getMaxStackSize(), inv.getInventoryStackLimit());
         boolean changed = false;
         int[] slots = slots(inv, side);
@@ -422,6 +440,7 @@ final class ItemMover {
 
     /** What the destinations didn't take goes back into the slot it came from, or anywhere it fits; returns the rest. */
     static ItemStack putBack(IInventory inv, int slot, int side, ItemStack s) {
+        if (inv instanceof BigStorage) return insert(inv, side, s);
         ItemStack in = inv.getStackInSlot(slot);
         if (in == null) {
             inv.setInventorySlotContents(slot, s);
@@ -440,6 +459,10 @@ final class ItemMover {
 
     /** Items matching a list entry (by that list's matching rules) in the whole inventory. */
     static int count(IInventory inv, FilterList list, ItemStack want) {
+        if (inv instanceof BigStorage) {
+            ItemStack b = ((BigStorage) inv).bigPeek();
+            return b != null && list.same(want, b) ? b.stackSize : 0;
+        }
         int n = 0;
         for (int i = 0; i < inv.getSizeInventory(); i++) {
             ItemStack s = inv.getStackInSlot(i);

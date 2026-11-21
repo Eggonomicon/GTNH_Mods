@@ -7,6 +7,7 @@ import net.minecraftforge.oredict.ShapedOreRecipe;
 import net.minecraftforge.oredict.ShapelessOreRecipe;
 
 import com.valier.tweaks.ModBlocks;
+import com.valier.tweaks.ValierRecipes;
 
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.registry.GameRegistry;
@@ -25,6 +26,10 @@ import gregtech.api.enums.ItemList;
  * Creative:     none (creative tab and NEI only)
  * Pipe Configurator: a Basic item pipe, a Basic fluid pipe, redstone and paper (shapeless)
  * </pre>
+ *
+ * With GregTech, each also has a cheaper assembler recipe ({@link ValierRecipes}): Basic from 3 bronze plates, a glass
+ * pane and the hopper or bucket; each next tier from 6 of the one below and the part; Wireless 2 at a time from 2
+ * Elite, one ender pearl, the emitter and the sensor; the Pipe Configurator 2 at a time.
  *
  * Without GregTech (a test client): iron instead of bronze plates, a hopper or bucket for every part.
  */
@@ -54,9 +59,25 @@ public final class PipeRecipes {
             GameRegistry.addRecipe(new ShapelessOreRecipe(new ItemStack(block, 1, PipeTier.WIRELESS),
                 new ItemStack(block, 1, PipeTier.ELITE), new ItemStack(Items.ender_pearl), gt ? Gt.emitterMV() : Items.ender_eye,
                 gt ? Gt.sensorMV() : Items.ender_eye));
+            if (!gt) continue;
+            ValierRecipes.assembler(new ItemStack(block, 8, PipeTier.BASIC), 5, ValierRecipes.STEAM, ValierRecipes.ore("plateBronze", 3),
+                ValierRecipes.ore("paneGlass", 1), core);
+            ValierRecipes.assembler(new ItemStack(block, 8, PipeTier.ADVANCED), 10, ValierRecipes.LV,
+                new ItemStack(block, 6, PipeTier.BASIC), lv);
+            ValierRecipes.assembler(new ItemStack(block, 8, PipeTier.ELITE), 10, ValierRecipes.MV,
+                new ItemStack(block, 6, PipeTier.ADVANCED), mv);
+            ValierRecipes.assembler(new ItemStack(block, 8, PipeTier.SUPERIOR), 10, ValierRecipes.HV,
+                new ItemStack(block, 6, PipeTier.ELITE), hv);
+            ValierRecipes.assembler(new ItemStack(block, 8, PipeTier.ULTIMATE), 10, ValierRecipes.EV,
+                new ItemStack(block, 6, PipeTier.SUPERIOR), ev);
+            ValierRecipes.assembler(new ItemStack(block, 2, PipeTier.WIRELESS), 10, ValierRecipes.MV,
+                new ItemStack(block, 2, PipeTier.ELITE), new ItemStack(Items.ender_pearl), Gt.emitterMV(), Gt.sensorMV());
         }
         GameRegistry.addRecipe(new ShapelessOreRecipe(new ItemStack(ModBlocks.pipeConfigurator), new ItemStack(ModBlocks.itemPipe, 1,
             PipeTier.BASIC), new ItemStack(ModBlocks.fluidPipe, 1, PipeTier.BASIC), "dustRedstone", new ItemStack(Items.paper)));
+        if (gt) ValierRecipes.assembler(new ItemStack(ModBlocks.pipeConfigurator, 2), 5, ValierRecipes.STEAM,
+            new ItemStack(ModBlocks.itemPipe, 1, PipeTier.BASIC), new ItemStack(ModBlocks.fluidPipe, 1, PipeTier.BASIC),
+            ValierRecipes.ore("dustRedstone", 1), new ItemStack(Items.paper));
     }
 
     /** GregTech's parts (only touched with GregTech loaded). */

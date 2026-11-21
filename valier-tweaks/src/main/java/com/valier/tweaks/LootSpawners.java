@@ -368,6 +368,8 @@ public final class LootSpawners {
         NBTTagList lore = new NBTTagList();
         lore.appendTag(new NBTTagString(grey + "Makes the loot of each " + mob + ", no mobs."));
         if (t.noDamaged) lore.appendTag(new NBTTagString(grey + "Throws damaged items away."));
+        if (t.filters()) lore.appendTag(new NBTTagString(grey + "Filters its loot (Allow " + t.allow.entries() + ", Void "
+            + t.voids.entries() + ")."));
         if (t.xpBottles) lore.appendTag(new NBTTagString(grey + "Turns its XP into bottles o' enchanting."));
         int looting = t.looting.level(), speed = t.speed.level();
         if (looting > 0) lore.appendTag(new NBTTagString(grey + "Looting " + roman(looting) + "."));
@@ -1203,6 +1205,10 @@ public final class LootSpawners {
             any |= !loot.isEmpty();
             for (ItemStack stack : MobLoot.merge(loot)) {
                 if (t.noDamaged && damaged(stack)) continue; // thrown away
+                if (!t.lets(stack)) { // its filter destroys it
+                    t.countVoided(stack.stackSize);
+                    continue;
+                }
                 ItemStack left = insertAround(world, t.xCoord, t.yCoord, t.zCoord, stack);
                 if (left != null) left = t.addToBuffer(left);
                 if (left != null) drop(world, t.xCoord, t.yCoord + 1, t.zCoord, left); // more than 27 stacks: never lose it
@@ -1217,6 +1223,10 @@ public final class LootSpawners {
             while (bottles > 0) {
                 ItemStack stack = new ItemStack(Items.experience_bottle, Math.min(bottles, 64));
                 bottles -= stack.stackSize;
+                if (!t.lets(stack)) {
+                    t.countVoided(stack.stackSize);
+                    continue;
+                }
                 ItemStack left = insertAround(world, t.xCoord, t.yCoord, t.zCoord, stack);
                 if (left != null) left = t.addToBuffer(left);
                 if (left != null) drop(world, t.xCoord, t.yCoord + 1, t.zCoord, left);
@@ -1420,6 +1430,11 @@ public final class LootSpawners {
         c.getChatStyle()
             .setColor(colour);
         return c;
+    }
+
+    /** How it is doing, as the sneak-right-click with an empty hand tells it. */
+    static void tellStatus(EntityPlayer player, LootSpawnerTile t) {
+        tell(player, status(t));
     }
 
     private static void tell(EntityPlayer player, IChatComponent msg) {

@@ -100,6 +100,21 @@ public class ValierTweaks {
         com.valier.tweaks.pipe.PipeNetworks pipes = new com.valier.tweaks.pipe.PipeNetworks.Events();
         MinecraftForge.EVENT_BUS.register(pipes); // chunk loads, world unloads
         MinecraftForge.EVENT_BUS.register(new com.valier.tweaks.pipe.PipeClicks.Events()); // sneak + wrench on pipes
+        MinecraftForge.EVENT_BUS.register(new com.valier.tweaks.storage.BarrelClicks.Events()); // sneak + wrench on barrels
+        MinecraftForge.EVENT_BUS.register(new com.valier.tweaks.storage.SatchelEvents()); // satchels picking things up
+        MinecraftForge.EVENT_BUS.register(new com.valier.tweaks.grid.GridEvents()); // sneak + wrench on grid blocks
+        com.valier.tweaks.grid.GridNets grid = new com.valier.tweaks.grid.GridNets();
+        MinecraftForge.EVENT_BUS.register(grid); // the overworld unloading
+        FMLCommonHandler.instance()
+            .bus()
+            .register(grid); // the Valier Grid, on server ticks
+        NET.registerMessage(com.valier.tweaks.storage.SatchelEvents.Scroll.Handler.class, com.valier.tweaks.storage.SatchelEvents.Scroll.class, 2,
+            Side.SERVER);
+        com.valier.tweaks.storage.BarrelSync barrels = new com.valier.tweaks.storage.BarrelSync();
+        MinecraftForge.EVENT_BUS.register(barrels); // the overworld unloading
+        FMLCommonHandler.instance()
+            .bus()
+            .register(barrels); // barrel labels and comparators, on server ticks
         FMLCommonHandler.instance()
             .bus()
             .register(pipes); // the pipe timer, on world ticks
@@ -120,13 +135,22 @@ public class ValierTweaks {
     public void init(FMLInitializationEvent event) {
         if (Loader.isModLoaded("gregtech")) XpCrafters.register(); // GregTech tanks; its recipe and crafting
         com.valier.tweaks.pipe.PipeRecipes.register();
+        com.valier.tweaks.storage.StorageRecipes.register();
+        com.valier.tweaks.grid.GridRecipes.register();
+        net.minecraftforge.oredict.RecipeSorter.register(MODID + ":satchel_upgrade", com.valier.tweaks.storage.ItemSatchelUpgrade.Recipe.class,
+            net.minecraftforge.oredict.RecipeSorter.Category.SHAPELESS, "after:minecraft:shapeless");
+        cpw.mods.fml.common.registry.GameRegistry.addRecipe(new com.valier.tweaks.storage.ItemSatchelUpgrade.Recipe());
         if (Loader.isModLoaded("Waila")) { // what pipes are doing, for WAILA (server data; players' lines)
             cpw.mods.fml.common.event.FMLInterModComms.sendMessage("Waila", "register",
                 "com.valier.tweaks.pipe.PipeWaila.callbackRegister");
             cpw.mods.fml.common.event.FMLInterModComms.sendMessage("Waila", "register",
                 "com.valier.tweaks.client.PipeHud.callbackRegister");
+            cpw.mods.fml.common.event.FMLInterModComms.sendMessage("Waila", "register",
+                "com.valier.tweaks.grid.GridWaila.callbackRegister");
+            cpw.mods.fml.common.event.FMLInterModComms.sendMessage("Waila", "register",
+                "com.valier.tweaks.client.GridHud.callbackRegister");
         }
-        cpw.mods.fml.common.network.NetworkRegistry.INSTANCE.registerGuiHandler(this, new com.valier.tweaks.pipe.PipeGui());
+        cpw.mods.fml.common.network.NetworkRegistry.INSTANCE.registerGuiHandler(this, new ValierGui()); // pipe faces, loot spawners
         proxy.init(event);
     }
 

@@ -72,6 +72,20 @@ public class BlockLootSpawner extends BlockContainer {
         super.breakBlock(world, x, y, z, block, meta);
     }
 
+    /**
+     * A plain right-click: its menu (store and loot filter, {@link LootMenu}) for players who may change it, how it is
+     * doing for anyone else. Sneak-clicks are {@link LootSpawners#onClick}'s (upgrades, wrench, status).
+     */
+    @Override
+    public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hx, float hy, float hz) {
+        if (player.isSneaking()) return false;
+        if (world.isRemote) return true;
+        if (player instanceof net.minecraftforge.common.util.FakePlayer) return false;
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof LootSpawnerTile && TweaksConfig.lootSpawners) LootMenu.open(player, (LootSpawnerTile) te);
+        return true;
+    }
+
     /** Pick-block (and WAILA's name): "Valier Loot Spawner (Zombie, Looting II)". */
     @Override
     public ItemStack getPickBlock(MovingObjectPosition target, World world, int x, int y, int z) {

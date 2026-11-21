@@ -81,6 +81,7 @@ public final class RailBoilerSelfTest {
     public void onTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         ticks++;
+        SelfTest.keepLoaded(world, x >> 4, z >> 4, x >> 4, z >> 4);
         boolean formed = firebox.isStructureValid() && tank.isStructureValid() && firebox.getMasterBlock() != null;
         if (!formed && ticks < 200) return;
         FMLCommonHandler.instance()

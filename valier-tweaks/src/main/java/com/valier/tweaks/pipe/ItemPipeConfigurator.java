@@ -41,6 +41,11 @@ public class ItemPipeConfigurator extends Item {
     public boolean onItemUseFirst(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int side, float hx,
         float hy, float hz) {
         TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof com.valier.tweaks.grid.TileGrid) { // 2.3: Grid blocks too
+            if (world.isRemote) return false;
+            com.valier.tweaks.grid.GridConfigure.use(stack, player, (com.valier.tweaks.grid.TileGrid) te, player.isSneaking());
+            return true;
+        }
         if (!(te instanceof TilePipe)) return false;
         if (world.isRemote) return false; // the server decides; returning true here would keep the click from it
         TilePipe p = (TilePipe) te;

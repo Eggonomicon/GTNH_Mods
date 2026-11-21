@@ -41,6 +41,17 @@ public final class TweaksConfig {
     public static int pipeNetworkMax = 4096;
     public static boolean pipeWirelessCrossDimension = true;
     public static int pipeHeldStacks = 4;
+    public static int[] barrelStacks = com.valier.tweaks.storage.BarrelTier.STACKS.clone();
+    public static int[] satchelSlots = com.valier.tweaks.storage.SatchelTier.SLOTS.clone();
+    public static int[] satchelPerSlot = com.valier.tweaks.storage.SatchelTier.PER_SLOT.clone();
+    public static int[] flaskTanks = com.valier.tweaks.storage.SatchelTier.TANKS.clone();
+    public static int[] flaskPerTank = com.valier.tweaks.storage.SatchelTier.PER_TANK.clone();
+    public static int gridAmps = 4;
+    public static long[] gridCellEu = com.valier.tweaks.grid.GridTier.CELL_EU.clone();
+    public static boolean gridRfToEu = false;
+    public static double gridRfPerEu = 3.6;
+    public static boolean gridControllerCrossDimension = true;
+    public static int gridLossPercent = 0;
     public static boolean xpCrafter = true;
     public static String xpCrafterTank = "gregtech:gt.blockmachines:817";
     public static String[] xpCrafterFluids = { "xpjuice" };
@@ -252,10 +263,48 @@ public final class TweaksConfig {
             + "dimensions (both ends' chunks must be loaded either way).");
         pipeHeldStacks = c.getInt("pipeHeldStacks", cat, 4, 1, 64, "Stacks a face may hold back (what a block took less of than "
             + "it said and that couldn't go back); past that the oldest drops.");
+        cat = "barrels";
+        c.setCategoryComment(cat, "Valier Barrels: one item each, lots of it. Seven tiers (Basic, LV, MV, HV, EV, IV, LuV); "
+            + "linked barrels share one store, holding the sum of their tiers.");
+        barrelStacks = tiers(c.get(cat, "barrelStacks", com.valier.tweaks.storage.BarrelTier.STACKS, "Stacks of its item each "
+            + "tier holds (64 stacks of iron ingots: 4,096)."), com.valier.tweaks.storage.BarrelTier.STACKS);
+        cat = "satchels";
+        c.setCategoryComment(cat, "Valier Satchels (items) and Flasks (fluids). Seven tiers each: LV, MV, HV, EV, IV, LuV, "
+            + "Creative (Creative is endless whatever these say). Slots and tanks: 1 to 54.");
+        satchelSlots = tiers(c.get(cat, "satchelSlots", com.valier.tweaks.storage.SatchelTier.SLOTS, "Slots of each Satchel "
+            + "tier."), com.valier.tweaks.storage.SatchelTier.SLOTS);
+        satchelPerSlot = tiers(c.get(cat, "satchelPerSlot", com.valier.tweaks.storage.SatchelTier.PER_SLOT, "Items one Satchel "
+            + "slot holds, per tier."), com.valier.tweaks.storage.SatchelTier.PER_SLOT);
+        flaskTanks = tiers(c.get(cat, "flaskTanks", com.valier.tweaks.storage.SatchelTier.TANKS, "Tanks of each Flask tier."),
+            com.valier.tweaks.storage.SatchelTier.TANKS);
+        flaskPerTank = tiers(c.get(cat, "flaskPerTank", com.valier.tweaks.storage.SatchelTier.PER_TANK, "mB one Flask tank "
+            + "holds, per tier."), com.valier.tweaks.storage.SatchelTier.PER_TANK);
+        cat = "grid";
+        c.setCategoryComment(cat, "The Valier Grid: wireless EU and RF. Plugs take power in, points send it out, cells store "
+            + "it, controllers charge players' items. Eight tiers, LV to UV, at GregTech's voltages.");
+        gridAmps = c.getInt("gridAmps", cat, 4, 1, 64, "Amps a plug takes and a point sends a tick, at its tier's voltage.");
+        double[] cells = c.get(cat, "gridCellEu", toDoubles(com.valier.tweaks.grid.GridTier.CELL_EU), "EU each Grid Cell tier holds.")
+            .getDoubleList();
+        gridCellEu = new long[com.valier.tweaks.grid.GridTier.CELL_EU.length];
+        for (int i = 0; i < gridCellEu.length; i++) gridCellEu[i] = i < cells.length ? (long) Math.max(1, cells[i])
+            : com.valier.tweaks.grid.GridTier.CELL_EU[i];
+        gridRfToEu = c.getBoolean("gridRfToEu", cat, false, "RF that comes in may go out as EU (GregTech machines). Off, as "
+            + "GregTech itself has it in this pack: RF only goes out as RF.");
+        gridRfPerEu = c.getFloat("gridRfPerEu", cat, 3.6F, 0.1F, 100F, "RF per EU, both ways (GregTech's own rate is 3.6).");
+        gridControllerCrossDimension = c.getBoolean("gridControllerCrossDimension", cat, true, "Controllers charge players in "
+            + "any dimension (else only in their own).");
+        gridLossPercent = c.getInt("gridLossPercent", cat, 0, 0, 90, "EU (and RF) lost on the way, as a percentage of what arrives: "
+            + "at 10, 100 EU delivered costs the network 110. 0: nothing is lost.");
         if (c.hasChanged()) c.save();
     }
 
     /** A per-tier list; one saved before a tier existed (2.0 had four) gets that tier's default added. */
+    private static double[] toDoubles(long[] v) {
+        double[] d = new double[v.length];
+        for (int i = 0; i < v.length; i++) d[i] = v[i];
+        return d;
+    }
+
     private static int[] tiers(net.minecraftforge.common.config.Property p, int[] defaults) {
         int[] v = p.getIntList();
         if (v.length >= defaults.length) return v;

@@ -22,7 +22,7 @@ import serverutils.lib.math.ChunkDimPos;
  * <p>
  * The ServerUtilities classes are only touched when it is loaded. Team answers are kept for a minute.
  */
-final class TeamScope {
+public final class TeamScope {
 
     static final boolean SU = Loader.isModLoaded("serverutilities");
     private static final long KEEP_MS = 60_000;
@@ -32,7 +32,7 @@ final class TeamScope {
     private TeamScope() {}
 
     /** The scope of an owner's Wireless tags: "t:<team>" or "p:<uuid>". */
-    static Object of(UUID owner) {
+    public static Object of(UUID owner) {
         if (owner == null) return "nobody";
         long now = System.currentTimeMillis();
         Object[] c = cache.get(owner);

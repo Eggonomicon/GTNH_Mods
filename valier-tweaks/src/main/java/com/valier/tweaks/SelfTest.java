@@ -69,7 +69,7 @@ public final class SelfTest {
 
     static final boolean ENABLED = Boolean.getBoolean("valiertweaks.selftest");
 
-    static final int CX = 400, CZ = 200; // an empty corner of the test world
+    public static final int CX = 400, CZ = 200; // an empty corner of the test world
     private static final int HEIGHT = 10;
 
     private static int passed, failed;
@@ -81,8 +81,10 @@ public final class SelfTest {
 
     static void run(ICommandSender sender, String step) {
         if (!"trees".equals(step) && !"peaceful".equals(step) && !"boilers".equals(step) && !"lootspawner".equals(step)
-            && !"xpcrafter".equals(step) && !"railboiler".equals(step) && !"mod".equals(step) && !"pipes".equals(step) && !"pipeperf".equals(step)) {
-            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner, xpcrafter, railboiler, mod, pipes, pipeperf"));
+            && !"xpcrafter".equals(step) && !"railboiler".equals(step) && !"mod".equals(step) && !"pipes".equals(step) && !"pipeperf".equals(step)
+            && !"barrels".equals(step) && !"barrelperf".equals(step) && !"satchels".equals(step)
+            && !"grid".equals(step) && !"gridperf".equals(step)) {
+            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner, xpcrafter, railboiler, mod, pipes, pipeperf, barrels, barrelperf, satchels, grid, gridperf"));
             return;
         }
         passed = failed = 0;
@@ -96,6 +98,11 @@ public final class SelfTest {
             else if ("railboiler".equals(step)) new RailBoilerSelfTest().start();
             else if ("pipes".equals(step)) new PipeSelfTest().start();
             else if ("pipeperf".equals(step)) new PipePerfTest().start();
+            else if ("barrels".equals(step)) new com.valier.tweaks.storage.BarrelSelfTest().start();
+            else if ("barrelperf".equals(step)) new com.valier.tweaks.storage.BarrelPerfTest().start();
+            else if ("satchels".equals(step)) new com.valier.tweaks.storage.SatchelSelfTest().start();
+            else if ("grid".equals(step)) new com.valier.tweaks.grid.GridSelfTest().start();
+            else if ("gridperf".equals(step)) new com.valier.tweaks.grid.GridPerfTest().start();
             else if ("mod".equals(step)) {
                 ModSelfTest.run();
                 summary();
@@ -508,6 +515,27 @@ public final class SelfTest {
             && stack.getTagCompound()
                 .getCompoundTag("InfiTool")
                 .getBoolean("Broken");
+    }
+
+    /**
+     * Unloads a chunk now, for a test's "unloaded chunk": the world unloads at most 100 queued chunks a go, in no
+     * order, so the queue is worked through until this one is gone. True: it is.
+     */
+    public static boolean unloadChunk(net.minecraft.world.WorldServer w, int cx, int cz) {
+        for (int k = 0; k < 64 && w.theChunkProviderServer.chunkExists(cx, cz); k++) {
+            w.theChunkProviderServer.unloadChunksIfNotNearSpawn(cx, cz);
+            w.theChunkProviderServer.unloadQueuedChunks();
+        }
+        return !w.theChunkProviderServer.chunkExists(cx, cz);
+    }
+
+    /**
+     * Keeps a test's chunks loaded through its ticks: every autosave (each 900 ticks) queues each chunk no player is near
+     * for unloading, which would swap a rig's tiles for fresh ones mid-test; loading a chunk again takes it off that queue.
+     */
+    public static void keepLoaded(net.minecraft.world.WorldServer w, int cx0, int cz0, int cx1, int cz1) {
+        if (w == null) return;
+        for (int cx = cx0; cx <= cx1; cx++) for (int cz = cz0; cz <= cz1; cz++) w.theChunkProviderServer.loadChunk(cx, cz);
     }
 
     public static void summary() {

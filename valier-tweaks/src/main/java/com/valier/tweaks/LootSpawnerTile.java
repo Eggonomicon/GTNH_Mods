@@ -15,6 +15,8 @@ import net.minecraft.tileentity.MobSpawnerBaseLogic;
 import net.minecraft.tileentity.TileEntityMobSpawner;
 import net.minecraft.util.EnumChatFormatting;
 
+import com.valier.tweaks.pipe.FilterList;
+
 /**
  * A mob spawner turned into a loot spawner ({@link LootSpawners}): it never spawns a mob. Instead, every spawner cycle
  * it makes the loot of the mobs it would have spawned and pushes it into the inventories and pipes touching it.
@@ -56,6 +58,11 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
     ItemStack xpPaid;
     /** XP made but not yet a bottle. */
     int xp;
+    /**
+     * The loot filter, set in its menu ({@link LootMenu}): what the Void list names is destroyed as it is rolled, and
+     * when the Allow list names anything, only what it names comes out. Saved in the mark as "Allow" and "Void".
+     */
+    public final FilterList allow = new FilterList(), voids = new FilterList();
     /** Lapis blocks (by default) put in: they set the Looting its mobs' loot is rolled with. */
     final Upgrade looting = new Upgrade(LootSpawners.Kind.LOOTING);
     /** Cursed earth (by default) put in: its batches come faster ({@link #speedFactor}). */
@@ -67,6 +74,9 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
      */
     int playerRange = 16;
 
+    // Not saved: what its filter destroyed, per minute over the last hour (the menu shows it).
+    private final long[] voidedPerMinute = new long[60];
+    private long voidMinute = Long.MIN_VALUE;
     // Not saved: what the status message reports.
     LootSpawners.Status status = LootSpawners.Status.STARTING;
     int rolls;
@@ -215,6 +225,8 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         xp = mark.getInteger("Xp");
         looting.read(mark);
         speed.read(mark);
+        allow.read(mark.getCompoundTag("Allow"));
+        voids.read(mark.getCompoundTag("Void"));
         for (int i = 0; i < SLOTS; i++) items[i] = null;
         NBTTagList list = mark.getTagList("Items", 10);
         for (int i = 0; i < list.tagCount(); i++) {
@@ -267,6 +279,8 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         if (xp > 0) mark.setInteger("Xp", xp);
         looting.write(mark);
         speed.write(mark);
+        writeList(mark, "Allow", allow);
+        writeList(mark, "Void", voids);
         NBTTagList list = new NBTTagList();
         for (int i = 0; i < SLOTS; i++) {
             if (items[i] == null) continue;
@@ -321,6 +335,65 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         mark.removeTag("Timer");
         mark.removeTag("Xp"); // the part of a bottle made so far: equal spawners' items then stack
         return (NBTTagCompound) nbt.copy(); // vanilla's SpawnPotentials entries share compounds with the live logic
+    }
+
+    private static void writeList(NBTTagCompound mark, String key, FilterList l) {
+        NBTTagCompound t = new NBTTagCompound();
+        l.write(t);
+        if (!t.hasNoTags()) mark.setTag(key, t);
+    }
+
+    // ---- the loot filter -----------------------------------------------------------------------------------------
+
+    /** Whether this rolled item comes out: not named by the Void list, and named by the Allow list if it names anything. */
+    boolean lets(ItemStack s) {
+        return s != null && !voids.matches(s, null) && allow.allows(s, null);
+    }
+
+    /** Whether the filter does anything at all. */
+    boolean filters() {
+        return voids.active() || allow.active();
+    }
+
+    void countVoided(int n) {
+        rollMinutes();
+        voidedPerMinute[(int) Math.floorMod(voidMinute, 60L)] += n;
+    }
+
+    /** Items its filter destroyed over the last hour. */
+    long voidedLastHour() {
+        rollMinutes();
+        long sum = 0;
+        for (long v : voidedPerMinute) sum += v;
+        return sum;
+    }
+
+    private void rollMinutes() {
+        long now = worldObj == null ? 0 : worldObj.getTotalWorldTime() / 1200;
+        if (voidMinute == Long.MIN_VALUE) {
+            voidMinute = now;
+            return;
+        }
+        if (now <= voidMinute) return;
+        long steps = Math.min(60, now - voidMinute);
+        for (long k = 1; k <= steps; k++) voidedPerMinute[(int) Math.floorMod(voidMinute + k, 60L)] = 0;
+        voidMinute = now;
+    }
+
+    /** Destroys what it keeps that its filter no longer lets out. Returns how many items. */
+    int purge() {
+        int n = 0;
+        for (int i = 0; i < SLOTS; i++) {
+            if (items[i] != null && !lets(items[i])) {
+                n += items[i].stackSize;
+                items[i] = null;
+            }
+        }
+        if (n > 0) {
+            countVoided(n);
+            markDirty();
+        }
+        return n;
     }
 
     // ---- the buffer ----------------------------------------------------------------------------------------------

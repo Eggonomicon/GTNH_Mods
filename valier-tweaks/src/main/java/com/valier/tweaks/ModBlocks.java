@@ -13,8 +13,21 @@ public final class ModBlocks {
     public static BlockXpCrafter xpCrafter;
     public static com.valier.tweaks.pipe.BlockPipe itemPipe, fluidPipe;
     public static com.valier.tweaks.pipe.ItemPipeConfigurator pipeConfigurator;
+    public static com.valier.tweaks.storage.BlockBarrel barrel;
+    public static com.valier.tweaks.storage.ItemBarrelUpgrade barrelUpgrade;
+    public static com.valier.tweaks.storage.ItemSatchel satchel, flask;
+    public static com.valier.tweaks.storage.ItemSatchelUpgrade satchelUpgrade;
+    public static com.valier.tweaks.storage.BlockSatchelDock satchelDock;
+    public static com.valier.tweaks.grid.BlockGrid gridPlug, gridPoint, gridCell, gridController;
 
     private ModBlocks() {}
+
+    private static com.valier.tweaks.grid.BlockGrid grid(int kind, String name) {
+        com.valier.tweaks.grid.BlockGrid b = new com.valier.tweaks.grid.BlockGrid(kind);
+        b.setCreativeTab(tab);
+        GameRegistry.registerBlock(b, com.valier.tweaks.grid.ItemBlockGrid.class, name);
+        return b;
+    }
 
     static void register() {
         tab = new ValierTab();
@@ -38,5 +51,33 @@ public final class ModBlocks {
         pipeConfigurator = new com.valier.tweaks.pipe.ItemPipeConfigurator();
         pipeConfigurator.setCreativeTab(tab);
         GameRegistry.registerItem(pipeConfigurator, "pipe_configurator");
+        barrel = new com.valier.tweaks.storage.BlockBarrel(); // 2.3.0
+        barrel.setCreativeTab(tab);
+        GameRegistry.registerBlock(barrel, com.valier.tweaks.storage.ItemBlockBarrel.class, "barrel");
+        GameRegistry.registerTileEntity(com.valier.tweaks.storage.TileBarrel.class, ValierTweaks.MODID + ".Barrel");
+        barrelUpgrade = new com.valier.tweaks.storage.ItemBarrelUpgrade();
+        barrelUpgrade.setCreativeTab(tab);
+        GameRegistry.registerItem(barrelUpgrade, "barrel_upgrade");
+        satchel = new com.valier.tweaks.storage.ItemSatchel(false);
+        satchel.setCreativeTab(tab);
+        GameRegistry.registerItem(satchel, "satchel");
+        flask = new com.valier.tweaks.storage.ItemSatchel(true);
+        flask.setCreativeTab(tab);
+        GameRegistry.registerItem(flask, "flask");
+        satchelUpgrade = new com.valier.tweaks.storage.ItemSatchelUpgrade();
+        satchelUpgrade.setCreativeTab(tab);
+        GameRegistry.registerItem(satchelUpgrade, "satchel_upgrade");
+        satchelDock = new com.valier.tweaks.storage.BlockSatchelDock();
+        satchelDock.setCreativeTab(tab);
+        GameRegistry.registerBlock(satchelDock, "satchel_dock");
+        GameRegistry.registerTileEntity(com.valier.tweaks.storage.TileSatchelDock.class, ValierTweaks.MODID + ".SatchelDock");
+        gridPlug = grid(com.valier.tweaks.grid.TileGrid.PLUG, "grid_plug");
+        gridPoint = grid(com.valier.tweaks.grid.TileGrid.POINT, "grid_point");
+        gridCell = grid(com.valier.tweaks.grid.TileGrid.CELL, "grid_cell");
+        gridController = grid(com.valier.tweaks.grid.TileGrid.CONTROLLER, "grid_controller");
+        GameRegistry.registerTileEntity(com.valier.tweaks.grid.TileGridPlug.class, ValierTweaks.MODID + ".GridPlug");
+        GameRegistry.registerTileEntity(com.valier.tweaks.grid.TileGridPoint.class, ValierTweaks.MODID + ".GridPoint");
+        GameRegistry.registerTileEntity(com.valier.tweaks.grid.TileGridCell.class, ValierTweaks.MODID + ".GridCell");
+        GameRegistry.registerTileEntity(com.valier.tweaks.grid.TileGridController.class, ValierTweaks.MODID + ".GridController");
     }
 }

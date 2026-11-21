@@ -132,7 +132,15 @@ public final class XpCrafters {
         RecipeSorter.register(ValierTweaks.MODID + ":xpcrafter", Recipe.class, RecipeSorter.Category.SHAPED,
             "after:forge:shapedore");
         Recipe recipe = Recipe.make();
-        if (recipe != null) GameRegistry.addRecipe(recipe);
+        if (recipe != null) { // the shaped recipe always (it checks the setting); the assembler one only when switched on
+            GameRegistry.addRecipe(recipe);
+            // The assembler's: one tank and one pump instead of three and two.
+            Item tank = LootSpawners.itemOf(TweaksConfig.xpCrafterTank);
+            if (TweaksConfig.xpCrafter && tank != null) ValierRecipes.assembler(recipe.getRecipeOutput(), 10, ValierRecipes.LV,
+                new ItemStack(tank, 1, Math.max(0, LootSpawners.metaOf(TweaksConfig.xpCrafterTank))), ItemList.Electric_Pump_LV.get(1),
+                ItemList.Conveyor_Module_LV.get(1), ItemList.Robot_Arm_LV.get(1), new ItemStack(Blocks.crafting_table),
+                ValierRecipes.ore(ValierRecipes.circuit(1), 1));
+        }
         hud = Loader.isModLoaded("Waila");
         if (hud) {
             FMLInterModComms.sendMessage("Waila", "register", "com.valier.tweaks.XpCrafterWaila.callbackRegister");

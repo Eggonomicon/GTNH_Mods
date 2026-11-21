@@ -23,7 +23,7 @@ import com.valier.tweaks.ValierTweaks;
  * the amount), right-clicking clears it, and nothing can be taken out of them or collected from them. Everything else comes as {@link PipeActionMessage}s, checked here. The
  * server sends the face's settings to the player as one compound ({@link PipeFaceMessage}) whenever they change.
  */
-public class ContainerPipeFace extends Container {
+public class ContainerPipeFace extends Container implements ValierMenu {
 
     /** Where the GUI draws things; the slots must match it. */
     public static final int FILTER_X = 8, FILTER_Y = 105, INV_Y = 159, HOTBAR_Y = 217;
@@ -46,7 +46,7 @@ public class ContainerPipeFace extends Container {
         this.cfg = cfg;
         this.max = PipeTier.max(pipe.kind(), pipe.tier());
         this.minTicks = PipeTier.interval(pipe.tier());
-        filterView = new FilterView(this);
+        filterView = new ListView(this::fl);
         for (int i = 0; i < FaceConfig.FILTER; i++)
             addSlotToContainer(new Ghost(filterView, i, FILTER_X + (i % 9) * 18, FILTER_Y + (i / 9) * 18));
         for (int r = 0; r < 3; r++) for (int c = 0; c < 9; c++) addSlotToContainer(new Slot(inv, 9 + r * 9 + c, 8 + c * 18, INV_Y + r * 18));
@@ -115,7 +115,7 @@ public class ContainerPipeFace extends Container {
         return null;
     }
 
-    static ItemStack one(ItemStack s) {
+    public static ItemStack one(ItemStack s) {
         ItemStack c = s.copy();
         c.stackSize = 1;
         return c;
@@ -137,6 +137,7 @@ public class ContainerPipeFace extends Container {
     }
 
     /** One action from the menu (server side; every value checked). */
+    @Override
     public void apply(EntityPlayer player, int action, int a, int b, ItemStack stack, String text) {
         if (!PipeClicks.may(pipe, player)) return;
         if (source()) {
@@ -305,6 +306,7 @@ public class ContainerPipeFace extends Container {
     }
 
     /** The client's copy, from the server. */
+    @Override
     public void receive(NBTTagCompound t) {
         cfg = FaceConfig.read(t);
         max = t.getInteger("Max");
@@ -316,7 +318,7 @@ public class ContainerPipeFace extends Container {
     /** A ghost slot: shows the filter item, takes nothing, gives nothing. */
     public static final class Ghost extends Slot {
 
-        Ghost(IInventory inv, int i, int x, int y) {
+        public Ghost(IInventory inv, int i, int x, int y) {
             super(inv, i, x, y);
         }
 
@@ -327,75 +329,6 @@ public class ContainerPipeFace extends Container {
 
         @Override
         public boolean canTakeStack(EntityPlayer p) {
-            return false;
-        }
-    }
-
-    /** The filter as an inventory, for the ghost slots (vanilla syncs their contents). */
-    static final class FilterView implements IInventory {
-
-        final ContainerPipeFace c;
-
-        FilterView(ContainerPipeFace c) {
-            this.c = c;
-        }
-
-        @Override
-        public int getSizeInventory() {
-            return FaceConfig.FILTER;
-        }
-
-        @Override
-        public ItemStack getStackInSlot(int i) {
-            return c.fl().filter[i];
-        }
-
-        @Override
-        public ItemStack decrStackSize(int i, int n) {
-            return null;
-        }
-
-        @Override
-        public ItemStack getStackInSlotOnClosing(int i) {
-            return null;
-        }
-
-        @Override
-        public void setInventorySlotContents(int i, ItemStack s) {
-            c.fl().filter[i] = s == null ? null : one(s);
-        }
-
-        @Override
-        public String getInventoryName() {
-            return "Filter";
-        }
-
-        @Override
-        public boolean hasCustomInventoryName() {
-            return false;
-        }
-
-        @Override
-        public int getInventoryStackLimit() {
-            return 1;
-        }
-
-        @Override
-        public void markDirty() {}
-
-        @Override
-        public boolean isUseableByPlayer(EntityPlayer p) {
-            return true;
-        }
-
-        @Override
-        public void openInventory() {}
-
-        @Override
-        public void closeInventory() {}
-
-        @Override
-        public boolean isItemValidForSlot(int i, ItemStack s) {
             return false;
         }
     }

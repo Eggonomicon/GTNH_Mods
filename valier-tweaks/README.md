@@ -6,6 +6,35 @@ Gameplay additions for the Valier server. **Since 2.0.0 it is needed on the serv
 The newest version is always at https://github.com/Eggonomicon/GTNH_Mods/releases/latest/download/valiertweaks.jar
 (the same jar, named `valiertweaks.jar`; keep only one Valier Tweaks jar in `mods`).
 
+## 2.3.0: Valier Barrels (linked), Satchels and Flasks, the Valier Grid
+
+- **Valier Barrels** hold lots of one item, in 7 tiers (Basic to LuV, 64 to 16,777,216 stacks). Barrels on the same
+  **channel** share one store, anywhere, in any dimension, loaded or not: take one of 640 iron ingots out of any of
+  them and every one shows 639. Lock, keep (automation leaves that many), void overflow, comparators, AE2 storage buses
+  see the whole count. See [Valier Barrels](#valier-barrels-230).
+- **Valier Satchels (items) and Flasks (fluids)**, LV to LuV and Creative: picked-up items go into a Satchel first;
+  place blocks from it; a Flask picks up and places fluids and fills and drains tanks. The **Satchel Dock** lets pipes,
+  hoppers and AE2 reach what a docked one holds. See [Satchels and Flasks](#valier-satchels-flasks-and-the-dock-230).
+- **The Valier Grid**: wireless EU and RF, LV to UV. Plugs take power in, points send it out (GregTech machines at their
+  own voltage, so nothing explodes), cells store it, the controller charges players' items. See
+  [the Valier Grid](#the-valier-grid-230).
+- **Every Valier recipe has a cheaper GregTech assembler version** (since 2.2.0).
+- **The Pipe Configurator is the Valier Configurator** now: it copies and pastes Grid settings too.
+- Players need 2.3.x to join a 2.3 server.
+
+## 2.2.0: the loot spawner menu and loot filter, assembler recipes
+
+2.2 was never released on its own: it ships in 2.3.0.
+
+- **A loot spawner's menu**: right-click it (players who may change it). Its store (take the loot it is keeping), and
+  its **loot filter**: an **Allow** list (only what it names comes out) and a **Void** list (what it names is destroyed
+  as it is made; wins over Allow). Each list matches items or whole mods, by damage, **NBT** (one enchanted book, not
+  another) and ore dictionary, as pipe lists do. XP bottles are filtered too. See [the loot spawner menu](#loot-spawner-menu-and-loot-filter-220).
+- **Every Valier recipe has a GregTech assembler recipe** that costs less: about half the metal or bulk and no tools,
+  the GT parts (circuits, conveyors, pumps, emitters) still one each. E.g. 8 Advanced pipes from 6 Basic ones (8 by
+  hand).
+- Players need 2.2.x to join a 2.2 server.
+
 ## 2.1.0: faster pipes, three filter lists, void, spread, WAILA, pick-up, copy settings, creative pipes
 
 - **Two faster tiers:** Superior (HV) and Ultimate (EV). An Ultimate fluid face moves 640,000 L/s, against GregTech's
@@ -211,6 +240,148 @@ someone is looking at, every quarter second.
 
 Loot spawners and XP crafters work with pipes: pipes can take from both. One with only a Valier pipe pulling from it
 (Pull or Provide) works; before 2.0, with nothing to push into, it would wait for "no output".
+
+## Loot spawner menu and loot filter (2.2.0)
+
+- **Opening it:** right-click a loot spawner (sneak-clicks still do what they did). Players who may change it (its
+  claim's members) get the menu; anyone else gets its status, as a sneak-right-click with an empty hand gives.
+- **Top:** the mob and how many a batch, what it is doing (hover for the full status), its upgrades.
+- **Store tab:** the 27 slots of loot nothing touching it took yet. Take from them; nothing goes in. The line under it
+  says how much the filter destroyed in the last hour.
+- **Allow and Void tabs**, the loot filter, each a full filter like a pipe face's list: 18 ghost slots (click with an
+  item, drag one from NEI, or shift-click one in your inventory; right-click clears), items or mods, damage (exact, any,
+  only damaged, only undamaged, worn 25/50/75%), NBT, ore dictionary, snapshot (the list becomes what the store holds),
+  clear.
+  - **Void** names what is destroyed as it is made. It wins over Allow.
+  - **Allow**, when it names anything, is all that comes out; everything else is destroyed.
+  - XP bottles go through the filter too.
+  - Stored loot the filter now destroys goes at once, and the menu says how much.
+- **Saved** with the spawner (in its mark, keys `Allow` and `Void`), also through a wrench pick-up; the item's lore says
+  it filters. The emerald block's damaged-items filter still works and still refunds.
+
+## Valier Barrels (2.3.0)
+
+One kind of item, lots of it, with the item and its count on the front.
+
+| Tier | Stacks | Iron ingots |
+|---|---|---|
+| Basic | 64 | 4,096 |
+| LV | 512 | 32,768 |
+| MV | 4,096 | 262,144 |
+| HV | 32,768 | 2,097,152 |
+| EV | 262,144 | 16,777,216 |
+| IV | 2,097,152 | 134,217,728 |
+| LuV | 16,777,216 | 1,073,741,824 |
+
+- **Clicks:** right-click puts the held stack in, a quick second right-click every matching item you carry; left-click
+  takes a stack, sneaking one item. Creative players take a stack too, and break a barrel holding something only
+  sneaking.
+- **Menu** (sneak + right-click with an empty hand): lock (it keeps its item at 0), void overflow (full, it still takes
+  its item and destroys it: a cobblestone sink), keep (hoppers, pipes and the like leave that many), its channel.
+- **Upgrade in place:** right-click a barrel with the Barrel Upgrade of the next tier; it keeps what it holds.
+- **A wrench** (sneaking) picks it up with what it holds; broken any way, it drops as an item holding it all. Placed
+  again it holds it again.
+- **Linked barrels:** type a channel name in the menu (or click one of your team's) and Link. Every barrel on a channel
+  shares one store, anywhere, in any dimension, loaded or not: take one out of any of them and it is gone from all. A
+  channel holds the sum of its barrels' capacities. A channel is your team's (or yours alone, without a team; the
+  same rule as wireless pipe tags).
+  - Joining: a barrel holding something joins only an empty channel or one holding the same item; what it holds goes in.
+  - Leaving (Unlink, broken, picked up): the barrel takes away what the rest can't hold, as its own; nothing is lost.
+    Its item remembers the channel and joins it again when placed (the channel of that name in the placer's team).
+- **Automation:** two slots, as barrels usually have: one always looks empty and takes what is put in, the other shows
+  up to a stack to take. Valier pipes move their whole amount at once (an Ultimate pipe's 320). AE2 storage buses see
+  the whole count. Comparators: 0 empty, 1 to 15 by how full.
+- **Cost:** barrels never tick. A store changing a thousand times between updates costs one label update per loaded
+  barrel showing it, at most every 10 ticks, sent only to players watching that chunk; labels are drawn within 16 blocks,
+  facing the player.
+
+## Valier Satchels, Flasks and the Dock (2.3.0)
+
+| Tier | Satchel slots × items each | Flask tanks × mB each |
+|---|---|---|
+| LV | 9 × 1,024 | 9 × 64,000 |
+| MV | 18 × 4,096 | 9 × 256,000 |
+| HV | 27 × 16,384 | 18 × 1,024,000 |
+| EV | 36 × 65,536 | 18 × 4,096,000 |
+| IV | 45 × 262,144 | 27 × 16,384,000 |
+| LuV | 54 × 2,147,483,647 | 27 × 2,147,483,647 |
+| Creative | 54, endless | 27, endless |
+
+- **Satchel:**
+  - **Pickup:** items you pick up that it holds go into it first, from anywhere in your inventory; with "new items"
+    on, ones it doesn't hold take empty slots. Items you threw don't come straight back. Finding an item's slot is
+    one lookup, however many slots it has.
+  - **In hand:** right-click a block to place (or use) the selected item (a tool used this way wears, and the worn one
+    goes to your inventory); right-click the air for its menu; sneak + mouse wheel picks the slot (shown beside the
+    hotbar for 3 seconds).
+  - **Menu:** click a slot for a stack (with one on the cursor: puts it in), right-click for one, shift-click for a
+    stack into your inventory; ctrl-click selects the slot. The selected slot's settings: keep (what shift-clicks,
+    placing and automation leave), ore dictionary (a picked-up item sharing an ore name is stored as this one), void
+    overflow (full, picked-up matches are destroyed; on by default), lock (keeps its item at 0). Pickup on or off,
+    new items too or not.
+- **Flask:** right-click a fluid source to pick it up, a block to place the selected fluid, a tank or machine to fill
+  it from the selected tank (sneaking: drain it into the Flask). In its menu, click a bucket or cell on a tank to fill or
+  empty it.
+- **Upgrades** (MV to LuV): craft a Satchel (or Flask) with the next tier's upgrade; it keeps everything it holds.
+- **Satchel Dock:** right-click with a Satchel or Flask to dock it, with an empty hand to take it back; broken, it drops
+  it. Docked, pipes, hoppers, GregTech and AE2 reach what it holds: a Satchel's slots (keep amounts respected) plus an
+  always-empty slot that takes anything it takes; a Flask's tanks.
+
+## The Valier Grid (2.3.0)
+
+Wireless EU and RF, in GregTech's tiers LV to UV.
+
+- **Grid Plug:** power goes in. GregTech generators and cables push EU into it up to its tier's voltage (more is
+  refused; nothing explodes), `gridAmps` amps a tick (4); IC2 generators and cables through IC2's energy net; RF
+  generators RF.
+- **Grid Point:** power goes out. GregTech machines get EU at **their own input voltage** (at most the point's), so
+  nothing explodes; GregTech cables (they connect to a point as to a generator) at the voltage set in its menu, never
+  over the cable's own, so it doesn't burn; IC2 machines in their tier's packets; RF machines RF,
+  from RF that came in or EU at 3.6 RF per EU (GregTech's own rate).
+- **Grid Cell:** stores EU, 1,000,000 at LV and 4 times more each tier (UV: 16,384,000,000). Broken or picked up, it
+  keeps its energy.
+- **Grid Controller:** charges its team's online players' items (armour, inventory, baubles: GregTech, IC2 and RF
+  items) every half second, in any dimension. Each player can say "not me" in its menu.
+- **Networks:** a name in your team, chosen in any block's menu. Blocks on a network share power anywhere, in any
+  dimension, while their chunks are loaded. Each network has a colour, shown as a ring of light just inside its
+  blocks' rims: one from its name until someone picks one of the 16 dye colours in a block's menu (saved with the
+  world). The menu's **Blocks** page lists the network's blocks (up to 60): what each is, where (in another
+  dimension: marked `*`), what it moved last second, and whether redstone has it off; plus the network's last minute in
+  and out.
+- **Who goes first:** points by priority (Surge before all); equal points share by what they want; what plugs give
+  that no point takes charges the cells; points draw on cells when plugs don't give enough. Each block has a limit
+  (EU a tick) and a redstone setting.
+- **RF to EU** is off (`gridRfToEu`), as GregTech itself has it in this pack: RF that comes in only goes out as RF.
+- **Loss:** none by default. With `gridLossPercent` set, what arrives costs the network that much more (at 10, 100 EU
+  delivered takes 110); the menu and WAILA show what was lost.
+- **The Valier Configurator** copies a block's settings (sneak-right-click) and pastes them (right-click); a network
+  is pasted by name, in the pasted block's own team. A wrench picks a block up keeping its settings and network (placed
+  by someone else, it joins that name in their team). WAILA shows a block's network, what it moved and a cell's energy.
+- **Cost:** one loop a tick over each network's loaded blocks; neighbours are looked up again only when they change; a
+  network with nothing to give is skipped.
+
+## Recipes (by hand and in the assembler, 2.2.0 and 2.3.0)
+
+Every Valier item has both. The assembler takes about half the metal or bulk and no tools; GregTech parts (circuits,
+conveyors, pumps, emitters, sensors, hulls) stay one each.
+
+| Item | By hand | Assembler |
+|---|---|---|
+| Basic pipes ×8 | 6 bronze plates, 2 glass panes, hopper/bucket | 3 plates, 1 pane, hopper/bucket |
+| Advanced/Elite/Superior/Ultimate ×8 | 8 of the tier below + LV/MV/HV/EV conveyor or pump | 6 of the tier below + the part |
+| Wireless pipe | Elite pipe, ender pearl, MV emitter, MV sensor | ×2 from 2 Elite, 1 pearl, the emitter, the sensor |
+| Valier Configurator | Basic item pipe, Basic fluid pipe, redstone, paper | ×2 from the same |
+| XP Crafter | 3 tanks, 2 LV pumps, LV conveyor, LV robot arm, crafting table, LV circuit | 1 tank, 1 pump, the rest |
+| Basic barrel | 4 wood slabs, 4 planks, chest | 2 slabs, 2 planks, chest |
+| Barrel Upgrade | 4 plates, 2 circuits, chest (LV) or conveyor, hammer, wrench | 2 plates, 1 circuit, chest or conveyor |
+| Satchel / Flask (LV) | 4 steel plates, 2 LV circuits, LV conveyor/pump, chest/large steel fluid cell, hammer | 2 plates, 1 circuit, the rest |
+| Satchel / Flask Upgrade | 4 plates, 2 circuits, conveyor/pump, hammer, wrench | 2 plates, 1 circuit, conveyor/pump |
+| Satchel Dock | LV hull, 2 LV circuits, chest | hull, 1 circuit, chest |
+| Grid Plug / Point | hull, emitter / sensor, 2 circuits, 2 cables (of its tier) | hull, emitter / sensor, 1 circuit |
+| Grid Cell | hull, battery, 2 circuits | hull, battery, 1 circuit |
+| Grid Controller | MV hull, 2 MV emitters, MV field generator | hull, field generator, 1 emitter |
+
+Plates by tier: steel (LV), aluminium (MV), stainless steel (HV), titanium (EV), tungstensteel (IV), chrome (LuV).
 
 ## Lumber axes fell the whole tree
 
@@ -520,6 +691,17 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `pipeNetworkMax` | `4096` | A network of more pipes than this does nothing (a safety limit). |
 | `pipeWirelessCrossDimension` | `true` | Wireless pipes link across dimensions. |
 | `pipeHeldStacks` | `4` | Stacks a face may hold back before the oldest drops. |
+| `barrels` / `barrelStacks` | `64, 512, 4096, 32768, 262144, 2097152, 16777216` | Stacks of its item a barrel of each tier holds (Basic, LV to LuV). (2.3.0) |
+| `satchels` / `satchelSlots` | `9, 18, 27, 36, 45, 54, 54` | Slots of each Satchel tier (LV to LuV, Creative), 1 to 54. |
+| `satchelPerSlot` | `1024, 4096, 16384, 65536, 262144, 2147483647, …` | Items one Satchel slot holds, per tier. |
+| `flaskTanks` | `9, 9, 18, 18, 27, 27, 27` | Tanks of each Flask tier. |
+| `flaskPerTank` | `64000, 256000, 1024000, 4096000, 16384000, 2147483647, …` | mB one Flask tank holds, per tier. |
+| `grid` / `gridAmps` | `4` | Amps a Grid plug takes and a point sends a tick, at its tier's voltage. |
+| `gridCellEu` | `1e6, 4e6, … 1.6384e10` | EU each Grid Cell tier (LV to UV) holds. |
+| `gridRfToEu` | `false` | RF that comes in may go out as EU. Off, as GregTech has it in this pack. |
+| `gridRfPerEu` | `3.6` | RF per EU, both ways (GregTech's own rate). |
+| `gridControllerCrossDimension` | `true` | Controllers charge players in any dimension. |
+| `gridLossPercent` | `0` | EU and RF lost on the way, as a percentage of what arrives (0 to 90). |
 
 ## Build and test
 
@@ -693,3 +875,38 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
   - **20 Nov 2026, Valier Tweaks 2.1.0 (as 2.1.0-pre1):** all nine steps, 300 checks, none failed (mod 6, lootspawner
     123, xpcrafter 70, pipes 42, pipeperf 2, railboiler 12, boilers 18, trees 12, peaceful 15). Speed: 0.203 ms a tick
     for 1,024 working faces, the same as 2.0.
+- **2.2.0 self-tests:**
+  - **Loot filter** (in `valiertweaks selftest lootspawner`): Void lists by item, by NBT (one enchanted book destroyed,
+    another kept; without NBT matching the entry names every book), by ore dictionary and by mod; an Allow list; Void
+    winning over Allow; XP bottles filtered; stored loot the filter now destroys removed and counted. The menu: it opens
+    for a player who may change the spawner and not where a claim keeps them out; list buttons, slots, right-click
+    clearing; both lists kept through saving, loading and a wrench pick-up; the item's lore.
+  - **Recipes** (in `valiertweaks selftest mod`): every craftable Valier item has a crafting recipe and an assembler
+    recipe, and the assembler makes 8 Advanced item pipes from 6 Basic ones.
+- **2.3.0 self-tests** (same flag), each in an empty chunk of the test world:
+  - **`valiertweaks selftest barrels`:** putting in and taking out (one, a stack, everything carried), lock, keep, void
+    overflow, hoppers and Valier pipes in and out, upgrading in place and wrench pick-up keeping what it holds, two
+    barrels in different chunks linked to one channel sharing one count (640, take one, 639 in both), the channel holding
+    the sum of its barrels, a barrel leaving with what the rest can't hold, a joining barrel holding another item
+    refused, one barrel's chunk unloaded, another player's channel kept apart, saving and loading, the menu (and not where
+    a claim keeps a player out), and an AE2 storage bus seeing, adding and taking the whole count. Also: a full hopper
+    under it that can't pass items on adding nothing, a placement Forge undoes (another mod cancelled it) dropping and
+    keeping nothing, and a barrel leaving a locked channel keeping its lock and item.
+  - **`valiertweaks selftest barrelperf`:** 1,024 linked barrels with 1,536 hopper calls a tick, under 1 ms a tick, and
+    the shared count exact afterwards.
+  - **`valiertweaks selftest satchels`:** pickup into the slot holding the item, new items into empty slots, void
+    overflow on and off, the ore dictionary setting, thrown items not coming straight back, pickup off, keep amounts
+    when placing, sneak + wheel, upgrades (only the next tier, only the right kind) keeping what it holds, the menu's
+    clicks and settings, the menu closing when the Satchel leaves the hand, the Dock as an inventory and a tank with
+    Valier pipes, and Flask pick-up, place, fill and drain. Also: a full voiding slot refusing what is put in by hand
+    (only pickups are destroyed), flint and steel used from a Satchel wearing, a Satchel item nobody holds being let go,
+    an item's slot found by lookup as slots empty and fill, and a full hopper under a dock adding nothing.
+  - **`valiertweaks selftest grid`:** plugs fed by GregTech LV generators, points feeding GregTech LV hulls at their
+    voltage, an over-voltage refused at the plug with nothing exploding, equal points sharing, priority 10 taking
+    everything, a cell filling from what no point takes and powering a point when plugs stop, EU out as RF at 3.6 per EU,
+    RF not turned into EU by default, another player's network kept apart, the menu, and a controller charging a
+    GregTech battery in a player's inventory. Also: a point feeding a hull through a GregTech tin cable, a cell
+    placement Forge undoes dropping nothing, the configurator pasting a network into the block's own team, a network's
+    colour (from its name, then picked, saved and sent to its blocks), and 10% loss (32 EU in delivers 29).
+  - **`valiertweaks selftest gridperf`:** a 200-block network moving power every tick, under 1 ms a tick, its points
+    powered the whole time.

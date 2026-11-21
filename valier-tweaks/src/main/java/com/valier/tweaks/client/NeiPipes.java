@@ -7,8 +7,8 @@ import codechicken.nei.api.API;
 import codechicken.nei.api.INEIGuiHandler;
 
 /**
- * NEI and the pipe face menu (only loaded with NEI): an item dragged from NEI's panel onto a filter slot sets it, so a
- * player doesn't need to own the item; NEI's panel keeps clear of the menu's face tabs.
+ * NEI and Valier's menus (only loaded with NEI): an item dragged from NEI's panel onto a filter slot sets it, so a
+ * player doesn't need to own the item; NEI's panel keeps clear of the pipe menu's face tabs.
  */
 public final class NeiPipes implements INEIGuiHandler {
 
@@ -18,11 +18,11 @@ public final class NeiPipes implements INEIGuiHandler {
 
     @Override
     public boolean handleDragNDrop(GuiContainer gui, int mx, int my, ItemStack stack, int button) {
-        return gui instanceof GuiPipeFace && ((GuiPipeFace) gui).dropped(mx, my, stack);
+        return gui instanceof ValierScreen && ((ValierScreen) gui).dropped(mx, my, stack);
     }
 
     @Override
     public boolean hideItemPanelSlot(GuiContainer gui, int x, int y, int w, int h) {
-        return gui instanceof GuiPipeFace && ((GuiPipeFace) gui).overTabs(x, y, w, h);
+        return gui instanceof ValierScreen && ((ValierScreen) gui).overTabs(x, y, w, h);
     }
 }

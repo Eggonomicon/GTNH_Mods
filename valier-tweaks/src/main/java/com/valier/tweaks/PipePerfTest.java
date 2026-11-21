@@ -106,6 +106,7 @@ public final class PipePerfTest { // public: Forge calls its tick handler from a
     public void onTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         ticks++;
+        SelfTest.keepLoaded(world, (bx >> 4) - 1, (bz >> 4) - 1, (bx >> 4) + 4, (bz >> 4) + 4);
         if (ticks == 100) {
             PipeNetworks.resetStats();
             return;

@@ -140,6 +140,7 @@ public final class LootSelfTest {
         rolls();
         cycles();
         damagedItems();
+        new LootFilterSelfTest(world, player).run(); // 2.2: the loot filter and the menu
         wrench();
         eggs();
         upgrades();
@@ -1435,6 +1436,9 @@ public final class LootSelfTest {
     public void onTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || done) return;
         ticks++;
+        // Its chunks stay loaded through an autosave (not the one it unloads on purpose).
+        SelfTest.keepLoaded(world, bx >> 4, bz >> 4, bx >> 4, bz >> 4);
+        SelfTest.keepLoaded(world, wx >> 4, bz >> 4, wx >> 4, bz >> 4);
         try {
             if (ticks == 3) {
                 SelfTest.check(itemsNear(s6p, Items.leather) == 7 && itemsNear(s6p, emerald()) == 1,

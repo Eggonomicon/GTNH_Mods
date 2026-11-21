@@ -165,7 +165,7 @@ public final class FilterList {
     // ---- saving -----------------------------------------------------------------------------------------------------
 
     /** Its settings into t (keys shared with the 2.0 format, so an old face reads as its Allow or Deny list). */
-    void write(NBTTagCompound t) {
+    public void write(NBTTagCompound t) {
         NBTTagList list = new NBTTagList();
         for (int i = 0; i < FaceConfig.FILTER; i++) {
             if (filter[i] == null && count[i] == 0) continue;
@@ -181,7 +181,7 @@ public final class FilterList {
         if (oreDict) t.setBoolean("OreDict", true);
     }
 
-    void read(NBTTagCompound t) {
+    public void read(NBTTagCompound t) {
         clear();
         NBTTagList list = t.getTagList("Filter", 10);
         for (int i = 0; i < list.tagCount(); i++) {
@@ -200,7 +200,7 @@ public final class FilterList {
         oreDict = t.getBoolean("OreDict");
     }
 
-    void copyFrom(FilterList o) {
+    public void copyFrom(FilterList o) {
         for (int i = 0; i < FaceConfig.FILTER; i++) {
             filter[i] = o.filter[i] == null ? null : o.filter[i].copy();
             count[i] = o.count[i];
