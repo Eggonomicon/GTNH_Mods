@@ -405,7 +405,8 @@ public final class LootSpawners {
      */
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onPlace(BlockEvent.PlaceEvent event) {
-        if (event.world.isRemote || event.placedBlock != Blocks.mob_spawner) return;
+        if (event.world.isRemote || event.placedBlock != Blocks.mob_spawner || event.itemInHand == null
+            || event.itemInHand.getItem() != Item.getItemFromBlock(Blocks.mob_spawner)) return; // not ours: it did it already
         NBTTagCompound saved = savedSpawner(event.itemInHand);
         if (saved != null) place(event.world, event.x, event.y, event.z, saved, event.player);
     }

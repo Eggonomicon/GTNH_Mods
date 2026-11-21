@@ -7,6 +7,8 @@ Gameplay additions for the Valier server. **Since 2.0.0 it is needed on the serv
 
 - **One jar for everyone.** Put `valiertweaks-2.0.x.jar` in the server's and every player's `mods` folder, and delete
   `valierclient-*.jar` (if it is left in, Forge stops at start-up with a "duplicate mods" screen naming both files).
+  The newest version is always at https://github.com/Eggonomicon/GTNH_Mods/releases/latest/download/valiertweaks.jar
+  (the same jar, named `valiertweaks.jar`; keep only one Valier Tweaks jar in `mods`).
 - **Joining:** a server with Valier Tweaks 2.0 asks a joining player for 2.0.x (any 2.0 version: fixes that only change
   the server don't need a new download). A player with it can still join servers without it.
 - **Loot spawners and XP crafters are real blocks now** (Valier Loot Spawner, Valier XP Crafter). Existing ones become
@@ -528,3 +530,17 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
     Client's name and line providers are run on that data, and the lines a player reads are checked (see its README).
   - **Chain armour:** the macerator recipes give 1, 2, 1 and 2 steel dust for helmet, leggings, boots and chestplate,
     also as a macerator looks them up.
+- **2.0.0 self-tests** (same flag): `valiertweaks selftest mod` (one jar: the stub `valierclient` mod id, language
+  file, server proxy), `valiertweaks selftest pipes` (in an empty chunk, after loading the chunks around it so nothing
+  is generated over the rigs) and `valiertweaks selftest pipeperf`.
+  - **Pipes:** joining chests and pipes but not stone, a wrench shutting a side, new faces being Provide, Pull to Push
+    moving every item with none lost, an iron whitelist, a Request face keeping 10 iron stocked, a double chest counted
+    as one inventory, liquid XP between two crafters, Wireless tags linking one owner's pipes and not another's, a loot
+    spawner working with only a Valier pipe pulling from it, idle faces sleeping longer, keep amounts on Pull and Push
+    faces, existing-item filters, Push/Pull faces, damage and mod filters, and `/valiertweaks pipes`.
+  - **Speed:** 512 chest-pipe-pipe-chest rigs (1,024 working faces: moving, idle and Request) cost 0.195 ms a tick
+    (limit 1 ms).
+  - **19 Nov 2026, Valier Tweaks 2.0.0 (as 2.0.0-pre2):** all nine steps on the test server, 276 checks, none failed
+    (mod 6, lootspawner 123, xpcrafter 70, pipes 18, pipeperf 2, railboiler 12, boilers 18, trees 12, peaceful 15).
+    Converting a copy of the Valier world (3 loot spawners, 27 XP crafters) kept every setting, upgrade, paid block,
+    crafter record and slot.

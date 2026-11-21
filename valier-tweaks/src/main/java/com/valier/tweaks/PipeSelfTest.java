@@ -43,7 +43,7 @@ import cpw.mods.fml.common.gameevent.TickEvent;
  * <li>the {@code pipes} command answers.</li>
  * </ul>
  */
-final class PipeSelfTest {
+public final class PipeSelfTest { // public: Forge calls its tick handler from another class loader
 
     final WorldServer world = DimensionManager.getWorld(0);
     final int bx = (SelfTest.CX + 8) << 4, bz = (SelfTest.CZ + 2) << 4;
@@ -57,7 +57,9 @@ final class PipeSelfTest {
     int[] idlePipe;
 
     void start() {
-        for (int cx = 0; cx < 2; cx++) for (int cz = 0; cz < 2; cz++) world.theChunkProviderServer.loadChunk((bx >> 4) + cx, (bz >> 4) + cz);
+        // One chunk more on every side: a chunk is decorated (dungeons, villages) once its neighbours exist, and that
+        // must happen now, not over the rigs while they are built.
+        for (int cx = -1; cx < 3; cx++) for (int cz = -1; cz < 3; cz++) world.theChunkProviderServer.loadChunk((bx >> 4) + cx, (bz >> 4) + cz);
         y = world.getHeightValue(bx + 8, bz + 8);
         clear();
         joins();

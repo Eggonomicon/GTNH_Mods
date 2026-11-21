@@ -1,5 +1,10 @@
 # Valier Client
 
+> **Retired: part of [Valier Tweaks](../valier-tweaks/README.md) since 2.0.0.** Install Valier Tweaks 2.x instead
+> (the newest is always at https://github.com/Eggonomicon/GTNH_Mods/releases/latest/download/valiertweaks.jar) and
+> delete `valierclient-*.jar`; with both in `mods`, the game stops at start-up with a "duplicate mods" screen. Kept
+> below as it was at 1.4.1.
+
 **Client-side, optional.** A small add-on players can install to see more of what the Valier server's mods do. Servers
 never need it, and nothing breaks for players without it: everything it shows is extra (an XP crafter's menu, for one,
 works for every player without it).

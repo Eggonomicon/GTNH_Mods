@@ -26,7 +26,7 @@ import cpw.mods.fml.common.gameevent.TickEvent;
  * 100 ticks to settle, 200 ticks are measured; the time spent in the pipe code per tick is logged and checked against
  * a limit (1 ms a tick).
  */
-final class PipePerfTest {
+public final class PipePerfTest { // public: Forge calls its tick handler from another class loader
 
     final WorldServer world = DimensionManager.getWorld(0);
     final int bx = (SelfTest.CX + 12) << 4, bz = (SelfTest.CZ + 6) << 4;
@@ -34,7 +34,9 @@ final class PipePerfTest {
     long startNanos, startMoves;
 
     void start() {
-        for (int cx = 0; cx < 4; cx++) for (int cz = 0; cz < 4; cz++) world.theChunkProviderServer.loadChunk((bx >> 4) + cx, (bz >> 4) + cz);
+        // One chunk more on every side: a chunk is decorated (dungeons, trees) once its neighbours exist, and that must
+        // happen now, not over the rigs while they are built.
+        for (int cx = -1; cx < 5; cx++) for (int cz = -1; cz < 5; cz++) world.theChunkProviderServer.loadChunk((bx >> 4) + cx, (bz >> 4) + cz);
         y = world.getHeightValue(bx + 8, bz + 8) + 1;
         clear();
         int rigs = 0;
@@ -56,7 +58,12 @@ final class PipePerfTest {
     void rig(int x, int z, int kind) {
         world.setBlock(x, y, z, Blocks.chest);
         world.setBlock(x + 3, y, z, Blocks.chest);
-        IInventory a = (IInventory) world.getTileEntity(x, y, z), b = (IInventory) world.getTileEntity(x + 3, y, z);
+        TileEntity ta = world.getTileEntity(x, y, z), tb = world.getTileEntity(x + 3, y, z);
+        if (!(ta instanceof IInventory) || !(tb instanceof IInventory)) {
+            SelfTest.log("pipeperf: no chest at " + x + " " + y + " " + z + "; that rig is skipped");
+            return;
+        }
+        IInventory a = (IInventory) ta, b = (IInventory) tb;
         int tier = kind == 0 ? PipeTier.BASIC : PipeTier.ELITE;
         TilePipe p1 = place(x + 1, z, tier), p2 = place(x + 2, z, tier);
         if (p1 == null || p2 == null) return;

@@ -544,7 +544,7 @@ public final class LootSelfTest {
                 .hasKey(LootSpawnerTile.MARK),
             "with spawn data (zombies with swords) players get it too, so the cage's zombie holds its sword; never the mark");
         ItemStack pick = ModBlocks.lootSpawner.getPickBlock(null, world, w5[0], y, w5[2]);
-        SelfTest.check(pick != null && pick.getDisplayName()
+        SelfTest.check(pick != null && pick.getDisplayName().replaceAll("§.", "")
             .contains("Valier Loot Spawner (Zombie") && LootSpawners.savedSpawner(pick) != null,
             "pick-block (and WAILA's name) is the Valier Loot Spawner (Zombie) item (" + (pick == null ? null : pick.getDisplayName()) + ")");
 
@@ -1424,7 +1424,9 @@ public final class LootSelfTest {
         s10.addToBuffer(new ItemStack(Items.leather, 3));
         world.theChunkProviderServer.unloadChunksIfNotNearSpawn(rx >> 4, bz >> 4);
 
-        // Left running: its chest fills by itself within two cycles.
+        // Left running: its chest fills by itself within two cycles. A fresh one: settings() switched loot spawners off,
+        // which made the first one a plain spawner for good.
+        s4 = lootSpawner(s4p, "Cow");
         clearInv((IInventory) world.getTileEntity(s4p[0], y - 1, s4p[2]));
         s4.timer = 25;
     }
@@ -1451,7 +1453,7 @@ public final class LootSelfTest {
                             .getSimpleName()) + ")");
             } else if (ticks == 70) {
                 IInventory chest = (IInventory) world.getTileEntity(s4p[0], y - 1, s4p[2]);
-                SelfTest.check(count(chest, Items.beef) > 0 && s4.rolls >= 3,
+                SelfTest.check(count(chest, Items.beef) > 0 && s4.rolls >= 1 && te(s4p) == s4,
                     "left running, it filled its chest on its own (" + count(chest, Items.beef) + " raw beef, " + s4.rolls + " batches)");
                 finish();
             }

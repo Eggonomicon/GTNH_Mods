@@ -438,14 +438,18 @@ final class XpSelfTest {
         SelfTest.check(amount(tank) == 0 && count(chest, berry) == 0 && c.bank == 2500 && c.made == 2, "solid XP: the "
             + "tank's liquid XP goes first (6,000 mB), then berries (" + state(c, tank, chest) + ")");
 
-        tank.fill(new FluidStack(FluidRegistry.WATER, 1000), true);
+        SelfTest.check(tank.fill(new FluidStack(FluidRegistry.WATER, 1000), true) == 0 && amount(tank) == 0,
+            "solid XP: the crafter's tank takes no water");
+        tank.fluid = new FluidStack(FluidRegistry.WATER, 1000); // only a converted GregTech tank can hold another fluid
+        tank.markDirty();
         chest.setInventorySlotContents(0, copy(berry, 30));
         XpCrafters.run(world, d, c);
         boolean fromBerries = c.made == 3 && count(chest, berry) == 0 && c.bank == 2000 && amount(tank) == 1000;
         XpCrafters.run(world, d, c);
         SelfTest.check(fromBerries && c.status == XpCrafters.Status.WRONG_FLUID, "solid XP: with water in its tank it still "
             + "crafts from berries, then says its tank holds something else (" + state(c, tank, chest) + ")");
-        tank.drain(1000, true);
+        tank.fluid = null;
+        tank.markDirty();
 
         XpMenu m = new XpMenu(player, world, d, c);
         player.inventory.setItemStack(copy(berry, 3));
