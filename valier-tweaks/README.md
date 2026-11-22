@@ -1052,6 +1052,21 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
   - **21 Nov 2026, as 2.3.1-pre2:** all 14 steps on the test server, 441 checks, none failed (mod 8, barrels 48,
     satchels 36, grid 20, lootspawner 153, xpcrafter 70, pipes 43, pipeperf 0.272 ms, barrelperf 0.288 ms, gridperf
     0.036 ms, railboiler 12, boilers 18, trees 12, peaceful 15; the perf numbers with Valier busy beside it).
+- **`valiertweaks selftest pipebench`** (`PipeBench`, after 2.3.3; a benchmark, not part of a release's checks): Valier
+  pipes against GregTech pipes and EnderIO conduits on the same rigs, each at its starting tier with default settings.
+  It times the overworld's tick and the server's tick handlers with each case built, against the same empty corner
+  before and after. Results on 22 Nov 2026 (gregtech 5.09.54.265, EnderIO 2.10.51):
+
+  | Case | Valier | GregTech | EnderIO |
+  |---|---|---|---|
+  | Items, 256 chest-pipe-pipe-chest rigs | 0.19 ms, 2,051 items/s | 0.20 ms, 819 items/s (LV conveyor) | 0.53 ms, 2,048 items/s |
+  | Fluids, 128 tank-pipe-pipe-tank rigs | 0.42 ms, 128,267 mB/s | 0.90 ms, 81,920 mB/s (LV pump) | 1.31 ms, 25,600 mB/s |
+  | Idle, 2,048 item pipe blocks | 0.00 ms | 0.11 ms | 0.79 ms |
+
+  Costs are ms a tick and vary by about 0.1 ms between runs. The chests (items) and EnderIO tanks (fluids) are in
+  every column alike. Gotchas found while building it: chests side by side join into double chests (the rigs are 5
+  apart); EnderIO conduits extract only with a redstone signal unless set to always; timing the whole server tick is
+  too noisy (other dimensions), and the first case after the warm-up can drift.
 - **`valiertweaks selftest cost`** (`CostSelfTest`, 2.3.3):
   - Timing a piece of work costs under 200 ns (a million timings).
   - A known load: 2 ms timed as tree felling on each of 50 ticks shows as 50 x 2 ms spread over the ticks of the last
