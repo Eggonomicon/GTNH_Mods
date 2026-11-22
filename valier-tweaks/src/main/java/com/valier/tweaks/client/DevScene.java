@@ -54,7 +54,10 @@ public final class DevScene {
     /** Where 2.3's blocks stand: barrels from x+20 (z 0), the Grid and the docks at z+8. */
     static final int BARRELS_X = 20, GRID_Z = 8;
     /** The server's side of the timeline (DevClient moves the camera and takes the shots to match). */
-    static final int LOOT_MENU = 376, BARREL_MENU = 416, SATCHEL_MENU = 440, FLASK_MENU = 464, GRID_MENU = 488;
+    static final int LOOT_MENU = 376, BARREL_MENU = 416, SATCHEL_MENU = 440, FLASK_MENU = 504, GRID_MENU = 528;
+    /** 2.3.3: a chest over the player's head, sneak + right-clicked with the Satchel by the client (DevClient). */
+    static final int CHEST = SATCHEL_MENU + 34;
+    static volatile int chestX, chestY, chestZ;
     /** Each menu's shot: {tick, the client's shot number} (see DevClient.menuShot). */
     static final int[][] SHOTS = { { LOOT_MENU + 18, 9 }, { LOOT_MENU + 28, 10 }, { BARREL_MENU + 15, 11 }, { SATCHEL_MENU + 14, 12 },
         { FLASK_MENU + 14, 13 }, { GRID_MENU + 16, 14 } };
@@ -88,7 +91,27 @@ public final class DevScene {
         if (tick == LOOT_MENU) p.openGui(ValierTweaks.instance, ValierGui.LOOT, w, baseX + 14, y, baseZ);
         if (tick == BARREL_MENU) p.openGui(ValierTweaks.instance, ValierGui.BARREL, w, baseX + BARRELS_X + 10, y, baseZ);
         if (tick == SATCHEL_MENU - 8 || tick == FLASK_MENU - 8) p.closeScreen();
-        if (tick == SATCHEL_MENU - 6) hand(p, satchel());
+        if (tick == SATCHEL_MENU - 6) { // 2.3.2: iron to shift-click in, torches to select the Satchel's torch slot by
+            p.inventory.setInventorySlotContents(9, new ItemStack(Items.iron_ingot, 20));
+            p.inventory.setInventorySlotContents(10, new ItemStack(Blocks.torch, 5));
+            hand(p, satchel());
+        }
+        if (tick == CHEST - 4) { // 2.3.3: the Satchel's menu shut, a chest two blocks over the player's feet
+            p.closeScreen();
+            chestX = net.minecraft.util.MathHelper.floor_double(p.posX);
+            chestY = net.minecraft.util.MathHelper.floor_double(p.posY) + 2;
+            chestZ = net.minecraft.util.MathHelper.floor_double(p.posZ);
+            w.setBlock(chestX, chestY, chestZ, Blocks.chest);
+            w.setBlockToAir(chestX, chestY - 1, chestZ);
+        }
+        if (tick == FLASK_MENU - 9) { // the client has checked it: gone again (emptied, so nothing spills)
+            TileEntity te = w.getTileEntity(chestX, chestY, chestZ);
+            if (te instanceof net.minecraft.inventory.IInventory) {
+                net.minecraft.inventory.IInventory c = (net.minecraft.inventory.IInventory) te;
+                for (int k = 0; k < c.getSizeInventory(); k++) c.setInventorySlotContents(k, null);
+            }
+            w.setBlockToAir(chestX, chestY, chestZ);
+        }
         if (tick == FLASK_MENU - 6) hand(p, flask());
         // 2.3.1: the Satchel's and Flask's menus are opened by the client, with a real right-click in the air (DevClient).
         if (tick == GRID_MENU) p.openGui(ValierTweaks.instance, ValierGui.GRID, w, baseX + BARRELS_X + 4, y, baseZ + GRID_Z);
@@ -266,6 +289,9 @@ public final class DevScene {
         inv.keep[0] = 64;
         inv.ore[1] = true;
         inv.lock[4] = true;
+        inv.refill[2] = 64; // 2.3.3: the marks for refill and send home
+        inv.home[3] = "Logs";
+        inv.homeScope[3] = "dev";
         inv.selected = 0;
         inv.save();
         return s;

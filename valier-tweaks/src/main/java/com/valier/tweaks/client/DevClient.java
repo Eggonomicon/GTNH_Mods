@@ -138,6 +138,8 @@ public final class DevClient {
         if (usedSatchel && t > DevScene.SATCHEL_MENU && t < DevScene.SATCHEL_MENU + 14) stayed(open, false);
         if (usedFlask && t > DevScene.FLASK_MENU && t < DevScene.FLASK_MENU + 14) stayed(open, true);
         menuShot(mc, t, 12, DevScene.SATCHEL_MENU + 14, satchel(open, false), "valier-12-satchel-menu.png");
+        satchelClicks(mc, t, open);
+        chestClick(mc, t);
         menuShot(mc, t, 13, DevScene.FLASK_MENU + 14, satchel(open, true), "valier-13-flask-menu.png");
         menuShot(mc, t, 14, DevScene.GRID_MENU + 16, open instanceof GuiGrid, "valier-14-grid-menu.png");
         if (shots == 15) {
@@ -412,6 +414,108 @@ public final class DevClient {
         ValierTweaks.LOG.info("[DevClient] right-click in the air with {}", held);
         mc.playerController.sendUseItem(mc.thePlayer, mc.theWorld, held);
         return true;
+    }
+
+    static boolean shifted, selectSent, satchelChecked;
+    static int ironBefore;
+
+    /**
+     * 2.3.2, in the Satchel's menu after its shot, as a player clicks: a shift-click on the 20 iron ingots in the
+     * inventory (the stack must leave the screen and the Satchel's iron go up by 20: the game never sent that before),
+     * then what a ctrl-click on the torches in the inventory does (selects the Satchel's torch slot), and a picture of
+     * its frame.
+     */
+    void satchelClicks(Minecraft mc, int t, GuiScreen open) {
+        if (shots != 13 || !satchel(open, false)) return;
+        GuiSatchel g = (GuiSatchel) open;
+        com.valier.tweaks.storage.SatchelInventory inv = g.inv();
+        int iron = inv.find(new net.minecraft.item.ItemStack(net.minecraft.init.Items.iron_ingot));
+        int ironNow = iron < 0 ? 0 : inv.counts[iron];
+        if (!shifted && t >= DevScene.SATCHEL_MENU + 16) {
+            shifted = true;
+            ironBefore = ironNow;
+            ValierTweaks.LOG.info("[DevClient] shift-click on {} in the inventory", g.inventorySlots.getSlot(0)
+                .getStack());
+            mc.playerController.windowClick(g.inventorySlots.windowId, 0, 0, 1, mc.thePlayer);
+        }
+        if (shifted && !selectSent && t >= DevScene.SATCHEL_MENU + 21) {
+            selectSent = true;
+            net.minecraft.item.ItemStack left = g.inventorySlots.getSlot(0)
+                .getStack();
+            boolean ok = left == null && ironNow == ironBefore + 20;
+            ValierTweaks.LOG.info("[DevClient] shift-click into the Satchel: {} (the inventory slot now {}, the Satchel's iron {} -> {})",
+                ok ? "PASS" : "FAIL", left, ironBefore, ironNow);
+            net.minecraft.item.ItemStack torches = g.inventorySlots.getSlot(1)
+                .getStack();
+            int at = torches == null ? -1 : GuiSatchel.holding(inv, torches);
+            if (at >= 0) g.send(com.valier.tweaks.storage.SatchelMenu.SELECT, at, 0);
+        }
+        if (selectSent && !satchelChecked && t >= DevScene.SATCHEL_MENU + 26) {
+            satchelChecked = true;
+            int torch = inv.find(new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.torch));
+            ValierTweaks.LOG.info("[DevClient] selecting by the torches in the inventory: {} (selected slot {}, the torches in {})",
+                torch >= 0 && inv.selected == torch ? "PASS" : "FAIL", inv.selected, torch);
+            ScreenShotHelper.saveScreenshot(mc.mcDataDir, "valier-12b-satchel-selected.png", mc.displayWidth, mc.displayHeight,
+                mc.getFramebuffer());
+        }
+    }
+
+    static boolean sneakOn, chestClicked, chestChecked;
+    static int torchesBefore;
+    /** The player's own movement input, while a sneaking one stands in (a key press from code doesn't hold unfocused). */
+    static net.minecraft.util.MovementInput realInput;
+
+    /**
+     * 2.3.3, as a player does it: sneak, then right-click the chest over the head with the Satchel (its torch slot
+     * selected, by the 2.3.2 check). The server must get the click (the client passes it on rather than answering it) and
+     * put the 500 torches in the chest; the client must not place a torch under it.
+     */
+    void chestClick(Minecraft mc, int t) {
+        if (!satchelChecked) return;
+        if (!sneakOn && t >= DevScene.CHEST) {
+            sneakOn = true;
+            realInput = mc.thePlayer.movementInput;
+            mc.thePlayer.movementInput = new net.minecraft.util.MovementInput() {
+
+                @Override
+                public void updatePlayerMoveState() {
+                    sneak = true; // the client sends the server it is sneaking, as a held sneak key does
+                }
+            };
+        }
+        if (sneakOn && !chestClicked && t >= DevScene.CHEST + 4 && mc.currentScreen == null) {
+            chestClicked = true;
+            net.minecraft.item.ItemStack held = mc.thePlayer.getHeldItem();
+            com.valier.tweaks.storage.SatchelInventory inv = com.valier.tweaks.storage.SatchelInventory.of(held);
+            torchesBefore = inv == null ? -1 : inv.counts[inv.selected];
+            ValierTweaks.LOG.info("[DevClient] sneaking {}, right-click on the chest at {} {} {} with {} ({} selected)",
+                mc.thePlayer.isSneaking(), DevScene.chestX, DevScene.chestY, DevScene.chestZ, held, torchesBefore);
+            mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, held, DevScene.chestX, DevScene.chestY, DevScene.chestZ, 0,
+                net.minecraft.util.Vec3.createVectorHelper(DevScene.chestX + 0.5, DevScene.chestY, DevScene.chestZ + 0.5));
+        }
+        if (chestClicked && !chestChecked && t >= DevScene.CHEST + 14) {
+            chestChecked = true;
+            if (realInput != null) mc.thePlayer.movementInput = realInput;
+            int inChest = -1;
+            net.minecraft.server.MinecraftServer srv = net.minecraft.server.MinecraftServer.getServer();
+            net.minecraft.tileentity.TileEntity te = srv == null ? null : srv.worldServerForDimension(0)
+                .getTileEntity(DevScene.chestX, DevScene.chestY, DevScene.chestZ);
+            if (te instanceof net.minecraft.inventory.IInventory) {
+                inChest = 0;
+                net.minecraft.inventory.IInventory c = (net.minecraft.inventory.IInventory) te;
+                for (int k = 0; k < c.getSizeInventory(); k++) {
+                    net.minecraft.item.ItemStack s = c.getStackInSlot(k);
+                    if (s != null && s.getItem() == net.minecraft.item.Item.getItemFromBlock(net.minecraft.init.Blocks.torch)) inChest += s.stackSize;
+                }
+            }
+            com.valier.tweaks.storage.SatchelInventory inv = com.valier.tweaks.storage.SatchelInventory.of(mc.thePlayer.getHeldItem());
+            int torchesNow = inv == null ? -1 : inv.find(new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.torch)) < 0 ? 0
+                : inv.counts[inv.find(new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.torch))];
+            boolean placed = mc.theWorld.getBlock(DevScene.chestX, DevScene.chestY - 1, DevScene.chestZ) != net.minecraft.init.Blocks.air;
+            boolean ok = torchesBefore == 500 && inChest == 500 && torchesNow == 0 && !placed;
+            ValierTweaks.LOG.info("[DevClient] sneak + right-click on a chest with the Satchel: {} (torches {} -> {} in the Satchel, {} in the "
+                + "chest, a block placed under it: {})", ok ? "PASS" : "FAIL", torchesBefore, torchesNow, inChest, placed);
+        }
     }
 
     /** Logs when the menu opened, and if it then closed by itself before its picture. */

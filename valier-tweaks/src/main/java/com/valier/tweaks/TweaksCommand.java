@@ -5,17 +5,30 @@ import net.minecraft.command.ICommandSender;
 import net.minecraft.command.WrongUsageException;
 
 /**
- * {@code /valiertweaks pipes} (how the pipes are doing; {@code pipes reset} starts the numbers again) and, only on a
- * test server started with the self-test flag, {@code /valiertweaks selftest <step>}.
+ * {@code /valiertweaks} (or {@code /valier}, 2.3.3), for ops: {@code cost} (how much server time Valier's blocks take,
+ * {@link ValierCost}), {@code pipes} (how the pipes are doing; {@code pipes reset} starts the numbers again),
+ * {@code revertblocks}, and, only on a test server started with the self-test flag, {@code selftest <step>}.
  */
 public class TweaksCommand extends CommandBase {
 
-    private static final String USAGE = "/valiertweaks pipes [reset] | revertblocks"
-        + (SelfTest.ENABLED ? " | selftest trees|peaceful|boilers|lootspawner|xpcrafter|railboiler|mod|pipes|pipeperf" : "");
+    private static final String USAGE = "/valier cost | pipes [reset] | revertblocks"
+        + (SelfTest.ENABLED ? " | selftest trees|peaceful|boilers|lootspawner|xpcrafter|railboiler|mod|pipes|pipeperf|"
+            + "barrels|barrelperf|satchels|grid|gridperf|cost" : "");
 
     @Override
     public String getCommandName() {
         return "valiertweaks";
+    }
+
+    @Override
+    public java.util.List<String> getCommandAliases() {
+        return java.util.Collections.singletonList("valier");
+    }
+
+    @Override
+    @SuppressWarnings("rawtypes")
+    public java.util.List addTabCompletionOptions(ICommandSender sender, String[] args) {
+        return args.length == 1 ? getListOfStringsMatchingLastWord(args, "cost", "pipes", "revertblocks") : null;
     }
 
     @Override
@@ -38,6 +51,18 @@ public class TweaksCommand extends CommandBase {
                 return;
             }
             for (String line : RevertBlocks.run()) sender.addChatMessage(new net.minecraft.util.ChatComponentText(line));
+            return;
+        }
+        if (args.length >= 1 && "cost".equals(args[0])) {
+            java.util.List<String> lines = ValierCost.report();
+            for (int i = 0; i < lines.size(); i++) {
+                net.minecraft.util.ChatComponentText c = new net.minecraft.util.ChatComponentText(lines.get(i));
+                if (i == 0) c.getChatStyle()
+                    .setColor(net.minecraft.util.EnumChatFormatting.GOLD);
+                else if (i == lines.size() - 1) c.getChatStyle()
+                    .setColor(net.minecraft.util.EnumChatFormatting.YELLOW);
+                sender.addChatMessage(c);
+            }
             return;
         }
         if (args.length >= 1 && "pipes".equals(args[0])) {

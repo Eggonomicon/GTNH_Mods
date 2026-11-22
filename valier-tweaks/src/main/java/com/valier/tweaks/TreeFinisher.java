@@ -114,6 +114,7 @@ public final class TreeFinisher {
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
+        long t0 = ValierCost.start();
         try {
             Iterator<Map.Entry<EntityPlayerMP, Chop>> it = chops.entrySet()
                 .iterator();
@@ -128,6 +129,7 @@ public final class TreeFinisher {
             for (Iterator<Finish> fit = finishing.iterator(); fit.hasNext();) if (work(fit.next())) fit.remove();
         } finally {
             tick++;
+            ValierCost.add(ValierCost.Part.TREES, t0);
         }
     }
 

@@ -47,6 +47,7 @@ public final class BarrelSync {
             work();
         } finally {
             lastTickNanos = System.nanoTime() - t0;
+            com.valier.tweaks.ValierCost.add(com.valier.tweaks.ValierCost.Part.BARRELS, t0);
         }
     }
 

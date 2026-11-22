@@ -19,7 +19,10 @@ import net.minecraftforge.oredict.OreDictionary;
  * change. Each slot holds one item (up to the tier's amount, counted as an int, never as a stack size) or one fluid,
  * with its own settings: keep (what automation, shift-clicks and placing leave), ore dictionary (a picked-up item
  * sharing an ore name is stored as this one), void overflow (picked-up matches are destroyed when it is full) and lock
- * (it keeps its item at 0). The whole: auto-pickup, and pick up new items into empty slots.
+ * (it keeps its item at 0); 2.3.3: refill (keep this many of its item in the player's inventory, topped up from it)
+ * and send home (picked-up items over its keep amount go straight to a barrel channel of the player's team,
+ * {@link SatchelHome}). The whole: auto-pickup, pick up new items into empty slots; 2.3.3: hotbar restock (a used-up
+ * stack in the hand is replaced from it) and what a sneak + right-click on a container does ({@link #box}).
  * <p>
  * One is kept per item stack (weakly), and read again only when the stack's NBT was replaced by something else.
  */
@@ -38,8 +41,21 @@ public final class SatchelInventory {
     public final FluidStack[] fluids;
     public final int[] counts, keep;
     public final boolean[] ore, voids, lock;
+    /** Per slot (2.3.3): how many of its item to keep in the player's inventory (0: off). */
+    public final int[] refill;
+    /** Per slot (2.3.3): the barrel channel picked-up items are sent to (its name and team scope), or null. */
+    public final String[] home, homeScope;
     public int selected;
     public boolean pickup = true, pickNew;
+    /** 2.3.3: hotbar restock (on by default); whether any slot refills (so a carried Satchel without is passed by). */
+    public boolean restock = true, refills;
+    /** Whether any slot sends home (so a pickup into a Satchel without one skips looking). */
+    public boolean homes;
+    /** 2.3.3: a sneak + right-click on a container: put the selected item in, put everything in, take out, or off. */
+    public int box;
+    public static final int BOX_PUT = 0, BOX_ALL = 1, BOX_TAKE = 2, BOX_OFF = 3, BOX_MODES = 4;
+    /** The most a slot refills to: the whole main inventory of 64-stacks. */
+    public static final int MAX_REFILL = 36 * 64;
     public long id;
     private NBTTagCompound read;
     /**
@@ -66,6 +82,9 @@ public final class SatchelInventory {
         ore = new boolean[size];
         voids = new boolean[size];
         lock = new boolean[size];
+        refill = new int[size];
+        home = new String[size];
+        homeScope = new String[size];
         slotTags = new NBTTagCompound[size];
         load();
     }
@@ -94,6 +113,8 @@ public final class SatchelInventory {
         selected = Math.max(0, Math.min(size - 1, t.getByte("Sel")));
         pickup = !t.getBoolean("NoPickup");
         pickNew = t.getBoolean("PickNew");
+        restock = !t.getBoolean("NoRestock");
+        box = Math.floorMod(t.getByte("Box"), BOX_MODES);
         NBTTagList list = t.getTagList("Slots", 10);
         for (int k = 0; k < list.tagCount(); k++) {
             NBTTagCompound s = list.getCompoundTagAt(k);
@@ -111,7 +132,23 @@ public final class SatchelInventory {
             ore[i] = s.getBoolean("Ore");
             voids[i] = s.hasKey("Void") ? s.getBoolean("Void") : !fluid;
             lock[i] = s.getBoolean("Lock");
+            refill[i] = Math.max(0, Math.min(MAX_REFILL, s.getInteger("Refill")));
+            if (s.hasKey("Home", 8) && !fluid) {
+                home[i] = s.getString("Home");
+                homeScope[i] = s.getString("HomeScope");
+            }
             slotTags[i] = s;
+        }
+        countRefills();
+    }
+
+    private void countRefills() {
+        refills = false;
+        homes = false;
+        if (fluid) return;
+        for (int i = 0; i < size; i++) {
+            if (refill[i] > 0) refills = true;
+            if (home[i] != null) homes = true;
         }
     }
 
@@ -128,10 +165,13 @@ public final class SatchelInventory {
         if (selected > 0) t.setByte("Sel", (byte) selected);
         if (!pickup) t.setBoolean("NoPickup", true);
         if (pickNew) t.setBoolean("PickNew", true);
+        if (!restock) t.setBoolean("NoRestock", true);
+        if (box != BOX_PUT) t.setByte("Box", (byte) box);
+        countRefills();
         NBTTagList list = new NBTTagList();
         for (int i = 0; i < size; i++) {
             boolean has = fluid ? fluids[i] != null : items[i] != null;
-            boolean defaults = keep[i] == 0 && !ore[i] && voids[i] == !fluid && !lock[i];
+            boolean defaults = keep[i] == 0 && !ore[i] && voids[i] == !fluid && !lock[i] && refill[i] == 0 && home[i] == null;
             if (!has && defaults) continue;
             NBTTagCompound s = new NBTTagCompound();
             slotTags[i] = s;
@@ -149,6 +189,11 @@ public final class SatchelInventory {
             if (ore[i]) s.setBoolean("Ore", true);
             if (voids[i] != !fluid) s.setBoolean("Void", voids[i]);
             if (lock[i]) s.setBoolean("Lock", true);
+            if (refill[i] > 0) s.setInteger("Refill", refill[i]);
+            if (home[i] != null) {
+                s.setString("Home", home[i]);
+                s.setString("HomeScope", homeScope[i] == null ? "" : homeScope[i]);
+            }
             list.appendTag(s);
         }
         t.setTag("Slots", list);
@@ -226,13 +271,25 @@ public final class SatchelInventory {
      * slots), else an empty one. Returns how many it took (what overflows a voiding slot counts: it is destroyed).
      */
     public int insert(ItemStack s, int n, boolean pickupOnly, boolean simulate) {
-        if (fluid || s == null || n <= 0) return 0;
+        return put(s, n, !pickupOnly || pickNew, pickupOnly, simulate);
+    }
+
+    /**
+     * Puts up to n of s in without destroying any (2.3.3, taking from a container: void overflow is for pickups off the
+     * ground): its slot, else (newItems) an empty one. Returns how many it took.
+     */
+    public int take(ItemStack s, int n, boolean newItems, boolean simulate) {
+        return put(s, n, newItems, false, simulate);
+    }
+
+    private int put(ItemStack s, int n, boolean intoEmpty, boolean mayVoid, boolean simulate) {
+        if (fluid || s == null || n <= 0 || s.getItem() instanceof ItemSatchel) return 0;
         int i = find(s);
-        if (i < 0 && (!pickupOnly || pickNew)) i = empty();
+        if (i < 0 && intoEmpty) i = empty();
         if (i < 0) return 0;
         long room = creative ? Long.MAX_VALUE : (long) capacity - counts[i];
         int take = (int) Math.min(n, Math.max(0, room));
-        int took = voids[i] && pickupOnly ? n : take; // void overflow: picked-up items only, never what is put in
+        int took = voids[i] && mayVoid ? n : take; // void overflow: picked-up items only, never what is put in
         if (simulate || took <= 0 || take <= 0) return took;
         boolean had = items[i] != null;
         if (!had) {
@@ -297,6 +354,16 @@ public final class SatchelInventory {
         if (had) saveCount(i, fluids[i].amount);
         else save();
         return took;
+    }
+
+    /** How much of f really fits (its tank, else an empty one), void overflow left out: what a tank click may take. */
+    public int roomFor(FluidStack f) {
+        if (!fluid || f == null) return 0;
+        int i = findFluid(f);
+        if (i < 0) for (int k = 0; k < size && i < 0; k++) if (fluids[k] == null && !lock[k]) i = k;
+        if (i < 0) return 0;
+        if (creative) return Integer.MAX_VALUE;
+        return Math.max(0, capacity - (fluids[i] == null ? 0 : fluids[i].amount));
     }
 
     public int availableFluid(int i, boolean automation) {

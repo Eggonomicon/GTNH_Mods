@@ -297,6 +297,7 @@ public class PipeNetworks {
             ValierTweaks.LOG.error("Valier pipes failed in dim " + event.world.provider.dimensionId, t);
         }
         nanos += System.nanoTime() - start;
+        com.valier.tweaks.ValierCost.add(com.valier.tweaks.ValierCost.Part.PIPES, start);
     }
 
     void run(long start) {
@@ -356,6 +357,7 @@ public class PipeNetworks {
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.START) return;
+        long t0 = com.valier.tweaks.ValierCost.start();
         Runnable r;
         while ((r = PipeActionMessage.TASKS.poll()) != null) {
             try {
@@ -366,6 +368,7 @@ public class PipeNetworks {
         }
         net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
         if (server != null) PipeInfo.refresh(server.getTickCounter()); // WAILA's view of the pipes being looked at
+        com.valier.tweaks.ValierCost.add(com.valier.tweaks.ValierCost.Part.PIPES, t0);
     }
 
     @SubscribeEvent
@@ -417,6 +420,13 @@ public class PipeNetworks {
             + " ticks hit the time budget");
         out.add(String.format("%.1f ms in all on pipes since start", nanos / 1e6));
         return out;
+    }
+
+    /** How many pipe networks are loaded (/valier cost). */
+    public static int networks() {
+        Set<PipeNetwork> seen = new HashSet<>();
+        for (PipeNetworks n : WORLDS.values()) seen.addAll(n.byPos.values());
+        return seen.size();
     }
 
     public static void resetStats() {

@@ -192,12 +192,15 @@ public class LootSpawnerTile extends TileEntityMobSpawner implements ISidedInven
         // A tile left over from before its chunk unloaded and loaded again in the same tick: only the chunk's own works.
         net.minecraft.world.chunk.Chunk chunk = worldObj.getChunkFromBlockCoords(xCoord, zCoord);
         if (chunk.chunkTileEntityMap.get(new net.minecraft.world.ChunkPosition(xCoord & 15, yCoord, zCoord & 15)) != this) return;
+        long t0 = ValierCost.start();
         try {
             LootSpawners.cycle(this);
         } catch (Throwable t) {
             if (!warned) ValierTweaks.LOG.warn("Loot spawner at " + where() + " failed; it will keep trying", t);
             warned = true;
             timer = Math.max(timer, maxDelay);
+        } finally {
+            ValierCost.add(ValierCost.Part.LOOT, t0);
         }
     }
 

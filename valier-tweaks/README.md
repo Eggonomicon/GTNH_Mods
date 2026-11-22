@@ -6,6 +6,81 @@ Gameplay additions for the Valier server. **Since 2.0.0 it is needed on the serv
 The newest version is always at https://github.com/Eggonomicon/GTNH_Mods/releases/latest/download/valiertweaks.jar
 (the same jar, named `valiertweaks.jar`; keep only one Valier Tweaks jar in `mods`).
 
+## 2.3.3: Satchels on chests, refill and hotbar restock, send home to a barrel channel, ore dictionary on barrels, /valier cost
+
+- **Sneak + right-click a container with a Satchel** (a chest, a double chest as one, a barrel, a machine, anything with
+  an inventory). What it does is the Satchel's new container mode (the chest button in its menu; click for the next
+  mode, right-click for the one before):
+  - **put the selected item in** (the default),
+  - **put everything in**,
+  - **take out** what the Satchel holds (with "new items" on, anything; nothing it takes is ever destroyed by void
+    overflow, which is only for things picked up off the ground),
+  - **off** (the click places the selected item, as before).
+
+  Every slot leaves its keep amount. A sided container is filled by the face clicked (a furnace's top is its input). A
+  Valier barrel moves any count in one click. Claims are respected. A chat line says why when nothing moved.
+- **Refill (per slot):** keep this many of the slot's item in your inventory, topped up from the Satchel twice a
+  second (64 is a stack of blocks; shift-click the + for steps of 64). It waits while a chest or other menu is open,
+  so what you put away doesn't come straight back. A blue mark (bottom right) shows a refilling slot.
+- **Hotbar restock (for the whole Satchel, on by default):** when the stack in your hand runs out (the last block
+  placed, the last pearl thrown, the last food eaten, a tool broken), a stack of it from the Satchel takes its place.
+  Moving a stack away doesn't count as running out.
+- **Send home (per slot):** link the slot to one of your team's barrel channels (the barrel button: click for the
+  next channel that takes the slot's item, right-click for off). Picked-up items fill the slot to its keep amount, and
+  the rest go straight into the channel, wherever its barrels are, loaded or not. A full slot empties into the channel
+  before anything would be destroyed. What the channel can't take stays in the Satchel. Only your team can send: a
+  Satchel given to someone else sends nothing. A green mark (top middle) shows a slot sending home. With refill on the
+  same slot, give it a keep amount, or send home leaves nothing to refill from.
+- **The Satchel's settings are in a panel on the right of its menu.** The new buttons made the menu too tall for a LuV
+  Satchel at GUI scale 4.
+- **Ore dictionary on barrels:** a new button in a barrel's menu. When on, items sharing an ore name with the barrel's
+  item go in as its item, so one barrel takes every mod's copper ingots. This works by hand, with hoppers and with
+  pipes. AE2 still sees each item apart and only offers the barrel's own item. It belongs to the channel, as lock and
+  void overflow do.
+- **Small safety fixes:**
+  - A Satchel is never put into another Satchel (or Flask).
+  - A barrel no longer swallows a Satchel or Flask right-clicked on it.
+- **`/valier cost` (ops and the console):** how much server time Valier's own blocks and tweaks take, so lag can be
+  pinned on them or ruled out without a profiler. `/valier` is now another name for `/valiertweaks`. For each part, costliest
+  first: ms a tick over the last 10 seconds, over the last minute, the worst tick of the minute, and what is loaded.
+  The parts are pipes, the Grid, barrels, Satchels, loot spawners, XP crafters, tree felling and peaceful dimensions.
+  The last line is the total against the server's own tick time and TPS. On the test server, just after its self-tests:
+
+  ```
+  Valier cost, ms of server time a tick: last 10 s, last 34 s, worst tick.
+   Tree felling: 0.101, 0.145, worst 2.020
+   Pipes: 0.014, 0.018, worst 3.107 (0 pipes in 0 networks)
+   Grid: 0.009, 0.017, worst 2.357 (0 blocks in 1 networks)
+   ...
+  In all: 0.127 ms a tick, 0.194 over the minute, worst tick 5.113, 7.1% of the server's 1.8 ms tick (20.0 TPS).
+  ```
+
+  Worst ticks of a few ms right after a start are one-off loads of saved data.
+
+  It is measured all the time: two clock reads around each Valier tick handler (about 50 ns each), kept for a minute.
+  Not counted: time other mods spend calling into Valier blocks. A hopper or AE2 filling a barrel is in their own
+  time; Valier pipes filling one is in the pipes' time.
+- **Needs 2.3.3 on players' computers** (the new menu and buttons). With an older jar the server still does the clicks,
+  refill and restock.
+
+## 2.3.2: shift-click into the Satchel, selecting from your inventory, Flasks on tanks, the selected slot framed
+
+- **Fixed: shift-clicking a stack in your inventory into a Satchel or Flask looked like it did nothing** until the next
+  click. The server put it in, but the game never told your screen (it expects the screen to have guessed the result,
+  and it can't guess what a Satchel takes). The server now sends your inventory after such a shift-click.
+- **Selecting:** ctrl-click or middle-click a slot, as before, or ctrl-click or middle-click an item in your own
+  inventory below to select the Satchel slot holding it (a Flask: the tank holding the fluid in that bucket or cell).
+- **The selected slot or tank has an orange frame**, drawn over its item or fluid (a fluid covered the old blue
+  background completely, so the Flask's selected tank never showed).
+- **Flasks on tanks:** right-click a tank or machine holding fluid to take it into the Flask; right-click an empty one
+  to put the selected fluid in; sneak-right-click always puts in. It now comes before the block's own right-click, so
+  Railcraft's iron and steel tanks (any wall, gauge or valve), GregTech's tanks and machines and other tanks with a menu
+  work too. A Flask never pours its fluid out on top of a tank. When the selected tank is empty, the tank that just took
+  fluid (from a tank, a source block or a bucket) becomes the selected one, so the next click puts it in again. A short
+  chat line says why when nothing moved (no room, nothing selected, the tank doesn't take it).
+- All of it is on the server except the frame and selecting from your inventory, which need 2.3.2 on players'
+  computers.
+
 ## 2.3.1: Satchel menus stay open, barrels in WAILA and Holo Glasses, small Grid Plugs and Points, loot spawners push into pipes, a Creative barrel
 
 - **Fixed: a Satchel's or Flask's menu closed again as soon as it opened** (right-click in the air). After every
@@ -115,6 +190,7 @@ nothing in transit. They are built to cost the server as little as possible:
   - Faster tiers move bigger batches at the same interval rather than running more often, so they cost about the same.
 - **Never loads a chunk.** A face whose block is in an unloaded chunk waits for that chunk.
 - `/valiertweaks pipes` (ops) shows the networks, the working and sleeping faces, transfers and the time spent.
+  `/valier cost` (2.3.3) shows their time per tick next to everything else Valier does.
 
 **Laying them:**
 - A pipe joins pipes of its kind (any tier) and any block beside it with an inventory (item pipes) or a tank (fluid
@@ -313,7 +389,8 @@ One kind of item, lots of it, with the item and its count on the front.
   takes a stack, sneaking one item. Creative players take a stack too, and break a barrel holding something only
   sneaking.
 - **Menu** (sneak + right-click with an empty hand): lock (it keeps its item at 0), void overflow (full, it still takes
-  its item and destroys it: a cobblestone sink), keep (hoppers, pipes and the like leave that many), its channel.
+  its item and destroys it: a cobblestone sink), ore dictionary (2.3.3: items sharing an ore name with its item go in
+  as its item; AE2 still offered only its own), keep (hoppers, pipes and the like leave that many), its channel.
 - **Upgrade in place:** right-click a barrel with the Barrel Upgrade of the next tier; it keeps what it holds.
 - **A wrench** (sneaking) picks it up with what it holds; broken any way, it drops as an item holding it all. Placed
   again it holds it again.
@@ -359,13 +436,20 @@ One kind of item, lots of it, with the item and its count on the front.
     goes to your inventory); right-click the air for its menu; sneak + mouse wheel picks the slot (shown beside the
     hotbar for 3 seconds).
   - **Menu:** click a slot for a stack (with one on the cursor: puts it in), right-click for one, shift-click for a
-    stack into your inventory; ctrl-click selects the slot. The selected slot's settings: keep (what shift-clicks,
-    placing and automation leave), ore dictionary (a picked-up item sharing an ore name is stored as this one), void
-    overflow (full, picked-up matches are destroyed; on by default), lock (keeps its item at 0). Pickup on or off,
-    new items too or not.
-- **Flask:** right-click a fluid source to pick it up, a block to place the selected fluid, a tank or machine to fill
-  it from the selected tank (sneaking: drain it into the Flask). In its menu, click a bucket or cell on a tank to fill or
-  empty it.
+    stack into your inventory; shift-click in your inventory puts that stack in. Ctrl-click or middle-click selects
+    the slot (an orange frame, 2.3.2), and so does a ctrl-click or middle-click on that item in your inventory below.
+    The selected slot's settings (in a panel on the right since 2.3.3): keep (what shift-clicks,
+    placing, chests, refills and automation leave), refill (2.3.3: keep that many in your inventory), ore dictionary (a
+    picked-up item sharing an ore name is stored as this one), void overflow (full, picked-up matches are destroyed; on
+    by default), lock (keeps its item at 0), send home (2.3.3: picked-up items over the keep amount go to a team barrel
+    channel). For the whole Satchel: pickup on or off, new items too or not, hotbar restock (2.3.3), and what a
+    sneak + right-click on a container does (2.3.3: put the selected item in, everything, take out, or off).
+- **Flask:** right-click a fluid source to pick it up, a block to place the selected fluid. **On a tank or machine
+  (2.3.2):** one holding fluid gives it to the Flask; an empty one gets the selected fluid; sneaking always puts the
+  selected fluid in. This comes before the block's own right-click, so it works on tanks that open a menu: Railcraft's
+  iron and steel tanks (any block of them, not just a valve), GregTech's tanks and machines, and anything else with
+  tanks (a machine with no tanks still opens its menu). In its menu, click a tank to select it (an orange frame), with
+  a bucket or cell to fill or empty it.
 - **Upgrades** (MV to LuV): craft a Satchel (or Flask) with the next tier's upgrade; it keeps everything it holds.
 - **Satchel Dock:** right-click with a Satchel or Flask to dock it, with an empty hand to take it back; broken, it drops
   it. Docked, pipes, hoppers, GregTech and AE2 reach what it holds: a Satchel's slots (keep amounts respected) plus an
@@ -968,3 +1052,63 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
   - **21 Nov 2026, as 2.3.1-pre2:** all 14 steps on the test server, 441 checks, none failed (mod 8, barrels 48,
     satchels 36, grid 20, lootspawner 153, xpcrafter 70, pipes 43, pipeperf 0.272 ms, barrelperf 0.288 ms, gridperf
     0.036 ms, railboiler 12, boilers 18, trees 12, peaceful 15; the perf numbers with Valier busy beside it).
+- **`valiertweaks selftest cost`** (`CostSelfTest`, 2.3.3):
+  - Timing a piece of work costs under 200 ns (a million timings).
+  - A known load: 2 ms timed as tree felling on each of 50 ticks shows as 50 x 2 ms spread over the ticks of the last
+    10 seconds and of the last minute (within 20%), and the worst tick is at least 2 ms.
+  - Real work lands on the right part: 4 pipe rigs moving cobblestone show as pipe time, and the 8 pipes and a barrel
+    are counted.
+  - `/valier cost`, run by its alias: a header, a line for every part (the costliest first) and the total against the
+    server's tick and TPS.
+  - **Results (pre7, 22 Nov):** cost 11 passed, 0 failed (a timing costs 45 ns; 50 x 2 ms show as 0.501 ms a tick over
+    200 ticks). With the wrapped handlers: grid 20, lootspawner 153, satchels 67, pipes 43, xpcrafter 70, mod 8, all
+    passed (pre6 and pre7).
+  - **Test order:** an empty server stops ticking blocks in a world 60 seconds (1,200 ticks) after the last player
+    left. Steps that need blocks to tick (`grid`: GregTech hulls take no EU; `lootspawner`: the spawner left running)
+    fail if they start later than that, so run them first in a `test_boot.py` batch.
+- **2.3.3 additions,** in `valiertweaks selftest satchels` (`SatchelStockSelfTest`):
+  - **Containers:**
+    - The selected cobblestone (190 of 200, keeping 10) goes past a full chest half into the double chest's other half.
+    - Put everything in: 100 dirt goes in.
+    - Take out: the cobblestone comes back, and stone and dirt it doesn't hold stay. With new items on, a stone slot
+      fills to 1,024 and the rest stays, clicked twice, though the slot voids pickups.
+    - Off, or not sneaking: the click isn't taken.
+    - A furnace's top: 64 into its input slot, none into its fuel slot.
+    - A barrel: 3,000 in with one click and out with one.
+    - An empty barrel right-clicked with a Satchel doesn't take it. A Satchel isn't put into a Satchel.
+  - **Refill:** 64 out into the inventory; 20 there tops up by 44; leaves the keep amount; waits while a menu is open.
+  - **Restock:** the last cobblestone placed brings 64 the next tick; a stack moved away isn't replaced; off, nothing.
+  - **Send home:**
+    - 100 picked up: the slot fills to its keep (16) and 94 go into the channel.
+    - A full, voiding slot empties into the channel first; none destroyed.
+    - Another team's link sends nothing.
+    - The button goes to off after the last channel.
+  - **Barrel ore dictionary:** acacia logs stay out of an oak log barrel with it off and go in as oak with it on; AE2
+    is still offered only oak; it is saved.
+  - **Saving:** the new settings are saved with the Satchel.
+  - **Real GTNH client (`DevClient`):** after the 2.3.2 checks, it sneak-right-clicks a chest over the player's head
+    with the Satchel (its torch slot selected). Pass: the 500 torches are in the server's chest and none placed under it.
+  - **22 Nov 2026, as 2.3.3-pre3** (the steps 2.3.3 touches): mod 8, barrels 48, pipes 43, barrelperf 0.259 ms a tick
+    for 1,024 linked barrels. Satchels: 66 passed, 1 failed. The failure was the test's own arithmetic: the refill
+    before it had already taken 44 more. **As pre4,** with that fixed: satchels 67 passed, 0 failed (the Railcraft
+    tank formed in 2 ticks).
+  - **Real GTNH client, as pre5** (pre4 with only the dev client's sneak changed): "sneak + right-click on a chest with
+    the Satchel: PASS (torches 500 -> 0 in the Satchel, 500 in the chest, a block placed under it: false)". The 2.3.2
+    shift-click and select checks passed again. A first try on pre4 didn't sneak at all: a sneak key pressed from code
+    doesn't hold while the window isn't focused. The dev client now gives the player a movement input that sneaks.
+- **2.3.2 additions,** in `valiertweaks selftest satchels`: shift-clicking 20 iron ingots in the inventory puts them in
+  the Satchel's iron slot, and apples with no slot free stay; a Flask in hand on a tank (a docked Flask), answered
+  before the block's own use: a click takes its 3,000 mB (selecting the Flask's tank that took it, its selected one
+  being empty), a click on the emptied tank puts it back, a sneak-click puts 1,000 more in where there is fluid; an air
+  click aimed at a tank not pouring fluid on top of it; a Flask full of lava taking no water; a voiding Flask tank
+  1,000 mB short of full taking just 1,000 and destroying none; picking up a water source selecting the tank it went
+  into. Then a real Railcraft iron tank built from Railcraft's own pattern (5×4×5 with its border), waited for until it
+  forms: its wall isn't a fluid handler but the Flask finds the tank through it, a click takes its 8,000 mB, a second
+  click puts it back.
+  - **22 Nov 2026, as 2.3.2-pre1:** all 14 steps on the test server; everything passed but the new Railcraft tank,
+    which Railcraft's `placeIronTank` never let form (it leaves the master and top positions empty). The pipe, barrel
+    and Grid costs: 0.243, 0.246 and 0.038 ms a tick. The Railcraft boiler took 179 ticks to form (Railcraft tests a
+    new structure when a block's clock reaches 256), so its summary came in after the next step had started; none of
+    its checks failed.
+  - **As 2.3.2-pre4** (the tank built from the pattern, the voiding check added): `mod` 8 and `satchels` 45, none
+    failed; the tank formed and both clicks on its wall worked.

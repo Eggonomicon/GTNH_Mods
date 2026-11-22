@@ -1053,11 +1053,13 @@ public final class XpCrafters {
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || ++tick % 20 != 0) return;
+        long t0 = ValierCost.start();
         for (WorldServer w : DimensionManager.getWorlds()) {
             Data d = data(w, false);
             if (d == null || d.crafters.isEmpty()) continue;
             for (Crafter c : new ArrayList<>(d.crafters.values())) run(w, d, c);
         }
+        ValierCost.add(ValierCost.Part.XP, t0);
     }
 
     /** One second of one crafter: only while its chunk is loaded; forgotten if its tank is gone. */
@@ -1272,7 +1274,15 @@ public final class XpCrafters {
         public void onPlayerTick(TickEvent.PlayerTickEvent event) {
             if (event.phase != TickEvent.Phase.END || !(event.player instanceof EntityPlayerMP)
                 || event.player instanceof FakePlayer) return;
-            EntityPlayerMP player = (EntityPlayerMP) event.player;
+            long t0 = ValierCost.start();
+            try {
+                sync((EntityPlayerMP) event.player);
+            } finally {
+                ValierCost.add(ValierCost.Part.XP, t0);
+            }
+        }
+
+        private void sync(EntityPlayerMP player) {
             if (player.playerNetServerHandler == null) return;
             Container container = player.openContainer;
             Slot result = resultSlot(container);

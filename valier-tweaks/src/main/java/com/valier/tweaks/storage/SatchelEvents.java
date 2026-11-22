@@ -16,8 +16,8 @@ import cpw.mods.fml.common.network.simpleimpl.MessageContext;
 import io.netty.buffer.ByteBuf;
 
 /**
- * Satchels picking things up (before they reach the inventory's own stacks), and sneak + mouse wheel choosing a
- * Satchel's or Flask's slot ({@link Scroll}).
+ * Satchels picking things up (before they reach the inventory's own stacks; a slot sending home first,
+ * {@link SatchelHome}), and sneak + mouse wheel choosing a Satchel's or Flask's slot ({@link Scroll}).
  */
 public final class SatchelEvents {
 
@@ -30,14 +30,30 @@ public final class SatchelEvents {
         EntityPlayer p = event.entityPlayer;
         EntityItem e = event.item;
         if (p == null || p.worldObj.isRemote || e == null || e.isDead) return;
+        long t0 = com.valier.tweaks.ValierCost.start();
+        try {
+            pickup(event, p, e);
+        } finally {
+            com.valier.tweaks.ValierCost.add(com.valier.tweaks.ValierCost.Part.SATCHELS, t0);
+        }
+    }
+
+    private static void pickup(EntityItemPickupEvent event, EntityPlayer p, EntityItem e) {
         ItemStack s = e.getEntityItem();
         if (s == null || s.stackSize <= 0 || s.getItem() instanceof ItemSatchel) return;
         String thrower = e.func_145800_j();
         if (thrower != null && thrower.equals(p.getCommandSenderName()) && e.age < 200) return;
         int before = s.stackSize;
+        // 2.3.3: a slot sending home first (filling to its keep amount, the rest to its barrel channel), before a full
+        // slot's void overflow could destroy what the channel has room for.
         for (ItemStack c : p.inventory.mainInventory) {
-            if (c == null || !(c.getItem() instanceof ItemSatchel) || ((ItemSatchel) c.getItem()).fluid) continue;
-            SatchelInventory inv = SatchelInventory.of(c);
+            SatchelInventory inv = SatchelRestock.carried(c);
+            if (inv == null || !inv.pickup) continue;
+            s.stackSize -= SatchelHome.pickup(p, inv, s);
+            if (s.stackSize <= 0) break;
+        }
+        if (s.stackSize > 0) for (ItemStack c : p.inventory.mainInventory) {
+            SatchelInventory inv = SatchelRestock.carried(c);
             if (inv == null || !inv.pickup) continue;
             int took = inv.insert(s, s.stackSize, true, false);
             if (took > 0) s.stackSize -= took;

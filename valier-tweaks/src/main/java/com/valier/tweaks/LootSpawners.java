@@ -1171,8 +1171,10 @@ public final class LootSpawners {
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
+        long t0 = ValierCost.start();
         convertPending();
         if (++tick % 40 == 0) scan();
+        ValierCost.add(ValierCost.Part.LOOT, t0);
     }
 
     /**

@@ -102,12 +102,20 @@ public class ValierTweaks {
         MinecraftForge.EVENT_BUS.register(new com.valier.tweaks.pipe.PipeClicks.Events()); // sneak + wrench on pipes
         MinecraftForge.EVENT_BUS.register(new com.valier.tweaks.storage.BarrelClicks.Events()); // sneak + wrench on barrels
         MinecraftForge.EVENT_BUS.register(new com.valier.tweaks.storage.SatchelEvents()); // satchels picking things up
+        com.valier.tweaks.storage.SatchelRestock restock = new com.valier.tweaks.storage.SatchelRestock();
+        MinecraftForge.EVENT_BUS.register(restock); // a stack in the hand used up
+        FMLCommonHandler.instance()
+            .bus()
+            .register(restock); // hotbar restock and refill, on player ticks
         MinecraftForge.EVENT_BUS.register(new com.valier.tweaks.grid.GridEvents()); // sneak + wrench on grid blocks
         com.valier.tweaks.grid.GridNets grid = new com.valier.tweaks.grid.GridNets();
         MinecraftForge.EVENT_BUS.register(grid); // the overworld unloading
         FMLCommonHandler.instance()
             .bus()
             .register(grid); // the Valier Grid, on server ticks
+        FMLCommonHandler.instance()
+            .bus()
+            .register(new ValierCost()); // /valier cost: Valier's share of each server tick
         NET.registerMessage(com.valier.tweaks.storage.SatchelEvents.Scroll.Handler.class, com.valier.tweaks.storage.SatchelEvents.Scroll.class, 2,
             Side.SERVER);
         com.valier.tweaks.storage.BarrelSync barrels = new com.valier.tweaks.storage.BarrelSync();

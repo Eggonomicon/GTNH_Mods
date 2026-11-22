@@ -18,16 +18,21 @@ import com.valier.tweaks.pipe.ValierMenu;
  * sends the item, NBT and all, whenever it changes), so counts of any size show; clicks on them come as actions:
  * <ul>
  * <li>Satchel: click takes a stack (with one on the cursor: puts it in), right-click one, shift-click a stack into
- * the inventory (keeping the slot's keep amount), ctrl-click selects the slot (for placing and the settings).</li>
- * <li>Flask: click with a bucket, cell or other container fills or empties it; ctrl-click selects.</li>
- * <li>The selected slot's settings (keep, ore dictionary, void overflow, lock) and the Satchel's pickup switches.</li>
+ * the inventory (keeping the slot's keep amount), ctrl-click or middle-click selects the slot (for placing and the
+ * settings); so does a ctrl-click or middle-click on that item in the inventory below (2.3.2).</li>
+ * <li>Flask: click with a bucket, cell or other container fills or empties it; with nothing on the cursor, selects.</li>
+ * <li>Shift-click in the inventory puts the stack in (a Flask: empties the container in); the server then sends the
+ * inventory, as the client can't guess it (2.3.2).</li>
+ * <li>The selected slot's settings (keep, ore dictionary, void overflow, lock; 2.3.3: refill, send home) and the
+ * Satchel's switches (pickup, new items; 2.3.3: hotbar restock, container mode), in a panel on the right (2.3.3: under
+ * the slots they made a LuV Satchel's menu too tall).</li>
  * </ul>
  * The Satchel's own inventory slot can't be clicked, swapped or dropped while its menu is open.
  */
 public class SatchelMenu extends Container implements ValierMenu {
 
     public static final int TAKE = 50, PUT = 51, SHIFT = 52, SELECT = 53, KEEP = 54, ORE = 55, VOID = 56, LOCK = 57, PICKUP = 58,
-        PICKNEW = 59, CONTAINER = 60;
+        PICKNEW = 59, CONTAINER = 60, REFILL = 61, HOME = 62, RESTOCK = 63, BOX = 64;
 
     public final EntityPlayer player;
     /** The player's inventory slot holding it. */
@@ -46,9 +51,9 @@ public class SatchelMenu extends Container implements ValierMenu {
         for (int c = 0; c < 9; c++) addSlotToContainer(slot(pi, c, 8 + c * 18, invY + 58));
     }
 
-    /** Where the player's inventory starts, under the rows of slots and the settings row. */
+    /** Where the player's inventory starts, under the rows of slots (the settings are in a panel on the right). */
     public static int invY(int rows) {
-        return 18 + rows * 18 + 36;
+        return 18 + rows * 18 + 14;
     }
 
     private Slot slot(InventoryPlayer pi, int index, int x, int y) {
@@ -90,7 +95,7 @@ public class SatchelMenu extends Container implements ValierMenu {
         if (inv == null) return null;
         ItemStack st = s.getStack();
         if (inv.fluid) {
-            fillFromContainer(inv, s);
+            if (fillFromContainer(inv, s)) resend(p);
             return null;
         }
         int took = inv.insert(st, st.stackSize, false, false);
@@ -98,8 +103,22 @@ public class SatchelMenu extends Container implements ValierMenu {
             st.stackSize -= took;
             if (st.stackSize <= 0) s.putStack(null);
             else s.onSlotChanged();
+            resend(p);
         }
         return null;
+    }
+
+    /**
+     * Sends the inventory (with the Satchel in it) after a shift-click (2.3.2). The client can't guess what the Satchel
+     * takes, so it guesses nothing, and the server agrees (both return null); the game then sends the changed slots as
+     * "quantity only" (EntityPlayerMP.isChangingQuantityOnly), which it never sends at all: the stack stayed on the
+     * client's screen until the next click showed it gone.
+     */
+    private void resend(EntityPlayer p) {
+        if (!(p instanceof EntityPlayerMP) || p instanceof net.minecraftforge.common.util.FakePlayer) return;
+        EntityPlayerMP mp = (EntityPlayerMP) p;
+        if (mp.playerNetServerHandler == null) return;
+        mp.sendContainerAndContentsToPlayer(this, getInventory());
     }
 
     @Override
@@ -167,6 +186,27 @@ public class SatchelMenu extends Container implements ValierMenu {
                 inv.pickNew = !inv.pickNew;
                 inv.save();
                 break;
+            case REFILL: // a: the step
+                if (inv.fluid) return;
+                inv.refill[inv.selected] = (int) Math.max(0, Math.min(SatchelInventory.MAX_REFILL, (long) inv.refill[inv.selected]
+                    + Math.max(-SatchelInventory.MAX_REFILL, Math.min(SatchelInventory.MAX_REFILL, a))));
+                inv.save();
+                break;
+            case HOME: // b: 1 off, else the next channel
+                if (inv.fluid) return;
+                if (b == 1) SatchelHome.set(inv, inv.selected, null, null);
+                else SatchelHome.next(p, inv, inv.selected);
+                break;
+            case RESTOCK:
+                if (inv.fluid) return;
+                inv.restock = !inv.restock;
+                inv.save();
+                break;
+            case BOX: // a: +1 or -1
+                if (inv.fluid) return;
+                inv.box = Math.floorMod(inv.box + (a < 0 ? -1 : 1), SatchelInventory.BOX_MODES);
+                inv.save();
+                break;
             case CONTAINER: // a Flask tank and a container on the cursor
                 if (!slotOk || !inv.fluid || cursor == null) return;
                 inv.selected = a;
@@ -220,7 +260,7 @@ public class SatchelMenu extends Container implements ValierMenu {
         else if (result != null && !p.inventory.addItemStackToInventory(result)) p.dropPlayerItemWithRandomChoice(result, false);
     }
 
-    static FluidStack containerFluid(ItemStack one) {
+    public static FluidStack containerFluid(ItemStack one) {
         if (one.getItem() instanceof IFluidContainerItem) return ((IFluidContainerItem) one.getItem()).getFluid(one);
         return FluidContainerRegistry.getFluidForFilledItem(one);
     }
@@ -234,18 +274,20 @@ public class SatchelMenu extends Container implements ValierMenu {
     }
 
     /** Shift-click of a container in the inventory into a Flask: it is emptied in. */
-    private void fillFromContainer(SatchelInventory inv, Slot s) {
+    private boolean fillFromContainer(SatchelInventory inv, Slot s) {
         ItemStack st = s.getStack();
         ItemStack one = st.copy();
         one.stackSize = 1;
         FluidStack in = containerFluid(one);
-        if (in == null || in.amount <= 0 || inv.fill(in, false) < in.amount) return;
+        if (in == null || in.amount <= 0 || inv.fill(in, false) < in.amount) return false;
         inv.fill(in, true);
+        ItemSatchel.selectIfEmpty(inv, in);
         ItemStack empty = emptied(one);
         st.stackSize--;
         if (st.stackSize <= 0) s.putStack(null);
         else s.onSlotChanged();
         if (empty != null && !player.inventory.addItemStackToInventory(empty)) player.dropPlayerItemWithRandomChoice(empty, false);
+        return true;
     }
 
     @Override

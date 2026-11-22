@@ -34,6 +34,8 @@ public final class BarrelClicks {
     /** Right-click: an upgrade, the menu (sneaking, empty hand), or put the held stack in (twice quickly: everything). */
     static void rightClick(EntityPlayer p, TileBarrel t) {
         ItemStack held = p.getHeldItem();
+        // 2.3.3: never a Satchel or Flask by hand (sneak + right-click with a Satchel moves its items instead).
+        if (held != null && held.getItem() instanceof ItemSatchel) return;
         if (held != null && held.getItem() instanceof ItemBarrelUpgrade) {
             upgrade(p, t, held);
             return;
@@ -76,7 +78,7 @@ public final class BarrelClicks {
     static void insertAll(EntityPlayer p, BarrelStore st) {
         for (int i = 0; i < p.inventory.mainInventory.length; i++) {
             ItemStack s = p.inventory.mainInventory[i];
-            if (s == null || !st.matches(s)) continue;
+            if (s == null || st.item == null || !st.takes(s)) continue; // 2.3.3: ore dictionary matches too
             long n = st.insert(s, s.stackSize, false);
             if (n <= 0) break;
             s.stackSize -= (int) n;

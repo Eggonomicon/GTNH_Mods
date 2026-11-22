@@ -77,6 +77,7 @@ final class BarrelAe implements IStorageMonitorable, IMEMonitor<IAEItemStack>, B
     public IAEItemStack injectItems(IAEItemStack input, Actionable mode, BaseActionSource src) {
         if (input == null) return null;
         ItemStack s = input.getItemStack();
+        if (!store.takesExact(s)) return input; // AE2 keeps each item apart: no ore dictionary here
         long took = store.insert(s, input.getStackSize(), mode == Actionable.SIMULATE);
         if (took >= input.getStackSize()) return null;
         IAEItemStack left = input.copy();
@@ -131,7 +132,7 @@ final class BarrelAe implements IStorageMonitorable, IMEMonitor<IAEItemStack>, B
 
     @Override
     public boolean canAccept(IAEItemStack s) {
-        return s != null && store.takes(s.getItemStack());
+        return s != null && store.takesExact(s.getItemStack());
     }
 
     @Override

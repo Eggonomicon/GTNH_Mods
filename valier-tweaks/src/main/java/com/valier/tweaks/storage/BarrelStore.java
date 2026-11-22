@@ -9,7 +9,8 @@ import net.minecraft.nbt.NBTTagCompound;
 /**
  * What a barrel holds: one kind of item (a 1-item template) and how many, up to a capacity in stacks, with its
  * settings: locked (keeps its item at 0), keep (automation leaves that many), void overflow (matching items still go in
- * when full, and are destroyed). An unlinked barrel has its own; linked barrels share their channel's
+ * when full, and are destroyed); 2.3.3: ore dictionary (an item sharing an ore name with its item goes in as its item,
+ * so one barrel takes every mod's copper ingots). An unlinked barrel has its own; linked barrels share their channel's
  * ({@link BarrelChannels}), so taking one from any of them takes it from all.
  * <p>
  * Every change is O(1): arithmetic on a long. The barrels showing it ({@link #viewers}) are told at most every 10 ticks
@@ -22,8 +23,11 @@ public final class BarrelStore {
     long count;
     /** Capacity in stacks (the owner sets it: a barrel's tier, or the sum of a channel's barrels). */
     long stacks = BarrelTier.STACKS[0];
-    boolean locked, voidOverflow;
+    boolean locked, voidOverflow, ore;
     long keep;
+    /** Its item's ore ids, for the ore dictionary setting (read again when the item object changes). */
+    private ItemStack oreFor;
+    private int[] oreIds;
     /** Loaded barrels showing it (server). */
     final List<TileBarrel> viewers = new ArrayList<>(1);
     /** Told when it changes (a channel marks its saved data dirty; a barrel its chunk). */
@@ -87,10 +91,28 @@ public final class BarrelStore {
         return a.getItem() == b.getItem() && a.getItemDamage() == b.getItemDamage() && ItemStack.areItemStackTagsEqual(a, b);
     }
 
-    /** Whether s may go in at all (its item, or anything while empty and unlocked). */
+    /** Whether s may go in at all (its item, or anything while empty and unlocked; with the ore dictionary on, an item
+     * sharing an ore name with its item too). */
     public boolean takes(ItemStack s) {
         if (s == null || s.getItem() == null) return false;
+        if (item == null) return !locked;
+        return same(item, s) || ore && sharesOre(s);
+    }
+
+    /** Only its own item (or anything while empty and unlocked): what AE2 is offered, as AE2 keeps each item apart. */
+    public boolean takesExact(ItemStack s) {
+        if (s == null || s.getItem() == null) return false;
         return item == null ? !locked : same(item, s);
+    }
+
+    boolean sharesOre(ItemStack s) {
+        if (oreFor != item) {
+            oreFor = item;
+            oreIds = net.minecraftforge.oredict.OreDictionary.getOreIDs(item);
+        }
+        if (oreIds.length == 0) return false;
+        for (int b : net.minecraftforge.oredict.OreDictionary.getOreIDs(s)) for (int a : oreIds) if (a == b) return true;
+        return false;
     }
 
     /** How many of s (up to n) it would take: what fits, or all of them with void overflow. */
@@ -180,6 +202,7 @@ public final class BarrelStore {
         if (count > 0) t.setLong("Amount", count); // not "Count": an item compound's own stack size is saved there
         if (locked) t.setBoolean("Locked", true);
         if (voidOverflow) t.setBoolean("Void", true);
+        if (ore) t.setBoolean("Ore", true);
         if (keep > 0) t.setLong("Keep", keep);
         return t;
     }
@@ -191,6 +214,7 @@ public final class BarrelStore {
         if (item == null) count = 0;
         locked = t.getBoolean("Locked");
         voidOverflow = t.getBoolean("Void");
+        ore = t.getBoolean("Ore");
         keep = Math.max(0, t.getLong("Keep"));
     }
 
@@ -198,6 +222,7 @@ public final class BarrelStore {
     void copySettings(BarrelStore o) {
         locked = o.locked;
         voidOverflow = o.voidOverflow;
+        ore = o.ore;
         keep = o.keep;
     }
 

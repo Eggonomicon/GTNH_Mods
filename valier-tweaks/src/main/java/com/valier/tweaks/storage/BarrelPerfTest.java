@@ -53,6 +53,13 @@ public final class BarrelPerfTest { // public: Forge calls its tick handler from
             .register(this);
     }
 
+    /** Removes a test barrel without dropping it (the cost self-test's too). */
+    public static void remove(net.minecraft.world.World w, int x, int y, int z) {
+        net.minecraft.tileentity.TileEntity te = w.getTileEntity(x, y, z);
+        if (te instanceof TileBarrel) ((TileBarrel) te).pickedUp = true;
+        w.setBlockToAir(x, y, z);
+    }
+
     @SubscribeEvent
     public void onTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.START) return; // the work; BarrelSync's share is timed around its own tick

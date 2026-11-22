@@ -46,6 +46,11 @@ public final class PeacefulDims {
         return world != null && !world.isRemote && TweaksConfig.peacefulDimensions && Data.get().dims.contains(world.provider.dimensionId);
     }
 
+    /** How many dimensions are peaceful (/valier cost; 0 with the feature off). */
+    static int count() {
+        return TweaksConfig.peacefulDimensions ? Data.get().dims.size() : 0;
+    }
+
     public static boolean isPeaceful(int dim) {
         return Data.get().dims.contains(dim);
     }
@@ -86,10 +91,12 @@ public final class PeacefulDims {
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || ++ticks % SWEEP_TICKS != 0 || !TweaksConfig.peacefulDimensions) return;
+        long t0 = ValierCost.start();
         for (int dim : Data.get().dims) {
             WorldServer world = DimensionManager.getWorld(dim);
             if (world != null) sweep(world);
         }
+        ValierCost.add(ValierCost.Part.PEACEFUL, t0);
     }
 
     static int sweep(World world) {

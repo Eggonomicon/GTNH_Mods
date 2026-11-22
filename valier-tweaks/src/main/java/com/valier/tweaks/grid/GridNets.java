@@ -22,6 +22,11 @@ import cpw.mods.fml.common.gameevent.TickEvent;
 public final class GridNets {
 
     static final Map<String, GridNet> NETS = new HashMap<>();
+
+    /** How many Grid networks there are (/valier cost). */
+    public static int networks() {
+        return NETS.size();
+    }
     private static final List<TileGrid> LOADED = new ArrayList<>();
     /** Nanoseconds spent on the Grid and the ticks counted (the perf test resets and reads them). */
     static long timed, timedTicks;
@@ -115,6 +120,7 @@ public final class GridNets {
         }
         timed += System.nanoTime() - t0;
         timedTicks++;
+        com.valier.tweaks.ValierCost.add(com.valier.tweaks.ValierCost.Part.GRID, t0);
     }
 
     /**

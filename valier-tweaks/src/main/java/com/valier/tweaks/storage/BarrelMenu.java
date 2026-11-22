@@ -21,14 +21,15 @@ import com.valier.tweaks.pipe.PipeFaceMessage;
 import com.valier.tweaks.pipe.ValierMenu;
 
 /**
- * A barrel's menu (sneak + right-click with an empty hand): what it holds, lock, void overflow, keep (for automation),
+ * A barrel's menu (sneak + right-click with an empty hand): what it holds, lock, void overflow, ore dictionary (2.3.3),
+ * keep (for automation),
  * and its channel: type a name (or click one of your team's channels) and link, or unlink. The server sends its state
  * as one compound ({@link PipeFaceMessage}); buttons come back as {@link com.valier.tweaks.pipe.PipeActionMessage}s
  * with the codes below.
  */
 public class BarrelMenu extends Container implements ValierMenu {
 
-    public static final int LOCK = 30, VOID = 31, KEEP = 32, LINK = 33, UNLINK = 34;
+    public static final int LOCK = 30, VOID = 31, KEEP = 32, LINK = 33, UNLINK = 34, ORE = 35;
     public static final int INV_Y = 140, HOTBAR_Y = 198;
 
     final TileBarrel tile;
@@ -38,7 +39,7 @@ public class BarrelMenu extends Container implements ValierMenu {
     public ItemStack item;
     public long count, capacity, keep, stacks;
     public int tier, barrels;
-    public boolean locked, voidOverflow;
+    public boolean locked, voidOverflow, ore;
     public String channel = "", note = "";
     public final List<String[]> channels = new ArrayList<>();
     private String lastSent;
@@ -83,6 +84,10 @@ public class BarrelMenu extends Container implements ValierMenu {
                 break;
             case VOID:
                 st.voidOverflow = !st.voidOverflow;
+                st.changed();
+                break;
+            case ORE:
+                st.ore = !st.ore;
                 st.changed();
                 break;
             case KEEP: {
@@ -146,6 +151,7 @@ public class BarrelMenu extends Container implements ValierMenu {
         t.setInteger("Tier", tile.tier);
         t.setBoolean("Locked", st.locked);
         t.setBoolean("Void", st.voidOverflow);
+        t.setBoolean("Ore", st.ore);
         BarrelChannels.Channel c = tile.linked();
         t.setString("Channel", c == null ? "" : c.name);
         t.setInteger("Barrels", c == null ? 1 : c.barrels());
@@ -178,6 +184,7 @@ public class BarrelMenu extends Container implements ValierMenu {
         tier = t.getInteger("Tier");
         locked = t.getBoolean("Locked");
         voidOverflow = t.getBoolean("Void");
+        ore = t.getBoolean("Ore");
         channel = t.getString("Channel");
         barrels = t.getInteger("Barrels");
         note = t.getString("Note");

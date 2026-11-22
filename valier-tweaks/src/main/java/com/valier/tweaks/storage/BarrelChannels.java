@@ -74,6 +74,12 @@ public final class BarrelChannels extends WorldSavedData {
         return d;
     }
 
+    /** How many channels there are (/valier cost; 0 before the overworld loads). */
+    public static int count() {
+        BarrelChannels d = get();
+        return d == null ? 0 : d.channels.size();
+    }
+
     /** Forgets the loaded channels (the overworld unloaded: the server is stopping). */
     static void forget() {
         instance = null;

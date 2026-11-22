@@ -16,7 +16,8 @@ import com.valier.tweaks.storage.BarrelMenu;
 import com.valier.tweaks.storage.BarrelTier;
 
 /**
- * A barrel's menu ({@link BarrelMenu}): what it holds and how full it is; lock, void overflow and keep; its channel
+ * A barrel's menu ({@link BarrelMenu}): what it holds and how full it is; lock, void overflow, ore dictionary (2.3.3)
+ * and keep; its channel
  * (type a name or click one of your team's, then Link; Unlink takes it off).
  */
 public class GuiBarrel extends ValierScreen {
@@ -55,7 +56,12 @@ public class GuiBarrel extends ValierScreen {
         voids.tip = () -> lines(EnumChatFormatting.WHITE + "Void overflow " + (c.voidOverflow ? "on" : "off"),
             c.voidOverflow ? "Full, it still takes its item and destroys it" : "Full, it takes no more",
             c.voidOverflow ? "(a sink for cobblestone and the like)." : "(on: a sink for cobblestone and the like).");
-        stepper(88, 48, 18, 44, BarrelMenu.KEEP, 1, 64, () -> number(c.keep),
+        Widget ore = add(48, 48, 18, 18, b -> send(BarrelMenu.ORE, 0, 0));
+        ore.item = () -> new ItemStack(Blocks.iron_ore);
+        ore.badge = () -> c.ore ? ICON_CHECK : ICON_CROSS;
+        ore.tip = () -> lines(EnumChatFormatting.WHITE + "Ore dictionary " + (c.ore ? "on" : "off"), "On: items sharing an ore name with",
+            "its item go in as its item (every mod's", "copper ingots into one barrel).", EnumChatFormatting.GRAY + "AE2 still sees each item apart.");
+        stepper(96, 48, 18, 40, BarrelMenu.KEEP, 1, 64, () -> number(c.keep),
             () -> lines(EnumChatFormatting.WHITE + "Keep " + String.format("%,d", c.keep), "Hoppers, pipes and other automation",
                 "leave this many in it.", EnumChatFormatting.GRAY + "Shift: by 64. Mouse wheel works too."));
         name = new GuiTextField(fontRendererObj, guiLeft + 9, guiTop + 85, 108, 12);
@@ -122,7 +128,7 @@ public class GuiBarrel extends ValierScreen {
         fontRendererObj.drawString(trimTo(what, 140), 28, 18, 0x303030);
         fontRendererObj.drawString(c.tier == BarrelTier.CREATIVE ? (c.item == null ? "Right-click it with an item" : "Endless")
             : String.format("%,d / %,d", c.count, c.capacity), 28, 28, 0x505050);
-        fontRendererObj.drawString("Keep", 60, 53, TEXT);
+        fontRendererObj.drawString("Keep", 72, 53, TEXT);
         fontRendererObj.drawString(c.channel.isEmpty() ? "Channel: not linked"
             : "Channel: " + c.channel + " (" + c.barrels + (c.barrels == 1 ? " barrel)" : " barrels)"), 8, 73, TEXT);
         if (!c.note.isEmpty()) fontRendererObj.drawString(trimTo(c.note, 160), 8, 132, 0x9A1A1A);

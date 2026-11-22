@@ -37,6 +37,11 @@ import com.valier.tweaks.pipe.PipeAccess;
  * <li>Flask: picking up a water source, placing it, a bucket emptied into it and filled from it, filling and draining a
  * tank (a docked Flask).</li>
  * <li>The dock: a Satchel as an inventory (pipes and hoppers in, slots out, keep respected) and a Flask as a tank.</li>
+ * <li>2.3.2: shift-click into the Satchel; a Flask in hand on a tank taking its fluid or (empty, or sneaking) putting the
+ * selected fluid in, never pouring it out on top; picking up selecting the tank it went into; a real Railcraft iron
+ * tank clicked on its wall ({@link RailTankSelfTest}, which ends the step once the tank has formed).</li>
+ * <li>2.3.3: sneak + right-click on containers, refill, hotbar restock, send home, the barrel ore dictionary setting
+ * ({@link SatchelStockSelfTest}).</li>
  * </ul>
  */
 public final class SatchelSelfTest {
@@ -51,6 +56,7 @@ public final class SatchelSelfTest {
         y = world.getHeightValue(bx + 8, bz + 8) + 2;
         player = new FakePlayer(world, new GameProfile(UUID.fromString("00000000-0000-4000-8000-0000000ba223"), "SatchelTester"));
         player.setPosition(bx + 8.5, y, bz + 8.5);
+        boolean waiting = false;
         try {
             pickup();
             inHand();
@@ -59,12 +65,17 @@ public final class SatchelSelfTest {
             flask();
             dock();
             fixes();
+            new SatchelStockSelfTest(this).run(); // 2.3.3: containers, refill, restock, send home, barrel ore dictionary
+            // 2.3.2: a Flask on a Railcraft tank, which forms on its own ticks: that part finishes the step.
+            if (cpw.mods.fml.common.Loader.isModLoaded("Railcraft")) waiting = new RailTankSelfTest(this).start();
         } catch (Throwable t) {
             com.valier.tweaks.ValierTweaks.LOG.error("[ValierTweaks SelfTest] satchels threw", t);
             SelfTest.check(false, "satchels ran without an exception (" + t + ")");
         } finally {
-            clear();
-            SelfTest.summary();
+            if (!waiting) {
+                clear();
+                SelfTest.summary();
+            }
         }
     }
 
@@ -246,6 +257,19 @@ public final class SatchelSelfTest {
         m.apply(player, SatchelMenu.PUT, 0, 0, null, null);
         SatchelSelfTest.check(stays && onCopy && SatchelInventory.of(copy).counts[0] == 450,
             "with the hand's Satchel swapped for an equal copy (as after the right-click that opened it), the menu stays open and works on it");
+        // 2.3.2: shift-click in the inventory puts the stack in (the server then sends the inventory to a real player,
+        // which the game left out: the stack stayed on the screen).
+        player.inventory.setInventorySlotContents(9, new ItemStack(Items.iron_ingot, 20));
+        ItemStack back = m.transferStackInSlot(player, 0); // the menu's first slot is the inventory's slot 9
+        SatchelSelfTest.check(back == null && player.inventory.getStackInSlot(9) == null && SatchelInventory.of(copy).counts[0] == 470,
+            "shift-clicking 20 iron ingots in the inventory puts them in the Satchel's iron slot (470)");
+        player.inventory.setInventorySlotContents(10, new ItemStack(Items.apple, 5));
+        SatchelInventory full = SatchelInventory.of(copy);
+        for (int k = 1; k < full.size; k++) full.lock[k] = true; // no empty slot it may use
+        full.save();
+        m.transferStackInSlot(player, 1);
+        SatchelSelfTest.check(player.inventory.getStackInSlot(10) != null && player.inventory.getStackInSlot(10).stackSize == 5,
+            "shift-clicking apples with no slot free for them leaves them");
         player.inventory.setInventorySlotContents(0, satchel(SatchelTier.LV));
         SatchelSelfTest.check(!m.canInteractWith(player), "a different Satchel put in its slot closes the menu");
         player.inventory.setInventorySlotContents(0, null);
@@ -270,10 +294,11 @@ public final class SatchelSelfTest {
         world.setBlock(px, y - 1, pz, Blocks.stone);
         world.setBlock(px, y, pz, Blocks.water);
         ItemSatchel item = (ItemSatchel) fl.getItem();
+        SatchelInventory.of(fl).selected = 5; // an empty tank: picking up then selects the tank the water goes into
         item.fluidClick(fl, world, player, mop(px, y, pz, 1));
         SatchelInventory inv = SatchelInventory.of(player.inventory.getStackInSlot(0));
-        SatchelSelfTest.check(world.isAirBlock(px, y, pz) && inv.fluids[0] != null && inv.fluids[0].amount == 1000,
-            "right-clicking a water source picks it up (1,000 mB)");
+        SatchelSelfTest.check(world.isAirBlock(px, y, pz) && inv.fluids[0] != null && inv.fluids[0].amount == 1000 && inv.selected == 0,
+            "right-clicking a water source picks it up (1,000 mB), selecting the tank it went into (the selected one was empty)");
         item.fluidClick(fl, world, player, mop(px, y - 1, pz, 1));
         inv = SatchelInventory.of(player.inventory.getStackInSlot(0));
         SatchelSelfTest.check(world.getBlock(px, y, pz) == Blocks.water && inv.isEmpty(0), "and placing it puts it back");
@@ -343,21 +368,60 @@ public final class SatchelSelfTest {
         FluidStack out = d.drain(ForgeDirection.UP, 2000, true);
         SatchelSelfTest.check(in == 5000 && out != null && out.amount == 2000 && d.getTankInfo(ForgeDirection.UP).length == 9,
             "a docked Flask is a tank: 5,000 mB in, 2,000 out, 9 tanks");
-        // A Flask in hand on that tank: fill from it (sneaking) and into it.
+        // A Flask in hand on that tank (2.3.2, answered before the block's own use): a tank with fluid gives it, an empty
+        // one gets the selected fluid, sneaking always puts in.
         ItemStack hand = new ItemStack(ModBlocks.flask, 1, SatchelTier.LV);
         player.inventory.setInventorySlotContents(0, hand);
-        player.setSneaking(true);
-        hand.getItem()
-            .onItemUse(hand, player, world, dx, y, dz, 1, 0.5F, 1F, 0.5F);
-        player.setSneaking(false);
-        SatchelInventory h = SatchelInventory.of(player.inventory.getStackInSlot(0));
-        boolean drained = h.fluids[0] != null && h.fluids[0].amount == 3000;
-        hand.getItem()
-            .onItemUse(hand, player, world, dx, y, dz, 1, 0.5F, 1F, 0.5F);
-        h = SatchelInventory.of(player.inventory.getStackInSlot(0));
-        SatchelSelfTest.check(drained && h.isEmpty(0) && d.inv().fluids[0] != null && d.inv().fluids[0].amount == 3000,
-            "a Flask in hand drains the tank (sneaking: 3,000 mB) and fills it back");
+        SatchelInventory.of(hand).selected = 4;
+        boolean answered = use(hand, dx, y, dz, false);
+        SatchelInventory h = SatchelInventory.of(hand);
+        boolean took = answered && h.fluids[0] != null && h.fluids[0].amount == 3000 && d.inv()
+            .isEmpty(0) && h.selected == 0;
+        use(hand, dx, y, dz, false);
+        boolean back = h.isEmpty(0) && d.inv().fluids[0] != null && d.inv().fluids[0].amount == 3000;
+        h.fill(new FluidStack(FluidRegistry.WATER, 1000), true);
+        use(hand, dx, y, dz, true);
+        boolean sneakPut = h.isEmpty(0) && d.inv().fluids[0] != null && d.inv().fluids[0].amount == 4000;
+        SatchelSelfTest.check(took && back && sneakPut, "a Flask in hand on a tank: a click takes its 3,000 mB (selecting that tank of "
+            + "the Flask's, its selected one being empty), a click on the now-empty tank puts it back, a sneak-click puts 1,000 more "
+            + "in where there is fluid (" + took + ", " + back + ", " + sneakPut + ")");
+        // Clicking the air at it (the raytrace finds the tank) never places the fluid against it.
+        h.fill(new FluidStack(FluidRegistry.WATER, 2000), true);
+        world.setBlockToAir(dx, y + 1, dz);
+        ((ItemSatchel) hand.getItem()).fluidClick(hand, world, player, mop(dx, y, dz, 1));
+        SatchelSelfTest.check(world.isAirBlock(dx, y + 1, dz) && h.fluids[0] != null && h.fluids[0].amount == 2000,
+            "a Flask's air click aimed at a tank doesn't pour its fluid out on top of it");
+        // A full Flask: told, nothing moved.
+        ItemStack full = new ItemStack(ModBlocks.flask, 1, SatchelTier.LV);
+        SatchelInventory fi = SatchelInventory.of(full);
+        for (int k = 0; k < fi.size; k++) {
+            fi.fluids[k] = new FluidStack(FluidRegistry.LAVA, fi.capacity);
+            fi.voids[k] = false;
+        }
+        fi.save();
+        int moved = ItemSatchel.tankClick(fi, d, ForgeDirection.UP, false, null);
+        SatchelSelfTest.check(moved == 0 && d.inv().fluids[0].amount == 4000, "a Flask full of lava takes no water from a tank");
+        // A Flask tank with void overflow on takes only what fits from a tank: a click never destroys a tank's fluid.
+        ItemStack vf = new ItemStack(ModBlocks.flask, 1, SatchelTier.LV);
+        SatchelInventory vi = SatchelInventory.of(vf);
+        vi.fill(new FluidStack(FluidRegistry.WATER, vi.capacity - 1000), true);
+        vi.voids[0] = true;
+        vi.save();
+        int voidTook = ItemSatchel.tankClick(vi, d, ForgeDirection.UP, false, null);
+        SatchelSelfTest.check(voidTook == 1000 && d.inv().fluids[0].amount == 3000 && vi.fluids[0].amount == vi.capacity,
+            "a Flask tank with void overflow on, 1,000 mB short of full, takes 1,000 of a tank's 4,000 mB and destroys none (" + voidTook + ")");
         clearInventory();
+    }
+
+    /** A Flask's right-click on a block, as the server gets it: onItemUseFirst, before the block's own use. */
+    boolean use(ItemStack hand, int x, int yy, int z, boolean sneak) {
+        player.setSneaking(sneak);
+        try {
+            return hand.getItem()
+                .onItemUseFirst(hand, player, world, x, yy, z, 1, 0.5F, 1F, 0.5F);
+        } finally {
+            player.setSneaking(false);
+        }
     }
 
     // ---- 2.3.0-pre1 review fixes -------------------------------------------------------------------------------------
