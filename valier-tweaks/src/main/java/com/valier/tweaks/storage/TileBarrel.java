@@ -72,7 +72,8 @@ public class TileBarrel extends TileEntity
     public BarrelStore store() {
         if (worldObj == null || worldObj.isRemote) return own;
         own.stacks = BarrelTier.stacks(tier);
-        if (!channel.isEmpty()) {
+        own.setCreative(tier == BarrelTier.CREATIVE);
+        if (!channel.isEmpty() && !own.creative) {
             if (linked == null || linked.removed) {
                 BarrelChannels data = BarrelChannels.get();
                 linked = data == null ? null : data.resolve(this);

@@ -58,6 +58,7 @@ final class LootFilterSelfTest {
             allow();
             xpBottles();
             menu();
+            upgrades();
             saving();
         } finally {
             clear();
@@ -212,6 +213,80 @@ final class LootFilterSelfTest {
         }
         SelfTest.check(refused == null && t.voids.filter[5] == null, "where a claim protects it, the menu doesn't open and "
             + "changes are refused");
+    }
+
+    /**
+     * The menu's upgrade buttons (2.3.1): XP bottles and Damaged Yes/No, paid from anywhere in the inventory (not the
+     * hand) and given back; Looting + and -; refused without the item; the screen gets the levels.
+     */
+    void upgrades() {
+        int[] p = { bx + 10, y, bz + 10 };
+        LootSpawnerTile t = holding(p, new ItemStack(Items.stick));
+        Object opened = LootMenu.server(player, world, p[0], p[1], p[2]);
+        net.minecraft.item.Item gold = LootSpawners.itemOf(TweaksConfig.lootSpawnerXpItem),
+            emerald = LootSpawners.itemOf(TweaksConfig.lootSpawnerFilterItem),
+            lapis = LootSpawners.itemOf(TweaksConfig.lootSpawnerLootingItem);
+        if (!(opened instanceof LootMenu) || gold == null || emerald == null || lapis == null) {
+            SelfTest.check(opened instanceof LootMenu, "the menu opens for its upgrade buttons");
+            SelfTest.log("upgrade buttons not checked: an upgrade item set in the config doesn't exist");
+            return;
+        }
+        LootMenu m = (LootMenu) opened;
+        boolean creative = player.capabilities.isCreativeMode;
+        player.capabilities.isCreativeMode = false;
+        try {
+            int xpCost = TweaksConfig.lootSpawnerXpItemCount, dmgCost = TweaksConfig.lootSpawnerFilterItemCount;
+            player.inventory.clearInventory(null, -1);
+            player.inventory.currentItem = 0;
+            player.inventory.setInventorySlotContents(20, new ItemStack(gold, xpCost + 1, Math.max(0, LootSpawners.metaOf(
+                TweaksConfig.lootSpawnerXpItem))));
+            m.apply(player, LootMenu.XP, 0, 0, null, null);
+            boolean on = t.xpBottles && have(gold) == 1 && t.xpPaid != null;
+            m.apply(player, LootMenu.XP, 0, 0, null, null);
+            SelfTest.check(on && !t.xpBottles && have(gold) == xpCost + 1 && t.xpPaid == null, "the menu's XP bottles button: "
+                + "Yes takes its item from anywhere in the inventory, No gives it back (" + have(gold) + " there)");
+            player.inventory.setInventorySlotContents(31, new ItemStack(emerald, dmgCost, Math.max(0, LootSpawners.metaOf(
+                TweaksConfig.lootSpawnerFilterItem))));
+            t.addToBuffer(new ItemStack(Items.iron_sword, 1, 40)); // a worn sword it was keeping
+            m.apply(player, LootMenu.DAMAGED, 0, 0, null, null);
+            on = t.noDamaged && have(emerald) == 0 && LootSelfTest.countHeld(t, Items.iron_sword) == 0;
+            m.apply(player, LootMenu.DAMAGED, 0, 0, null, null);
+            SelfTest.check(on && !t.noDamaged && have(emerald) == dmgCost, "the menu's Damaged button: No takes its item and "
+                + "throws away the worn sword it kept, Yes gives the item back");
+            player.inventory.clearInventory(null, -1);
+            m.apply(player, LootMenu.XP, 0, 0, null, null);
+            m.apply(player, LootMenu.DAMAGED, 0, 0, null, null);
+            SelfTest.check(!t.xpBottles && !t.noDamaged, "without the item in the inventory, neither switches on");
+            player.inventory.setInventorySlotContents(9, new ItemStack(lapis, 4, Math.max(0, LootSpawners.metaOf(
+                TweaksConfig.lootSpawnerLootingItem))));
+            for (int i = 0; i < 3; i++) m.apply(player, LootMenu.LOOTING, 1, 0, null, null);
+            int in = t.looting.blocks, level = t.looting.level(), left = have(lapis);
+            m.apply(player, LootMenu.LOOTING, -1, 0, null, null);
+            SelfTest.check(in == 3 && level == LootSpawners.lootingLevel(3) && left == 1 && t.looting.blocks == 2 && t.looting.paid == 2
+                && have(lapis) == 2, "Looting + puts three in from the inventory (Looting " + level + "), - takes one back out ("
+                    + t.looting.blocks + " in it, " + have(lapis) + " back in the inventory)");
+            LootMenu screen = new LootMenu(player.inventory, null, new InventoryBasic("x", false, LootSpawnerTile.SLOTS), world, p[0],
+                p[1], p[2]);
+            screen.receive(m.state());
+            SelfTest.check(screen.lootingIn == 2 && screen.looting == t.looting.level() && !screen.xp && !screen.noDamaged
+                && screen.lootingItem != null && screen.lootingItem.getItem() == lapis && screen.xpItem != null
+                && screen.lootingTiers.length == TweaksConfig.lootSpawnerLootingBlocks.length,
+                "the screen gets the upgrades (Looting " + screen.looting + ", " + screen.lootingIn + " in it, XP " + screen.xp
+                    + ", damaged " + (screen.noDamaged ? "thrown away" : "out") + ") and what they cost");
+            m.apply(player, LootMenu.LOOTING, -1, 0, null, null);
+            m.apply(player, LootMenu.LOOTING, -1, 0, null, null);
+            SelfTest.check(t.looting.blocks == 0 && t.looting.item == null && have(lapis) == 4, "taking them all back out leaves "
+                + "it with none, and all four came back");
+        } finally {
+            player.capabilities.isCreativeMode = creative;
+            player.inventory.clearInventory(null, -1);
+        }
+    }
+
+    int have(net.minecraft.item.Item item) {
+        int n = 0;
+        for (ItemStack s : player.inventory.mainInventory) if (s != null && s.getItem() == item) n += s.stackSize;
+        return n;
     }
 
     void saving() {

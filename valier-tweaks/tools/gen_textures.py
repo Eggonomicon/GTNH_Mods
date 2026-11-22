@@ -225,13 +225,18 @@ def barrel_wood(x, y, n):
     return mix(WOOD, WOOD_HI, t)
 
 
+def barrel_metal(tier, x, y):
+    """(lo, hi) of a barrel tier's metal at a pixel: the Creative barrel's (7) comes in diagonal bands."""
+    return CREATIVE_BANDS[((x + y) // 3) % 3] if tier == 7 else BARREL_METAL[tier]
+
+
 def barrel_side(tier, label=False):
     """Wooden staves held by two metal bands (the tier's metal) and a metal rim; the front has a recessed label panel
     where the item and its count are drawn."""
-    lo, hi = BARREL_METAL[tier]
     n = noise(71 + tier * 5 + (2 if label else 0))
 
     def px(x, y):
+        lo, hi = barrel_metal(tier, x, y)
         if x in (0, 15) or y in (0, 15):
             return shade(hi if (x == 0 or y == 0) else lo, 1.05 if (x == 0 or y == 0) else 0.8) + (255,)
         if label and 3 <= x <= 12 and 3 <= y <= 12:
@@ -249,10 +254,10 @@ def barrel_side(tier, label=False):
 
 def barrel_top(tier):
     """The lid: a 2 px metal rim, planks across, and a small metal plate in the middle."""
-    lo, hi = BARREL_METAL[tier]
     n = noise(97 + tier * 5)
 
     def px(x, y):
+        lo, hi = barrel_metal(tier, x, y)
         if x in (0, 15) or y in (0, 15):
             return shade(hi if (x == 0 or y == 0) else lo, 1.05 if (x == 0 or y == 0) else 0.8) + (255,)
         if x in (1, 14) or y in (1, 14):
@@ -457,6 +462,23 @@ def grid_light():
     return px
 
 
+def grid_arm(tier):
+    """A Grid plug's or point's arm, and the plate where it meets an energy block: dark casing with a cross of the tier's
+    colour through the middle and dark edges beside it, so an arm (a thin slice through the middle) shows a coloured
+    stripe down its length and its plate a cross."""
+    c = GRID_COLOURS[tier]
+    n = noise(311 + tier)
+
+    def px(x, y):
+        if x in (7, 8) or y in (7, 8):
+            return shade(c, 1.15 if 7 in (x, y) else 0.85) + (255,)
+        if x in (6, 9) or y in (6, 9):
+            return shade(GRID_CASE, 0.7) + (255,)
+        return shade(mix(GRID_CASE, GRID_CASE_HI, 0.25 + n[y][x] * 0.2), 1.0) + (255,)
+
+    return px
+
+
 # name -> (folder, function)
 TEXTURES = {
     'pipe_configurator': ('items', pipe_configurator),
@@ -480,7 +502,7 @@ TEXTURES = {
     'xp_crafter_top': ('blocks', xp_crafter_top),
     'xp_crafter_bottom': ('blocks', xp_crafter_bottom),
 }
-for _t in range(7):
+for _t in range(8):
     TEXTURES['barrel_side_%d' % _t] = ('blocks', (lambda t: lambda: barrel_side(t))(_t))
     TEXTURES['barrel_front_%d' % _t] = ('blocks', (lambda t: lambda: barrel_side(t, True))(_t))
     TEXTURES['barrel_top_%d' % _t] = ('blocks', (lambda t: lambda: barrel_top(t))(_t))
@@ -502,6 +524,8 @@ for _t in range(8):
         TEXTURES['grid_%s_%d' % (_k, _t)] = ('blocks', (lambda k, t: lambda: grid(k, t))(_k, _t))
 TEXTURES['grid_controller'] = ('blocks', lambda: grid('controller', 1))
 TEXTURES['grid_light'] = ('blocks', grid_light)
+for _t in range(8):
+    TEXTURES['grid_arm_%d' % _t] = ('blocks', (lambda t: lambda: grid_arm(t))(_t))
 
 
 def render(fn):

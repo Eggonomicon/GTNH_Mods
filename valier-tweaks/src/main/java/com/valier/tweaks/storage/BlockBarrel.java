@@ -60,7 +60,7 @@ public class BlockBarrel extends BlockContainer {
     @Override
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void getSubBlocks(Item item, CreativeTabs tab, List list) {
-        for (int t = 0; t < BarrelTier.COUNT; t++) list.add(new ItemStack(item, 1, t));
+        for (int t = 0; t < BarrelTier.METAS; t++) list.add(new ItemStack(item, 1, t));
     }
 
     // ---- looks ------------------------------------------------------------------------------------------------------
@@ -68,10 +68,10 @@ public class BlockBarrel extends BlockContainer {
     @Override
     @SideOnly(Side.CLIENT)
     public void registerBlockIcons(IIconRegister r) {
-        side = new IIcon[BarrelTier.COUNT];
-        top = new IIcon[BarrelTier.COUNT];
-        front = new IIcon[BarrelTier.COUNT];
-        for (int t = 0; t < BarrelTier.COUNT; t++) {
+        side = new IIcon[BarrelTier.METAS];
+        top = new IIcon[BarrelTier.METAS];
+        front = new IIcon[BarrelTier.METAS];
+        for (int t = 0; t < BarrelTier.METAS; t++) {
             side[t] = r.registerIcon(ValierTweaks.MODID + ":barrel_side_" + t);
             top[t] = r.registerIcon(ValierTweaks.MODID + ":barrel_top_" + t);
             front[t] = r.registerIcon(ValierTweaks.MODID + ":barrel_front_" + t);

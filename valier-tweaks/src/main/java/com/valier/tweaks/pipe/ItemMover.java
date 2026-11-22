@@ -100,6 +100,38 @@ final class ItemMover {
         return moved;
     }
 
+    // ---- Pushed in -----------------------------------------------------------------------------------------------
+
+    /**
+     * A block that pushes its own output (a loot spawner) hands the face touching it a stack, and it goes where a Pull
+     * from that face would send it: Push faces, Request faces short of it, then overflow Provide faces. The face's
+     * lists apply: Deny and Allow keep it out, its Void list destroys it. With an amount on its Allow or Void entry for
+     * it, the face leaves it to its block (a Pull keeps that amount there). Returns what's left: the block keeps it.
+     */
+    static ItemStack pushedIn(PipeNetwork.Face f, ItemStack stack) {
+        if (stack == null || stack.stackSize <= 0) return null;
+        World w = f.pipe.getWorldObj();
+        IInventory src = inventory(w, f.tx, f.ty, f.tz);
+        long tick = w.getTotalWorldTime();
+        if (f.cfg.voids(stack, src)) {
+            if (f.cfg.voids.stockOf(stack) > 0) return stack;
+            f.cfg.flow.add(stack, stack.stackSize, true, tick);
+            return null;
+        }
+        if (!f.cfg.passes(stack, src) || f.cfg.stockOf(stack) > 0) return stack;
+        List<PipeNetwork.Face> inserts = PipeNetworks.partners(f, FaceMode.INSERT, false);
+        List<PipeNetwork.Face> requests = PipeNetworks.partners(f, FaceMode.REQUEST, false);
+        List<PipeNetwork.Face> overflow = PipeNetworks.partners(f, FaceMode.PROVIDE, true);
+        if (inserts.isEmpty() && requests.isEmpty() && overflow.isEmpty()) return stack;
+        ItemStack go = stack.copy();
+        int before = go.stackSize;
+        ItemStack left = deliver(f, key(w, f.tx, f.ty, f.tz), go, inserts, requests, overflow);
+        int moved = before - (left == null ? 0 : left.stackSize);
+        if (moved <= 0) return stack;
+        f.cfg.flow.add(stack, moved, false, tick);
+        return left;
+    }
+
     /** How many of s a pulling or providing face may give: all, or what is over its Allow amount for s. */
     static int spare(FaceConfig cfg, IInventory inv, ItemStack s) {
         int keep = cfg.stockOf(s);

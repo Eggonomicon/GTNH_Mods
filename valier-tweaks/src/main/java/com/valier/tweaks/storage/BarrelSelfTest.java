@@ -78,6 +78,7 @@ public final class BarrelSelfTest {
             channels();
             menu();
             fixes();
+            creative();
             ae2();
         } catch (Throwable t) {
             com.valier.tweaks.ValierTweaks.LOG.error("[ValierTweaks SelfTest] barrels threw", t);
@@ -234,6 +235,12 @@ public final class BarrelSelfTest {
                 .count() == 639, "640 iron ingots, one taken from the second barrel: both show 639");
         SelfTest.check(a.store()
             .capacity() == 2 * 64 * 64, "the channel holds both barrels' capacity (8,192)");
+        if (cpw.mods.fml.common.Loader.isModLoaded("holoinventory")) {
+            net.minecraft.nbt.NBTTagList holo = net.dries007.holoInventory.compat.InventoryDecoderRegistry.toNBT(b);
+            SelfTest.check(holo.tagCount() == 1 && holo.getCompoundTagAt(0)
+                .getInteger("Count") == 639,
+                "Holo Glasses see the linked barrel's whole count (639), not its output slot's stack (" + holo + ")");
+        }
         // The Nether.
         WorldServer nether = DimensionManager.getWorld(-1);
         if (nether == null) {
@@ -472,6 +479,76 @@ public final class BarrelSelfTest {
     }
 
     // ---- helpers -------------------------------------------------------------------------------------------------------
+
+    // ---- the Creative barrel (2.3.1) -----------------------------------------------------------------------------------
+
+    void creative() {
+        int[] at = { bx + 6, y, bz + 14 };
+        TileBarrel t = barrel(world, at[0], at[1], at[2], BarrelTier.CREATIVE, OWNER);
+        hold(new ItemStack(Items.diamond, 5));
+        BarrelClicks.rightClick(player, t);
+        BarrelStore st = t.store();
+        SelfTest.check(st.creative() && st.item() != null && st.item()
+            .getItem() == Items.diamond && st.count() == BarrelStore.ENDLESS && player.getHeldItem() != null
+            && player.getHeldItem().stackSize == 5, "right-clicked with 5 diamonds, a Creative barrel gives diamonds without end, "
+                + "and the 5 stay in the hand");
+        clearInventory();
+        BarrelClicks.take(player, t, false);
+        BarrelClicks.take(player, t, true);
+        SelfTest.check(countCarried(Items.diamond) == 65 && t.store()
+            .count() == BarrelStore.ENDLESS, "left-click takes a stack of them, sneaking one, and it still has no end ("
+                + countCarried(Items.diamond) + " carried)");
+        clearInventory();
+        world.setBlock(at[0], at[1] - 1, at[2], Blocks.hopper);
+        TileEntity h = world.getTileEntity(at[0], at[1] - 1, at[2]);
+        boolean pulled = h instanceof TileEntityHopper && TileEntityHopper.func_145891_a((TileEntityHopper) h)
+            && TileEntityHopper.func_145891_a((TileEntityHopper) h);
+        ItemStack inHopper = h instanceof TileEntityHopper ? ((TileEntityHopper) h).getStackInSlot(0) : null;
+        if (h instanceof TileEntityHopper) ((TileEntityHopper) h).setInventorySlotContents(0, null);
+        world.setBlockToAir(at[0], at[1] - 1, at[2]);
+        ItemStack got = com.valier.tweaks.pipe.PipeAccess.take(t, BigStorage.OUT_SLOT, 320);
+        int room = com.valier.tweaks.pipe.PipeAccess.space(t, 1, new ItemStack(Items.diamond, 64), 64);
+        ItemStack refused = TileEntityHopper.func_145889_a(t, new ItemStack(Items.diamond, 10), 0);
+        SelfTest.check(pulled && inHopper != null && inHopper.stackSize == 2 && got != null && got.stackSize == 320
+            && room == 0 && refused != null && refused.stackSize == 10 && t.store()
+                .count() == BarrelStore.ENDLESS,
+            "a hopper under it pulls diamonds, a Valier pipe takes 320 at once, and nothing goes in (" + room + " room)");
+        t.store().voidOverflow = true;
+        ItemStack gone = TileEntityHopper.func_145889_a(t, new ItemStack(Items.diamond, 10), 0);
+        ItemStack dirt = TileEntityHopper.func_145889_a(t, new ItemStack(Blocks.dirt, 10), 0);
+        t.store().voidOverflow = false;
+        SelfTest.check(gone == null && dirt != null && dirt.stackSize == 10 && t.store()
+            .count() == BarrelStore.ENDLESS, "with void overflow on, diamonds put in are destroyed; dirt still isn't taken");
+        hold(new ItemStack(Items.emerald, 1));
+        BarrelClicks.rightClick(player, t);
+        SelfTest.check(t.store()
+            .item()
+            .getItem() == Items.emerald && player.getHeldItem() != null, "right-clicked with an emerald, it gives emeralds now");
+        hold(new ItemStack(ModBlocks.barrelUpgrade, 1, BarrelTier.LUV));
+        BarrelClicks.rightClick(player, t);
+        boolean noUpgrade = t.tier == BarrelTier.CREATIVE && player.getHeldItem() != null;
+        hold(null);
+        BarrelChannels d = BarrelChannels.get();
+        String why = d == null ? "the channels aren't loaded" : d.join(t, t.scopeOf(OWNER), "creative-test");
+        SelfTest.check(noUpgrade && why != null && t.channel()
+            .isEmpty(), "a Creative barrel takes no upgrade and can't be linked (" + why + ")");
+        ItemStack item = BarrelClicks.toItem(t);
+        t.pickedUp = true;
+        world.setBlockToAir(at[0], at[1], at[2]);
+        TileBarrel again = placeItem(item, at[0], at[1], at[2]);
+        SelfTest.check(item.getItemDamage() == BarrelTier.CREATIVE && again != null && again.tier == BarrelTier.CREATIVE
+            && again.store()
+                .item() != null
+            && again.store()
+                .item()
+                .getItem() == Items.emerald
+            && again.store()
+                .count() == BarrelStore.ENDLESS
+            && again.store()
+                .comparator() == 15,
+            "picked up and placed again, it is still a Creative barrel giving emeralds (comparator 15)");
+        killItems(at);
+    }
 
     TileBarrel barrel(WorldServer w, int x, int yy, int z, int tier, UUID owner) {
         w.setBlock(x, yy, z, ModBlocks.barrel, tier, 3);

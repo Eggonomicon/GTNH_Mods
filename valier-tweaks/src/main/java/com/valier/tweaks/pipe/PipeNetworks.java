@@ -10,6 +10,7 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.WeakHashMap;
 
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import net.minecraftforge.common.util.ForgeDirection;
@@ -109,6 +110,25 @@ public class PipeNetworks {
                 return;
             }
         }
+    }
+
+    /**
+     * A block that pushes its own output (a loot spawner) offers a stack to the item pipe at x y z, through the pipe's
+     * side {@code side} (the one facing it). A Provide or Push/Pull face there sends it on to the network's Push faces
+     * (and Request faces short of it), as a Pull from it would; a Pull face takes nothing this way, it pulls from the
+     * block on its own timer. Returns what's left. Nothing is queued: it is one look over the network's faces.
+     */
+    public static ItemStack pushInto(World w, int x, int y, int z, int side, ItemStack stack) {
+        PipeNetworks n = WORLDS.get(w);
+        if (n == null || stack == null || w.isRemote) return stack;
+        PipeNetwork net = n.byPos.get(key(x, y, z));
+        if (net == null || net.kind != PipeKind.ITEM || net.isTooBig()) return stack;
+        for (PipeNetwork.Face f : net.all) {
+            if (f.side != side || f.dead || f.pipe.xCoord != x || f.pipe.yCoord != y || f.pipe.zCoord != z) continue;
+            FaceMode m = f.cfg.mode;
+            return m == FaceMode.PROVIDE || m == FaceMode.PUSH_PULL ? ItemMover.pushedIn(f, stack) : stack;
+        }
+        return stack;
     }
 
     /** How many times in a row that face found nothing to do (-1: no such active face). For the self-test. */

@@ -44,6 +44,24 @@ public final class BarrelClicks {
             return;
         }
         BarrelStore st = t.store();
+        if (st.creative) { // 2.3.1: the held item becomes what it gives (and stays in the hand); nothing goes in by hand
+            if (held == null || st.matches(held)) return;
+            if (!may(p, t)) {
+                tell(p, EnumChatFormatting.RED, "You can't change this barrel: it's protected.");
+                return;
+            }
+            st.set(held);
+            t.markDirty();
+            ValierTweaks.LOG.info("{} set the Creative barrel at {} {} {} to {}", p.getCommandSenderName(), t.xCoord, t.yCoord,
+                t.zCoord, held);
+            ChatComponentText msg = new ChatComponentText("This Creative barrel gives ");
+            msg.getChatStyle()
+                .setColor(EnumChatFormatting.GREEN);
+            msg.appendSibling(new net.minecraft.util.ChatComponentTranslation(held.getUnlocalizedName() + ".name"))
+                .appendSibling(new ChatComponentText(" now, without end."));
+            p.addChatMessage(msg);
+            return;
+        }
         boolean twice = twice(p, t);
         if (held != null && st.takes(held)) {
             long n = st.insert(held, held.stackSize, false);
@@ -124,7 +142,7 @@ public final class BarrelClicks {
     }
 
     static String an(String tier) {
-        return (tier.equals("Basic") ? "a " : "an ") + tier; // "an LV", "an MV", ... as they are spoken
+        return (tier.equals("Basic") || tier.equals("Creative") ? "a " : "an ") + tier; // "an LV", "an MV", as spoken
     }
 
     /** Sneak + right-click with a wrench: the barrel comes off as an item holding what it held, and its channel. */

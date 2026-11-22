@@ -30,6 +30,14 @@ public final class BarrelStore {
     Runnable onChange;
     /** Changed since the barrels showing it were last told. */
     boolean dirty;
+    /**
+     * A Creative barrel's (2.3.1): it gives its item forever (its count stays {@link #ENDLESS}, taking leaves it), and
+     * takes nothing in, unless void overflow is on: then its item goes in and is destroyed. Its item is set by hand
+     * ({@link #set}); it is never linked.
+     */
+    boolean creative;
+    /** A Creative barrel's count (what the label, WAILA, AE2 and comparators see). */
+    public static final long ENDLESS = Integer.MAX_VALUE;
     /** Told with the barrels (an AE2 storage bus's view, {@link BarrelAe}). */
     final List<Watcher> watchers = new ArrayList<>(0);
 
@@ -48,7 +56,26 @@ public final class BarrelStore {
     }
 
     public long capacity() {
+        if (creative) return ENDLESS;
         return stacks * (item == null ? 64 : Math.max(1, item.getMaxStackSize()));
+    }
+
+    public boolean creative() {
+        return creative;
+    }
+
+    /** Made a Creative barrel's (or not): its count is endless while it has an item. */
+    void setCreative(boolean on) {
+        creative = on;
+        if (on) count = item == null ? 0 : ENDLESS;
+    }
+
+    /** A Creative barrel gives this from now on (one is kept as its item; the stack itself is left alone). */
+    public void set(ItemStack s) {
+        item = s.copy();
+        item.stackSize = 1;
+        count = ENDLESS;
+        changed();
     }
 
     /** Whether s is the item held (same item, damage and NBT). */
@@ -69,6 +96,7 @@ public final class BarrelStore {
     /** How many of s (up to n) it would take: what fits, or all of them with void overflow. */
     public long room(ItemStack s, long n) {
         if (n <= 0 || !takes(s)) return 0;
+        if (creative) return voidOverflow && item != null ? n : 0;
         if (voidOverflow) return n;
         long cap = stacks * Math.max(1, s.getMaxStackSize());
         return Math.max(0, Math.min(n, cap - count));
@@ -77,7 +105,7 @@ public final class BarrelStore {
     /** Puts up to n of s in; returns how many it took (with void overflow, what doesn't fit is destroyed). */
     public long insert(ItemStack s, long n, boolean simulate) {
         long take = room(s, n);
-        if (take <= 0 || simulate) return take;
+        if (take <= 0 || simulate || creative) return take; // a Creative barrel destroys what it takes
         if (item == null) {
             item = s.copy();
             item.stackSize = 1;
@@ -91,6 +119,7 @@ public final class BarrelStore {
     /** How many can be taken out (automation leaves the keep amount). */
     public long available(boolean automation) {
         if (item == null) return 0;
+        if (creative) return ENDLESS;
         return Math.max(0, count - (automation ? keep : 0));
     }
 
@@ -100,7 +129,7 @@ public final class BarrelStore {
         if (k <= 0) return null;
         ItemStack out = item.copy();
         out.stackSize = (int) Math.min(Integer.MAX_VALUE, k);
-        if (simulate) return out;
+        if (simulate || creative) return out;
         count -= k;
         if (count <= 0 && !locked) {
             count = 0;
@@ -113,7 +142,7 @@ public final class BarrelStore {
     /** Takes up to n out for automation (a long: AE2 asks in longs); returns how many. */
     long take(long n) {
         long k = Math.min(n, available(true));
-        if (k <= 0) return 0;
+        if (k <= 0 || creative) return Math.max(0, k);
         count -= k;
         if (count <= 0 && !locked) {
             count = 0;

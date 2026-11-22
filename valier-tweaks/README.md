@@ -6,6 +6,34 @@ Gameplay additions for the Valier server. **Since 2.0.0 it is needed on the serv
 The newest version is always at https://github.com/Eggonomicon/GTNH_Mods/releases/latest/download/valiertweaks.jar
 (the same jar, named `valiertweaks.jar`; keep only one Valier Tweaks jar in `mods`).
 
+## 2.3.1: Satchel menus stay open, barrels in WAILA and Holo Glasses, small Grid Plugs and Points, loot spawners push into pipes, a Creative barrel
+
+- **Fixed: a Satchel's or Flask's menu closed again as soon as it opened** (right-click in the air). After every
+  right-click the game swaps the held item for an equal copy of it, and the menu took that for the Satchel leaving the
+  hand. It stays open now until it is closed (a different item in that slot still closes it).
+- **Barrels in WAILA**, as JABBA's: what one holds ("640 of 32,768 Iron Ingot"), its tier and size in stacks, its
+  channel, lock and void overflow. WAILA option "Valier barrels".
+- **Holo Glasses (HoloInventory) show a barrel's whole count**, not the one stack its output slot gives automation.
+- **Grid Plugs and Points are small nodes**, as Flux Networks' are: a core half a block wide (the face, small, with the
+  network's ring of light) and an arm with a plate out to each energy block beside it (GregTech, IC2 or RF). Their
+  collision follows the core and arms. Cells and the Controller stay full blocks.
+- **Loot spawners push into Valier pipes.** A pipe face left on Provide (the default) or set to Push/Pull on a loot
+  spawner takes each batch as it is made and sends it on to the network's Push faces (then Request faces short of it),
+  with that face's Deny, Allow and Void lists. No Pull face is needed. A Pull face on a spawner still pulls from its
+  store on its own timer, as before.
+- **Loot spawner menu: upgrade buttons.** Under the status: Looting and Speed with - and + (one Looting or Speed item
+  in from anywhere in your inventory, or one back out), and XP bottles and Damaged as Yes/No buttons (Yes on XP bottles
+  and No on Damaged take their gold or emerald block from your inventory, and switching back gives it back). The
+  tooltips say the level, how many are in it, how many more the next level takes, and what each costs. Sneak-clicks
+  with the blocks still work.
+- **Creative barrel** (creative tab and NEI only: no recipe, no upgrade): right-click it with an item and it gives that
+  item without end (the stack stays in your hand; right-click with another item to change it). Left-click, hoppers,
+  pipes and AE2 take as much as they like. It takes nothing in, unless its void overflow is on: then its item goes in
+  and is destroyed. It can't be linked. WAILA and its label say "Endless".
+- The Satchel fix, the Holo Glasses count and the spawner pushing into pipes need only the server's jar; the small
+  nodes, the WAILA lines, the spawner menu's buttons and the Creative barrel need 2.3.1 on players' computers. 2.3.0
+  players can still join a 2.3.1 server.
+
 ## 2.3.0: Valier Barrels (linked), Satchels and Flasks, the Valier Grid
 
 - **Valier Barrels** hold lots of one item, in 7 tiers (Basic to LuV, 64 to 16,777,216 stacks). Barrels on the same
@@ -239,13 +267,20 @@ Pipes hold nothing in transit, so the flow is what's "in" the pipe system. The s
 someone is looking at, every quarter second.
 
 Loot spawners and XP crafters work with pipes: pipes can take from both. One with only a Valier pipe pulling from it
-(Pull or Provide) works; before 2.0, with nothing to push into, it would wait for "no output".
+(Pull or Provide) works; before 2.0, with nothing to push into, it would wait for "no output". From 2.3.1 a loot spawner
+also pushes into the pipe: a face on it left on Provide or set to Push/Pull carries each batch straight to the
+network's Push faces (then Request faces short of it), by that face's lists, with no Pull face anywhere. A Pull face
+pulls from the spawner's store on its timer, as before (so it keeps the pipe tier's rate).
 
 ## Loot spawner menu and loot filter (2.2.0)
 
 - **Opening it:** right-click a loot spawner (sneak-clicks still do what they did). Players who may change it (its
   claim's members) get the menu; anyone else gets its status, as a sneak-right-click with an empty hand gives.
-- **Top:** the mob and how many a batch, what it is doing (hover for the full status), its upgrades.
+- **Top:** the mob and how many a batch, what it is doing (hover for the full status).
+- **Upgrades (2.3.1):** Looting and Speed with - and + (one item in from anywhere in your inventory, or one back out;
+  one put in in creative just goes when taken out), and XP bottles and Damaged as Yes/No. XP bottles Yes and Damaged
+  No take the config's item (a gold block, an emerald block) from your inventory; switching back gives it back. With
+  the config's item missing or empty, the button can't switch it.
 - **Store tab:** the 27 slots of loot nothing touching it took yet. Take from them; nothing goes in. The line under it
   says how much the filter destroyed in the last hour.
 - **Allow and Void tabs**, the loot filter, each a full filter like a pipe face's list: 18 ghost slots (click with an
@@ -272,6 +307,7 @@ One kind of item, lots of it, with the item and its count on the front.
 | EV | 262,144 | 16,777,216 |
 | IV | 2,097,152 | 134,217,728 |
 | LuV | 16,777,216 | 1,073,741,824 |
+| Creative (2.3.1) | endless | endless |
 
 - **Clicks:** right-click puts the held stack in, a quick second right-click every matching item you carry; left-click
   takes a stack, sneaking one item. Creative players take a stack too, and break a barrel holding something only
@@ -291,9 +327,17 @@ One kind of item, lots of it, with the item and its count on the front.
 - **Automation:** two slots, as barrels usually have: one always looks empty and takes what is put in, the other shows
   up to a stack to take. Valier pipes move their whole amount at once (an Ultimate pipe's 320). AE2 storage buses see
   the whole count. Comparators: 0 empty, 1 to 15 by how full.
+- **WAILA and Holo Glasses (2.3.1):** WAILA shows what a barrel holds ("640 of 32,768 Iron Ingot"), its tier and size in
+  stacks ("10 stacks + 0 of 512 stacks"), its channel and how many barrels share it, lock and void overflow (from what
+  its label already shows: it asks the server for nothing). HoloInventory's Holo Glasses show the whole count.
 - **Cost:** barrels never tick. A store changing a thousand times between updates costs one label update per loaded
   barrel showing it, at most every 10 ticks, sent only to players watching that chunk; labels are drawn within 16 blocks,
   facing the player.
+- **Creative barrel (2.3.1):** from the creative tab or NEI. Right-click it with an item to set what it gives (the
+  stack stays in your hand); right-click with another item to change it. It never runs out: left-click, hoppers, pipes
+  and AE2 storage buses (which see 2,147,483,647) take what they like and its count stays. It takes nothing in, unless
+  its void overflow is on, then its item goes in and is destroyed (a sink for that item). No upgrades, no channel;
+  comparators read 15. A wrench or a break drops it as a Creative barrel still set to its item.
 
 ## Valier Satchels, Flasks and the Dock (2.3.0)
 
@@ -338,6 +382,8 @@ Wireless EU and RF, in GregTech's tiers LV to UV.
   nothing explodes; GregTech cables (they connect to a point as to a generator) at the voltage set in its menu, never
   over the cable's own, so it doesn't burn; IC2 machines in their tier's packets; RF machines RF,
   from RF that came in or EU at 3.6 RF per EU (GregTech's own rate).
+- **Plugs and Points are small (2.3.1):** a core half a block wide and an arm with a plate out to each GregTech, IC2
+  or RF block beside them, as Flux Networks' nodes; drawn into the chunk's mesh (redrawn when a neighbour changes).
 - **Grid Cell:** stores EU, 1,000,000 at LV and 4 times more each tier (UV: 16,384,000,000). Broken or picked up, it
   keeps its energy.
 - **Grid Controller:** charges its team's online players' items (armour, inventory, baubles: GregTech, IC2 and RF
@@ -891,7 +937,10 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
     refused, one barrel's chunk unloaded, another player's channel kept apart, saving and loading, the menu (and not where
     a claim keeps a player out), and an AE2 storage bus seeing, adding and taking the whole count. Also: a full hopper
     under it that can't pass items on adding nothing, a placement Forge undoes (another mod cancelled it) dropping and
-    keeping nothing, and a barrel leaving a locked channel keeping its lock and item.
+    keeping nothing, and a barrel leaving a locked channel keeping its lock and item. 2.3.1: Holo Glasses seeing a linked
+    barrel's whole count (639), not its output slot's stack; the Creative barrel set by a right-click (the stack staying
+    in the hand), giving stacks, a hopper and a Valier pipe taking from it without end, taking nothing in, destroying its
+    item with void overflow on (and still refusing others), no upgrade, no channel, and kept through a wrench pick-up.
   - **`valiertweaks selftest barrelperf`:** 1,024 linked barrels with 1,536 hopper calls a tick, under 1 ms a tick, and
     the shared count exact afterwards.
   - **`valiertweaks selftest satchels`:** pickup into the slot holding the item, new items into empty slots, void
@@ -900,7 +949,9 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
     clicks and settings, the menu closing when the Satchel leaves the hand, the Dock as an inventory and a tank with
     Valier pipes, and Flask pick-up, place, fill and drain. Also: a full voiding slot refusing what is put in by hand
     (only pickups are destroyed), flint and steel used from a Satchel wearing, a Satchel item nobody holds being let go,
-    an item's slot found by lookup as slots empty and fill, and a full hopper under a dock adding nothing.
+    an item's slot found by lookup as slots empty and fill, and a full hopper under a dock adding nothing. 2.3.1: the
+    menu staying open (and working on it) when the game swaps the held Satchel for an equal copy, as after the
+    right-click that opened it, and closing for a different Satchel.
   - **`valiertweaks selftest grid`:** plugs fed by GregTech LV generators, points feeding GregTech LV hulls at their
     voltage, an over-voltage refused at the plug with nothing exploding, equal points sharing, priority 10 taking
     everything, a cell filling from what no point takes and powering a point when plugs stop, EU out as RF at 3.6 per EU,
@@ -910,3 +961,10 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
     colour (from its name, then picked, saved and sent to its blocks), and 10% loss (32 EU in delivers 29).
   - **`valiertweaks selftest gridperf`:** a 200-block network moving power every tick, under 1 ms a tick, its points
     powered the whole time.
+- **2.3.1 additions:** in `valiertweaks selftest pipes`, a loot spawner whose only pipe face on it is left on Provide
+  pushing its batch through to a Push face's chest, with that face's Deny list keeping leather back; in
+  `valiertweaks selftest lootspawner`, the menu's XP bottles and Damaged buttons paid from anywhere in the inventory and
+  refunded, refused without the item, Looting + and - from and to the inventory, and the screen getting the levels.
+  - **21 Nov 2026, as 2.3.1-pre2:** all 14 steps on the test server, 441 checks, none failed (mod 8, barrels 48,
+    satchels 36, grid 20, lootspawner 153, xpcrafter 70, pipes 43, pipeperf 0.272 ms, barrelperf 0.288 ms, gridperf
+    0.036 ms, railboiler 12, boilers 18, trees 12, peaceful 15; the perf numbers with Valier busy beside it).

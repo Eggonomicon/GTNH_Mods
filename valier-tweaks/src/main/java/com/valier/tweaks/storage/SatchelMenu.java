@@ -32,7 +32,7 @@ public class SatchelMenu extends Container implements ValierMenu {
     public final EntityPlayer player;
     /** The player's inventory slot holding it. */
     public final int at;
-    private final ItemStack opened;
+    private ItemStack opened;
 
     public SatchelMenu(EntityPlayer player, int at) {
         this.player = player;
@@ -59,7 +59,12 @@ public class SatchelMenu extends Container implements ValierMenu {
     public SatchelInventory inv() {
         ItemStack now = player.inventory.getStackInSlot(at);
         if (now == null || !(now.getItem() instanceof ItemSatchel)) return null;
-        if (!player.worldObj.isRemote && now != opened) return null;
+        if (!player.worldObj.isRemote && now != opened) {
+            // After every right-click the game swaps the held stack for a copy of itself (NetHandlerPlayServer), so after
+            // the click that opened this menu too: an equal stack is still this Satchel. Anything else closes the menu.
+            if (!ItemStack.areItemStacksEqual(now, opened)) return null;
+            opened = now;
+        }
         return SatchelInventory.of(now);
     }
 

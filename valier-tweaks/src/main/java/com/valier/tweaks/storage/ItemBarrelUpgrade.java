@@ -36,7 +36,7 @@ public class ItemBarrelUpgrade extends Item {
     }
 
     static int tier(ItemStack stack) {
-        return Math.max(1, BarrelTier.clamp(stack.getItemDamage()));
+        return Math.max(1, Math.min(BarrelTier.COUNT - 1, stack.getItemDamage()));
     }
 
     @Override
@@ -57,7 +57,7 @@ public class ItemBarrelUpgrade extends Item {
     @Override
     @SideOnly(Side.CLIENT)
     public IIcon getIconFromDamage(int meta) {
-        return icons[Math.max(1, BarrelTier.clamp(meta))];
+        return icons[Math.max(1, Math.min(BarrelTier.COUNT - 1, meta))];
     }
 
     @Override

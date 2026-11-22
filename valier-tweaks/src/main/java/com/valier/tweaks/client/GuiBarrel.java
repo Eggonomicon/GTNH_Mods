@@ -120,7 +120,8 @@ public class GuiBarrel extends ValierScreen {
         fontRendererObj.drawString("Valier Barrel (" + BarrelTier.NAMES[BarrelTier.clamp(c.tier)] + ")", 8, 5, TEXT);
         String what = c.item == null ? (c.locked ? "Locked, empty" : "Empty") : c.item.getDisplayName();
         fontRendererObj.drawString(trimTo(what, 140), 28, 18, 0x303030);
-        fontRendererObj.drawString(String.format("%,d / %,d", c.count, c.capacity), 28, 28, 0x505050);
+        fontRendererObj.drawString(c.tier == BarrelTier.CREATIVE ? (c.item == null ? "Right-click it with an item" : "Endless")
+            : String.format("%,d / %,d", c.count, c.capacity), 28, 28, 0x505050);
         fontRendererObj.drawString("Keep", 60, 53, TEXT);
         fontRendererObj.drawString(c.channel.isEmpty() ? "Channel: not linked"
             : "Channel: " + c.channel + " (" + c.barrels + (c.barrels == 1 ? " barrel)" : " barrels)"), 8, 73, TEXT);

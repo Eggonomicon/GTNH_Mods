@@ -34,7 +34,7 @@ public class RenderBarrel extends TileEntitySpecialRenderer {
         ForgeDirection d = ForgeDirection.getOrientation(t.facing);
         if (-cx * d.offsetX - cz * d.offsetZ <= 0.5) return; // the player isn't in front of its label
         if (t.label == null || t.labelFor != t.shownCount) {
-            t.label = text(t.shownCount);
+            t.label = t.tier == com.valier.tweaks.storage.BarrelTier.CREATIVE ? "Endless" : text(t.shownCount);
             t.labelFor = t.shownCount;
         }
         Minecraft mc = Minecraft.getMinecraft();

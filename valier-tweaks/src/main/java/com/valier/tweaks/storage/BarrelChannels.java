@@ -128,6 +128,7 @@ public final class BarrelChannels extends WorldSavedData {
 
     /** Links t to the channel called name in scope. Returns null when done, else why not. */
     String join(TileBarrel t, String scope, String name) {
+        if (t.tier == BarrelTier.CREATIVE) return "A Creative barrel can't be linked.";
         name = clean(name);
         if (name.isEmpty()) return "Type a channel name first.";
         Channel c = channels.get(key(scope, name));

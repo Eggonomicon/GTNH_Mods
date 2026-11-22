@@ -8,16 +8,19 @@ import net.minecraft.block.BlockContainer;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.creativetab.CreativeTabs;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.IIcon;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
+import net.minecraftforge.common.util.ForgeDirection;
 
 import com.valier.tweaks.LootSpawners;
 import com.valier.tweaks.ValierGui;
@@ -38,7 +41,7 @@ public class BlockGrid extends BlockContainer {
 
     public final int kind;
     @SideOnly(Side.CLIENT)
-    private IIcon[] icons;
+    private IIcon[] icons, armIcons;
     /** The ring of light drawn in a block's network colour ({@code client.RenderGrid}). */
     @SideOnly(Side.CLIENT)
     public static IIcon light;
@@ -48,11 +51,99 @@ public class BlockGrid extends BlockContainer {
     public BlockGrid(int kind) {
         super(Material.iron);
         this.kind = kind;
+        // Block's constructor asked isOpaqueCube() before kind was set: plugs and points are small, the others full.
+        opaque = !node();
+        lightOpacity = node() ? 0 : 255;
         setHardness(4.0F);
         setResistance(20.0F);
         setStepSound(soundTypeMetal);
         setHarvestLevel("pickaxe", 1);
         setBlockName(ValierTweaks.MODID + "." + NAMES[kind]);
+    }
+
+    /** Plugs and points are small nodes, as Flux Networks' are: a core, and an arm out to each energy block beside it. */
+    public boolean node() {
+        return kind == TileGrid.PLUG || kind == TileGrid.POINT;
+    }
+
+    /** A node's core spans 4 to 12 pixels, its arms 6 to 10, the plates at their ends 5 to 11 (one pixel thick). */
+    public static final float CORE = 4 / 16F, ARM = 6 / 16F, PLATE = 5 / 16F;
+
+    @Override
+    public boolean isOpaqueCube() {
+        return !node();
+    }
+
+    @Override
+    public boolean renderAsNormalBlock() {
+        return !node();
+    }
+
+    /** A node's sides with an arm (a bit each, by ForgeDirection): those with an energy block beside it. */
+    public int arms(IBlockAccess w, int x, int y, int z) {
+        if (!node()) return 0;
+        int m = 0;
+        for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS)
+            if (GridEnergy.connects(w.getTileEntity(x + d.offsetX, y + d.offsetY, z + d.offsetZ), d)) m |= 1 << d.ordinal();
+        return m;
+    }
+
+    /** The box (0 to 1) of an arm toward d, or with plate = true of the plate at its end. */
+    public static float[] armBox(ForgeDirection d, boolean plate) {
+        float lo = plate ? PLATE : ARM, hi = 1 - lo, in = plate ? 1 - 1 / 16F : 1 - CORE;
+        float[] b = { lo, lo, lo, hi, hi, hi };
+        int[] off = { d.offsetX, d.offsetY, d.offsetZ };
+        for (int a = 0; a < 3; a++) {
+            if (off[a] < 0) {
+                b[a] = 0;
+                b[a + 3] = 1 - in;
+            } else if (off[a] > 0) {
+                b[a] = in;
+                b[a + 3] = 1;
+            }
+        }
+        return b;
+    }
+
+    @Override
+    public void setBlockBoundsBasedOnState(IBlockAccess w, int x, int y, int z) {
+        if (!node()) {
+            setBlockBounds(0, 0, 0, 1, 1, 1);
+            return;
+        }
+        int m = arms(w, x, y, z);
+        float lo = CORE, hi = 1 - CORE;
+        setBlockBounds(arm(m, ForgeDirection.WEST) ? 0 : lo, arm(m, ForgeDirection.DOWN) ? 0 : lo, arm(m, ForgeDirection.NORTH) ? 0 : lo,
+            arm(m, ForgeDirection.EAST) ? 1 : hi, arm(m, ForgeDirection.UP) ? 1 : hi, arm(m, ForgeDirection.SOUTH) ? 1 : hi);
+    }
+
+    static boolean arm(int arms, ForgeDirection d) {
+        return (arms & 1 << d.ordinal()) != 0;
+    }
+
+    @Override
+    public void setBlockBoundsForItemRender() {
+        setBlockBounds(0, 0, 0, 1, 1, 1);
+    }
+
+    /** A node collides with its core and its arms, not the whole block. */
+    @Override
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public void addCollisionBoxesToList(World w, int x, int y, int z, AxisAlignedBB mask, List list, Entity e) {
+        if (!node()) {
+            super.addCollisionBoxesToList(w, x, y, z, mask, list, e);
+            return;
+        }
+        int m = arms(w, x, y, z);
+        box(list, mask, x, y, z, new float[] { CORE, CORE, CORE, 1 - CORE, 1 - CORE, 1 - CORE });
+        for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) if (arm(m, d)) box(list, mask, x, y, z, armBox(d, false));
+        setBlockBoundsBasedOnState(w, x, y, z);
+    }
+
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    private static void box(List list, AxisAlignedBB mask, int x, int y, int z, float[] b) {
+        AxisAlignedBB bb = AxisAlignedBB.getBoundingBox(x + b[0], y + b[1], z + b[2], x + b[3], y + b[4], z + b[5]);
+        if (mask.intersectsWith(bb)) list.add(bb);
     }
 
     public int tiers() {
@@ -97,6 +188,16 @@ public class BlockGrid extends BlockContainer {
         for (int t = 0; t < tiers(); t++) icons[t] = r.registerIcon(ValierTweaks.MODID + ":" + NAMES[kind] + (tiers() > 1 ? "_" + t : ""));
         blockIcon = icons[0];
         light = r.registerIcon(ValierTweaks.MODID + ":grid_light");
+        if (node()) {
+            armIcons = new IIcon[tiers()];
+            for (int t = 0; t < tiers(); t++) armIcons[t] = r.registerIcon(ValierTweaks.MODID + ":grid_arm_" + t);
+        }
+    }
+
+    /** A node's arm (and plate) texture: the tier's colour down the middle. */
+    @SideOnly(Side.CLIENT)
+    public IIcon arm(int meta) {
+        return armIcons == null ? getIcon(0, meta) : armIcons[Math.max(0, Math.min(armIcons.length - 1, meta))];
     }
 
     @Override

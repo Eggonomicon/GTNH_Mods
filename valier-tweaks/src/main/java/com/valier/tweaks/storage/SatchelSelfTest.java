@@ -237,6 +237,17 @@ public final class SatchelSelfTest {
         ItemStack swap = m.slotClick(5, 0, 2, player);
         SatchelSelfTest.check(r == null && swap == null && player.inventory.getStackInSlot(0) == bag && player.inventory.getItemStack() == null,
             "the open Satchel's own slot can't be clicked or swapped away");
+        // The game leaves a copy in the hand after the right-click that opened the menu (NetHandlerPlayServer).
+        ItemStack copy = ItemStack.copyItemStack(bag);
+        player.inventory.setInventorySlotContents(0, copy);
+        boolean stays = m.canInteractWith(player);
+        m.apply(player, SatchelMenu.TAKE, 0, 0, null, null);
+        boolean onCopy = SatchelInventory.of(copy).counts[0] == 386 && player.inventory.getItemStack() != null;
+        m.apply(player, SatchelMenu.PUT, 0, 0, null, null);
+        SatchelSelfTest.check(stays && onCopy && SatchelInventory.of(copy).counts[0] == 450,
+            "with the hand's Satchel swapped for an equal copy (as after the right-click that opened it), the menu stays open and works on it");
+        player.inventory.setInventorySlotContents(0, satchel(SatchelTier.LV));
+        SatchelSelfTest.check(!m.canInteractWith(player), "a different Satchel put in its slot closes the menu");
         player.inventory.setInventorySlotContents(0, null);
         SatchelSelfTest.check(!m.canInteractWith(player), "with the Satchel gone from the hand, the menu closes");
         clearInventory();

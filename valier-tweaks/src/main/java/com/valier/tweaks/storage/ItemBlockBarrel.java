@@ -92,18 +92,24 @@ public class ItemBlockBarrel extends ItemBlock {
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         int t = BarrelTier.clamp(stack.getItemDamage());
-        list.add(EnumChatFormatting.GRAY + "Holds " + String.format("%,d", BarrelTier.stacks(t)) + " stacks of one item.");
+        boolean creative = t == BarrelTier.CREATIVE;
+        if (creative) {
+            list.add(EnumChatFormatting.LIGHT_PURPLE + "Gives its item without end.");
+            list.add(EnumChatFormatting.GRAY + "Right-click it with an item to set it.");
+        } else list.add(EnumChatFormatting.GRAY + "Holds " + String.format("%,d", BarrelTier.stacks(t)) + " stacks of one item.");
         NBTTagCompound tag = tag(stack);
         if (tag != null) {
             BarrelStore s = new BarrelStore();
             s.read(tag.getCompoundTag("Store"));
-            if (!s.isEmpty()) list.add(EnumChatFormatting.YELLOW + String.format("%,d", s.count()) + " × " + s.item()
-                .getDisplayName());
+            if (!s.isEmpty()) list.add(EnumChatFormatting.YELLOW + (creative ? "Gives " : String.format("%,d", s.count()) + " × ")
+                + s.item()
+                    .getDisplayName());
             if (s.locked) list.add(EnumChatFormatting.AQUA + "Locked to its item");
             if (!tag.getString("Channel")
                 .isEmpty()) list.add(EnumChatFormatting.LIGHT_PURPLE + "Rejoins channel \"" + tag.getString("Channel") + "\" when placed");
         }
-        list.add(EnumChatFormatting.DARK_GRAY + "Right-click: put in. Left-click: take a stack.");
+        if (!creative) list.add(EnumChatFormatting.DARK_GRAY + "Right-click: put in. Left-click: take a stack.");
+        else list.add(EnumChatFormatting.DARK_GRAY + "Left-click: take a stack. Sneaking: one.");
         list.add(EnumChatFormatting.DARK_GRAY + "Sneak + right-click, empty hand: its menu.");
     }
 }

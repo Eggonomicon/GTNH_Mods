@@ -38,7 +38,9 @@ public class LootMenu extends Container implements ValierMenu {
 
     /** The store view; the lists are {@link FaceConfig#ALLOW} and {@link FaceConfig#VOID}. */
     public static final int STORE = -1;
-    public static final int GHOST_Y = 82, STORE_Y = 61, INV_Y = 133, HOTBAR_Y = 191;
+    /** The upgrade buttons (2.3.1): Looting and Speed take {@code a} +1 (put one in) or -1 (take one back). */
+    public static final int XP = 50, DAMAGED = 51, LOOTING = 52, SPEED = 53;
+    public static final int GHOST_Y = 102, STORE_Y = 81, INV_Y = 153, HOTBAR_Y = 211;
     public static final int STORE_FROM = FaceConfig.FILTER, INV_FROM = STORE_FROM + LootSpawnerTile.SLOTS;
 
     /** The spawner (server only; null on players' computers). */
@@ -53,6 +55,11 @@ public class LootMenu extends Container implements ValierMenu {
     /** From the server, for the screen. */
     public String line1 = "", line2 = "", line3 = "", full = "", note = "";
     public long voided;
+    /** Its upgrades, from the server: levels, items in it, and what one costs (null: none can be put in here). */
+    public int looting, lootingIn, speed, speedIn, xpPerBottle = 7;
+    public boolean speedBelow, xp, noDamaged;
+    public int[] lootingTiers = {}, speedTiers = {};
+    public ItemStack lootingItem, speedItem, xpItem, filterItem;
     private String lastSent;
 
     public LootMenu(InventoryPlayer inv, LootSpawnerTile tile, IInventory store, World world, int x, int y, int z) {
@@ -152,6 +159,19 @@ public class LootMenu extends Container implements ValierMenu {
     @Override
     public void apply(EntityPlayer player, int action, int a, int b, ItemStack stack, String text) {
         if (!server()) return;
+        if (action >= XP && action <= SPEED) { // the upgrades, paid from (and given back to) the inventory
+            if (!may(player)) return;
+            if (action == XP) LootSpawners.toggleXp(player, tile, null);
+            else if (action == DAMAGED) LootSpawners.toggleFilter(player, tile, null);
+            else {
+                LootSpawners.Kind k = action == LOOTING ? LootSpawners.Kind.LOOTING : LootSpawners.Kind.SPEED;
+                if (a > 0) LootSpawners.addBlock(player, tile, k, null);
+                else LootSpawners.takeOne(player, tile, k);
+            }
+            note = "";
+            detectAndSendChanges();
+            return;
+        }
         if (action == PipeActionMessage.LIST) { // only what the menu shows
             if (a == STORE) store = true;
             else if (a == FaceConfig.ALLOW || a == FaceConfig.VOID) {
@@ -254,7 +274,32 @@ public class LootMenu extends Container implements ValierMenu {
             .getUnformattedText());
         t.setLong("Voided", tile.voidedLastHour());
         t.setString("Note", note);
+        t.setByte("Looting", (byte) tile.looting.level());
+        t.setInteger("LootingIn", tile.looting.blocks);
+        t.setByte("Speed", (byte) tile.speedLevel());
+        t.setInteger("SpeedIn", tile.speed.blocks);
+        t.setBoolean("SpeedBelow", LootSpawners.speedBelow(tile));
+        t.setIntArray("LootingTiers", TweaksConfig.lootSpawnerLootingBlocks);
+        t.setIntArray("SpeedTiers", TweaksConfig.lootSpawnerSpeedBlocks);
+        t.setBoolean("Xp", tile.xpBottles);
+        t.setBoolean("NoDamaged", tile.noDamaged);
+        t.setInteger("XpPer", TweaksConfig.lootSpawnerXpPerBottle);
+        cost(t, "LootingItem", TweaksConfig.lootSpawnerLootingItem, 1);
+        cost(t, "SpeedItem", TweaksConfig.lootSpawnerSpeedItem, 1);
+        cost(t, "XpItem", TweaksConfig.lootSpawnerXpItem, TweaksConfig.lootSpawnerXpItemCount);
+        cost(t, "FilterItem", TweaksConfig.lootSpawnerFilterItem, TweaksConfig.lootSpawnerFilterItemCount);
         return t;
+    }
+
+    /** What an upgrade costs, as a stack, when its config names an item. */
+    private static void cost(NBTTagCompound t, String key, String setting, int count) {
+        net.minecraft.item.Item item = LootSpawners.itemOf(setting);
+        if (item != null) t.setTag(key, new ItemStack(item, count, Math.max(0, LootSpawners.metaOf(setting))).writeToNBT(
+            new NBTTagCompound()));
+    }
+
+    private static ItemStack costOf(NBTTagCompound t, String key) {
+        return t.hasKey(key, 10) ? ItemStack.loadItemStackFromNBT(t.getCompoundTag(key)) : null;
     }
 
     @Override
@@ -277,6 +322,20 @@ public class LootMenu extends Container implements ValierMenu {
         full = t.getString("Full");
         voided = t.getLong("Voided");
         note = t.getString("Note");
+        looting = t.getByte("Looting");
+        lootingIn = t.getInteger("LootingIn");
+        speed = t.getByte("Speed");
+        speedIn = t.getInteger("SpeedIn");
+        speedBelow = t.getBoolean("SpeedBelow");
+        lootingTiers = t.getIntArray("LootingTiers");
+        speedTiers = t.getIntArray("SpeedTiers");
+        xp = t.getBoolean("Xp");
+        noDamaged = t.getBoolean("NoDamaged");
+        xpPerBottle = t.getInteger("XpPer");
+        lootingItem = costOf(t, "LootingItem");
+        speedItem = costOf(t, "SpeedItem");
+        xpItem = costOf(t, "XpItem");
+        filterItem = costOf(t, "FilterItem");
     }
 
     /** Three short lines: the mob and how much a batch is; what it is doing; its upgrades. */
@@ -332,7 +391,7 @@ public class LootMenu extends Container implements ValierMenu {
         else LootSpawners.tellStatus(player, t);
     }
 
-    static Object server(EntityPlayer player, World world, int x, int y, int z) {
+    public static Object server(EntityPlayer player, World world, int x, int y, int z) {
         TileEntity te = world.getTileEntity(x, y, z);
         if (!(te instanceof LootSpawnerTile)) return null;
         LootSpawnerTile t = (LootSpawnerTile) te;

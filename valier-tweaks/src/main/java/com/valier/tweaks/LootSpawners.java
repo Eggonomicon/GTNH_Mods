@@ -226,11 +226,16 @@ public final class LootSpawners {
 
     /**
      * Sneak-right-click on a loot spawner with the filter item (an emerald block by default): damaged items are thrown
-     * away from now on, and the item is kept in the spawner. Again: switched off, and the item is given back.
+     * away from now on, and the item is kept in the spawner. Again: switched off, and the item is given back. From the
+     * menu ({@code held} null, 2.3.1) the item is taken from anywhere in the inventory.
      */
     static void toggleFilter(EntityPlayer player, LootSpawnerTile t, ItemStack held) {
         if (!mayChange(player, t.getWorldObj(), t.xCoord, t.yCoord, t.zCoord)) {
             tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
+            return;
+        }
+        if (held == null && itemOf(TweaksConfig.lootSpawnerFilterItem) == null) {
+            tell(player, text(EnumChatFormatting.RED, "Throwing damaged items away can't be switched on or off on this server."));
             return;
         }
         if (t.noDamaged) {
@@ -250,17 +255,9 @@ public final class LootSpawners {
             tell(player, msg);
             return;
         }
-        int cost = TweaksConfig.lootSpawnerFilterItemCount;
-        boolean creative = player.capabilities.isCreativeMode;
-        if (!creative && held.stackSize < cost) {
-            tell(player, text(EnumChatFormatting.RED, "That takes " + cost + " of them."));
-            return;
-        }
-        if (!creative) {
-            t.filterPaid = held.splitStack(cost);
-            if (held.stackSize <= 0) player.inventory.setInventorySlotContents(player.inventory.currentItem, null);
-            player.inventoryContainer.detectAndSendChanges();
-        }
+        ItemStack paid = pay(player, held, TweaksConfig.lootSpawnerFilterItem, TweaksConfig.lootSpawnerFilterItemCount, null);
+        if (paid == NOT_PAID) return;
+        t.filterPaid = paid;
         t.noDamaged = true;
         int thrown = 0;
         for (int i = 0; i < LootSpawnerTile.SLOTS; i++) {
@@ -543,11 +540,16 @@ public final class LootSpawners {
     /**
      * Sneak-right-click on a loot spawner with the XP item (a gold block by default): the XP its mobs would have
      * dropped comes out as bottles o' enchanting from now on, and the item is kept in the spawner. Again: switched off,
-     * and the item is given back.
+     * and the item is given back. From the menu ({@code held} null, 2.3.1) the item is taken from anywhere in the
+     * inventory.
      */
     static void toggleXp(EntityPlayer player, LootSpawnerTile t, ItemStack held) {
         if (!mayChange(player, t.getWorldObj(), t.xCoord, t.yCoord, t.zCoord)) {
             tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
+            return;
+        }
+        if (held == null && itemOf(TweaksConfig.lootSpawnerXpItem) == null) {
+            tell(player, text(EnumChatFormatting.RED, "Bottles o' enchanting can't be switched on or off on this server."));
             return;
         }
         if (t.xpBottles) {
@@ -567,17 +569,9 @@ public final class LootSpawners {
             tell(player, msg);
             return;
         }
-        int cost = TweaksConfig.lootSpawnerXpItemCount;
-        boolean creative = player.capabilities.isCreativeMode;
-        if (!creative && held.stackSize < cost) {
-            tell(player, text(EnumChatFormatting.RED, "That takes " + cost + " of them."));
-            return;
-        }
-        if (!creative) {
-            t.xpPaid = held.splitStack(cost);
-            if (held.stackSize <= 0) player.inventory.setInventorySlotContents(player.inventory.currentItem, null);
-            player.inventoryContainer.detectAndSendChanges();
-        }
+        ItemStack paid = pay(player, held, TweaksConfig.lootSpawnerXpItem, TweaksConfig.lootSpawnerXpItemCount, null);
+        if (paid == NOT_PAID) return;
+        t.xpPaid = paid;
         t.xpBottles = true;
         t.markDirty();
         ValierTweaks.LOG.info("{} made the loot spawner at {} turn its XP into bottles o' enchanting", player.getCommandSenderName(),
@@ -590,8 +584,13 @@ public final class LootSpawners {
     /**
      * Sneak-right-click on a loot spawner with a Looting item (a lapis block by default) or a Speed item (cursed earth):
      * one goes in, and how many it holds sets the level ({@link Kind#tiers}). For Speed one right under it counts too.
+     * From the menu ({@code held} null, 2.3.1) it is taken from anywhere in the inventory.
      */
     static void addBlock(EntityPlayer player, LootSpawnerTile t, Kind kind, ItemStack held) {
+        if (held == null && itemOf(kind.item()) == null) {
+            tell(player, text(EnumChatFormatting.RED, "No " + kind.word + " items can be put in on this server."));
+            return;
+        }
         LootSpawnerTile.Upgrade u = kind.of(t);
         int[] tiers = kind.tiers();
         int below = kind == Kind.SPEED && speedBelow(t) ? 1 : 0;
@@ -600,7 +599,7 @@ public final class LootSpawners {
             tell(player, text(EnumChatFormatting.GRAY, "It already has " + kind.word + " " + roman(level) + ", the most it can have."));
             return;
         }
-        if (u.paid > 0 && u.item != null && !MobLoot.sameItem(u.item, copyOne(held))) {
+        if (held != null && u.paid > 0 && u.item != null && !MobLoot.sameItem(u.item, copyOne(held))) {
             tell(player, text(EnumChatFormatting.RED, "It holds ").appendSibling(itemName(u.item))
                 .appendSibling(new ChatComponentText(" for its " + kind.word + "; only more of those go in.")));
             return;
@@ -609,14 +608,13 @@ public final class LootSpawners {
             tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
             return;
         }
+        ItemStack paid = pay(player, held, kind.item(), 1, u.paid > 0 ? u.item : null);
+        if (paid == NOT_PAID) return;
         int factor = t.speedFactor();
         u.blocks++;
-        if (!player.capabilities.isCreativeMode) {
+        if (paid != null) {
             u.paid++;
-            if (u.item == null) u.item = copyOne(held);
-            held.stackSize--;
-            if (held.stackSize <= 0) player.inventory.setInventorySlotContents(player.inventory.currentItem, null);
-            player.inventoryContainer.detectAndSendChanges();
+            if (u.item == null) u.item = copyOne(paid);
         }
         int now = kind.level(u.blocks + below);
         if (t.timer > 0) t.timer = Math.max(1, t.timer * factor / t.speedFactor()); // the batch counting down speeds up too
@@ -633,6 +631,94 @@ public final class LootSpawners {
             + kind.word + " " + roman(now + 1) + "."));
         else msg.appendSibling(new ChatComponentText(" That's the most it can have."));
         tell(player, msg);
+    }
+
+    /**
+     * From the menu (2.3.1): one Looting or Speed item comes back out, and the level may drop. A paid one comes back
+     * to the player; one put in in creative (more in it than were paid for) just goes.
+     */
+    static void takeOne(EntityPlayer player, LootSpawnerTile t, Kind kind) {
+        if (!mayChange(player, t.getWorldObj(), t.xCoord, t.yCoord, t.zCoord)) {
+            tell(player, text(EnumChatFormatting.RED, "You can't change this spawner: it's protected."));
+            return;
+        }
+        LootSpawnerTile.Upgrade u = kind.of(t);
+        if (u.blocks <= 0) {
+            tell(player, text(EnumChatFormatting.GRAY, "It has no " + kind.word + " items in it to take back."));
+            return;
+        }
+        int below = kind == Kind.SPEED && speedBelow(t) ? 1 : 0;
+        int level = kind.level(u.blocks + below), factor = t.speedFactor();
+        ItemStack back = null;
+        if (u.paid >= u.blocks && u.item != null) {
+            back = copyOne(u.item);
+            u.paid--;
+        }
+        u.blocks--;
+        if (u.paid <= 0) {
+            u.paid = 0;
+            u.item = null;
+        }
+        if (t.timer > 0) t.timer = Math.max(1, t.timer * factor / t.speedFactor()); // the batch counting down slows too
+        t.markDirty();
+        t.getWorldObj()
+            .markBlockForUpdate(t.xCoord, t.yCoord, t.zCoord); // the hover names its level
+        if (back != null) give(player, back);
+        int now = kind.level(u.blocks + below);
+        ValierTweaks.LOG.info("{} took a {} item out of the loot spawner at {}: {} now, {} {}", player.getCommandSenderName(),
+            kind.word.toLowerCase(), t.where(), u.blocks, kind.word, now);
+        tell(player, text(EnumChatFormatting.GREEN, (now == level ? "Still " : "") + (now > 0 ? kind.word + " " + roman(now)
+            : "No " + kind.word) + (now == level ? "" : " now") + " (" + u.blocks + " in it" + (below > 0 ? " and one under it" : "")
+            + ")." + (back != null ? " One came back to you." : "")));
+    }
+
+    /** Not paid: the player was told what it takes. */
+    static final ItemStack NOT_PAID = new ItemStack(Blocks.stone, 0);
+
+    /**
+     * Takes what switching an upgrade on costs: off the held stack (a sneak-click), or, from the menu ({@code held}
+     * null), from anywhere in the main inventory, only items like {@code like} when that is set (a Looting item must be
+     * the same as the ones already paid). Returns what was paid: null in creative (nothing is), {@link #NOT_PAID} when
+     * they don't have it, after telling them what it takes.
+     */
+    static ItemStack pay(EntityPlayer player, ItemStack held, String setting, int cost, ItemStack like) {
+        if (player.capabilities.isCreativeMode) return null;
+        ItemStack[] inv = player.inventory.mainInventory;
+        if (held != null) {
+            if (held.stackSize < cost) {
+                tell(player, text(EnumChatFormatting.RED, "That takes " + cost + " of them."));
+                return NOT_PAID;
+            }
+            ItemStack paid = held.splitStack(cost);
+            if (held.stackSize <= 0) player.inventory.setInventorySlotContents(player.inventory.currentItem, null);
+            player.inventoryContainer.detectAndSendChanges();
+            return paid;
+        }
+        int have = 0;
+        for (ItemStack s : inv) if (payWith(s, setting, like)) have += s.stackSize;
+        if (have < cost) {
+            IChatComponent what = like != null ? new ChatComponentText(cost != 1 ? cost + " × " : "a ").appendSibling(itemName(like))
+                : costText(setting, cost);
+            tell(player, text(EnumChatFormatting.RED, "That takes ").appendSibling(what)
+                .appendSibling(new ChatComponentText(" from your inventory.")));
+            return NOT_PAID;
+        }
+        ItemStack paid = null;
+        for (int i = 0; i < inv.length && (paid == null || paid.stackSize < cost); i++) {
+            ItemStack s = inv[i];
+            if (!payWith(s, setting, paid != null ? paid : like)) continue;
+            ItemStack part = s.splitStack(Math.min(s.stackSize, cost - (paid == null ? 0 : paid.stackSize)));
+            if (s.stackSize <= 0) inv[i] = null;
+            if (paid == null) paid = part;
+            else paid.stackSize += part.stackSize;
+        }
+        player.inventory.markDirty();
+        if (player.openContainer != null) player.openContainer.detectAndSendChanges();
+        return paid;
+    }
+
+    private static boolean payWith(ItemStack s, String setting, ItemStack like) {
+        return s != null && s.stackSize > 0 && matches(setting, s) && (like == null || MobLoot.sameItem(like, s));
     }
 
     /**
@@ -1319,13 +1405,16 @@ public final class LootSpawners {
 
     /**
      * Into one neighbour, entering from side {@code from} (its side facing the spawner): an inventory (a double chest
-     * as one, sided inventories by their own rules, the way a hopper does it), else an EnderIO conduit, else a
-     * BuildCraft pipe.
+     * as one, sided inventories by their own rules, the way a hopper does it), else a Valier pipe (through a Provide or
+     * Push/Pull face, on to its Push faces; a Pull face pulls from the store on its own), else an EnderIO conduit, else
+     * a BuildCraft pipe.
      */
     static ItemStack insertInto(World world, int x, int y, int z, ForgeDirection from, ItemStack stack) {
         TileEntity te = neighbour(world, x, y, z);
         if (te == null) return stack;
         try {
+            if (te instanceof com.valier.tweaks.pipe.TilePipe) // 2.3.1
+                return com.valier.tweaks.pipe.PipeNetworks.pushInto(world, x, y, z, from.ordinal(), stack);
             if (te instanceof IInventory) {
                 // A double chest as one, like a hopper does, unless that would mean loading the chunk next to it.
                 boolean around = world.blockExists(x + 1, y, z) && world.blockExists(x - 1, y, z)

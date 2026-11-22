@@ -55,7 +55,10 @@ public final class DevScene {
     static final int BARRELS_X = 20, GRID_Z = 8;
     /** The server's side of the timeline (DevClient moves the camera and takes the shots to match). */
     static final int LOOT_MENU = 376, BARREL_MENU = 416, SATCHEL_MENU = 440, FLASK_MENU = 464, GRID_MENU = 488;
-    private int wait;
+    /** Each menu's shot: {tick, the client's shot number} (see DevClient.menuShot). */
+    static final int[][] SHOTS = { { LOOT_MENU + 18, 9 }, { LOOT_MENU + 28, 10 }, { BARREL_MENU + 15, 11 }, { SATCHEL_MENU + 14, 12 },
+        { FLASK_MENU + 14, 13 }, { GRID_MENU + 16, 14 } };
+    private int wait, held;
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
@@ -68,24 +71,48 @@ public final class DevScene {
             built = true;
             return;
         }
+        EntityPlayerMP p = (EntityPlayerMP) w.playerEntities.get(0);
+        // A slow client (the real GTNH pack) falls seconds behind this timeline. It holds (5 s at most) until the player
+        // stands by the next menu's block (a menu closes beyond 8 blocks) and until the client has each menu's shot.
+        if (behind(p)) {
+            if (++held < 100) return;
+            ValierTweaks.LOG.warn("[DevClient] the client didn't catch up by tick {}; going on", tick);
+        }
+        held = 0;
         tick++;
-        if (tick == 215) { // the camera (the player) is beside the pipe by now: menus close beyond 8 blocks
-            EntityPlayerMP p = (EntityPlayerMP) w.playerEntities.get(0);
+        if (tick == 215) { // the camera (the player) is beside the pipe by now
             TileEntity te = w.getTileEntity(baseX + 2, baseY, baseZ + 6);
             if (te instanceof TilePipe) PipeGui.open(p, (TilePipe) te, ForgeDirection.WEST.ordinal());
         }
-        EntityPlayerMP p = (EntityPlayerMP) w.playerEntities.get(0);
         int y = baseY;
         if (tick == LOOT_MENU) p.openGui(ValierTweaks.instance, ValierGui.LOOT, w, baseX + 14, y, baseZ);
         if (tick == BARREL_MENU) p.openGui(ValierTweaks.instance, ValierGui.BARREL, w, baseX + BARRELS_X + 10, y, baseZ);
         if (tick == SATCHEL_MENU - 8 || tick == FLASK_MENU - 8) p.closeScreen();
         if (tick == SATCHEL_MENU - 6) hand(p, satchel());
         if (tick == FLASK_MENU - 6) hand(p, flask());
-        if (tick == SATCHEL_MENU || tick == FLASK_MENU) p.openGui(ValierTweaks.instance, ValierGui.SATCHEL, w, p.inventory.currentItem, 0, 0);
+        // 2.3.1: the Satchel's and Flask's menus are opened by the client, with a real right-click in the air (DevClient).
         if (tick == GRID_MENU) p.openGui(ValierTweaks.instance, ValierGui.GRID, w, baseX + BARRELS_X + 4, y, baseZ + GRID_Z);
     }
 
+    /** Whether the client is behind at this tick: not yet by the block whose menu opens next, or without its shot. */
+    boolean behind(EntityPlayerMP p) {
+        int y = baseY;
+        if (tick == 214) return !near(p, baseX + 2, y, baseZ + 6);
+        if (tick == LOOT_MENU - 1) return !near(p, baseX + 14, y, baseZ);
+        if (tick == BARREL_MENU - 1) return !near(p, baseX + BARRELS_X + 10, y, baseZ);
+        if (tick == GRID_MENU - 1) return !near(p, baseX + BARRELS_X + 4, y, baseZ + GRID_Z);
+        for (int[] s : SHOTS) if (tick == s[0]) return DevClient.taken <= s[1];
+        return false;
+    }
+
+    static boolean near(EntityPlayerMP p, int x, int y, int z) {
+        return p.getDistanceSq(x + 0.5, y + 0.5, z + 0.5) < 36.0;
+    }
+
     void build(WorldServer w) {
+        // Load (generating if need be) the scene's chunks first: in the GTNH pack a setBlock into a chunk that isn't loaded
+        // yet does nothing, and the barrels and the Grid stand in the next chunk east.
+        for (int cx = -1; cx <= 2; cx++) for (int cz = -1; cz <= 1; cz++) w.theChunkProviderServer.loadChunk(cx, cz);
         baseX = 0;
         baseZ = 0;
         baseY = w.getHeightValue(0, 0);
@@ -115,10 +142,26 @@ public final class DevScene {
         loot(w, baseX + 14, y, baseZ);
         if (!w.playerEntities.isEmpty()) {
             EntityPlayerMP p = (EntityPlayerMP) w.playerEntities.get(0);
+            upgrades(w, baseX + 14, y, baseZ, p);
             barrels(w, y, p);
             grid(w, y, p);
         }
         ValierTweaks.LOG.info("[DevClient] scene built at {} {} {}", baseX, y, baseZ);
+    }
+
+    /** Looting II and XP bottles, put in with its menu's buttons as a player would (2.3.1; free, as in creative). */
+    static void upgrades(WorldServer w, int x, int y, int z, EntityPlayerMP p) {
+        Object m = com.valier.tweaks.LootMenu.server(p, w, x, y, z);
+        if (!(m instanceof com.valier.tweaks.LootMenu)) return;
+        com.valier.tweaks.LootMenu menu = (com.valier.tweaks.LootMenu) m;
+        boolean creative = p.capabilities.isCreativeMode;
+        p.capabilities.isCreativeMode = true;
+        try {
+            for (int i = 0; i < 3; i++) menu.apply(p, com.valier.tweaks.LootMenu.LOOTING, 1, 0, null, null);
+            menu.apply(p, com.valier.tweaks.LootMenu.XP, 0, 0, null, null);
+        } finally {
+            p.capabilities.isCreativeMode = creative;
+        }
     }
 
     /** Some loot in the spawner's store, and a Void list naming rotten flesh and one enchanted book (NBT matched). */
@@ -136,7 +179,7 @@ public final class DevScene {
         t.markDirty();
     }
 
-    /** A barrel of every tier, filled to a ninth (Basic) up to seven ninths (LuV); then two linked LV ones. */
+    /** A barrel of every tier, filled to a ninth (Basic) up to seven ninths (LuV), a Creative one; then two linked LV ones. */
     static void barrels(WorldServer w, int y, EntityPlayerMP p) {
         ItemStack[] fill = { new ItemStack(Blocks.cobblestone), new ItemStack(Items.iron_ingot), new ItemStack(Items.redstone),
             new ItemStack(Blocks.log, 1, 2), new ItemStack(Items.diamond), new ItemStack(Blocks.glass), new ItemStack(Items.gold_ingot) };
@@ -146,6 +189,9 @@ public final class DevScene {
                 .insert(fill[t], b.store()
                     .capacity() * (t + 1) / 9, false);
         }
+        TileBarrel creative = barrel(w, baseX + BARRELS_X + 7, y, baseZ, BarrelTier.CREATIVE); // 2.3.1: ender pearls, endless
+        if (creative != null) creative.store()
+            .set(new ItemStack(Items.ender_pearl));
         // Linked: 640 iron ingots in one, the other joins, one ingot comes out of the second: 639 in both.
         TileBarrel a = barrel(w, baseX + BARRELS_X + 8, y, baseZ, BarrelTier.LV);
         TileBarrel c = barrel(w, baseX + BARRELS_X + 10, y, baseZ, BarrelTier.LV);

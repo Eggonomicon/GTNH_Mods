@@ -63,7 +63,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
     static final UUID STRANGER = UUID.fromString("00000000-0000-4000-8000-0000000000b2");
 
     // The rigs, checked later.
-    int[] a1, b1, a2, b2, c3, d3, dc, out4, e5, f5, wa, wb, wc, ls, lsOut, idle;
+    int[] a1, b1, a2, b2, c3, d3, dc, out4, e5, f5, wa, wb, wc, ls, lsOut, idle, lsPush, lsPushOut;
     int[] idlePipe;
 
     void start() {
@@ -270,6 +270,24 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         TilePipe p = pipe(p1, ModBlocks.itemPipe, PipeTier.ELITE, OWNER);
         mode(p, ForgeDirection.WEST, FaceMode.EXTRACT);
         mode(p, ForgeDirection.EAST, FaceMode.INSERT);
+
+        // 2.3.1: a spawner pushing into a pipe whose face on it is left on Provide (no Pull face anywhere); that face's
+        // Deny list keeps leather back (it stays in the spawner).
+        lsPush = at(6, 2);
+        lsPushOut = at(6, 4);
+        world.setBlock(lsPush[0], y, lsPush[2], Blocks.mob_spawner);
+        placed.add(lsPush);
+        net.minecraft.tileentity.TileEntityMobSpawner v2 = (net.minecraft.tileentity.TileEntityMobSpawner) world.getTileEntity(lsPush[0],
+            y, lsPush[2]);
+        v2.func_145881_a()
+            .setEntityName("Cow");
+        LootSpawnerTile.mark(v2);
+        LootSpawners.swap(world, v2).timer = 1;
+        chest(lsPushOut);
+        TilePipe pp = pipe(at(6, 3), ModBlocks.itemPipe, PipeTier.BASIC, OWNER);
+        mode(pp, ForgeDirection.NORTH, FaceMode.PROVIDE);
+        if (pp.face(ForgeDirection.NORTH.ordinal()) != null) pp.face(ForgeDirection.NORTH.ordinal()).deny.filter[0] = new ItemStack(Items.leather);
+        mode(pp, ForgeDirection.SOUTH, FaceMode.INSERT);
 
         idle = at(8, 12);
         idlePipe = at(9, 12);
@@ -743,6 +761,12 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         for (int i = 0; lo != null && i < lo.getSizeInventory(); i++) if (lo.getStackInSlot(i) != null) loot += lo.getStackInSlot(i).stackSize;
         SelfTest.check(loot > 0, "a loot spawner with only a Valier pipe pulling from it makes loot, and the pipe takes it to the "
             + "chest (" + loot + " items)");
+        IInventory po = inv(lsPushOut);
+        TileEntity pt = world.getTileEntity(lsPush[0], y, lsPush[2]);
+        int beef = count(po, Items.beef) + count(po, Items.cooked_beef), leather = count(po, Items.leather);
+        SelfTest.check(beef > 0 && leather == 0 && pt instanceof LootSpawnerTile && count((IInventory) pt, Items.beef) == 0,
+            "a loot spawner pushes its loot into a Valier pipe whose face on it is left on Provide, on to the chest on its Push "
+                + "face; leather, on that face's Deny list, stays in the spawner (" + beef + " beef, " + leather + " leather in the chest)");
         int sleeping = PipeNetworks.idleOf(world, idlePipe[0], y, idlePipe[2], ForgeDirection.WEST.ordinal());
         SelfTest.check(sleeping >= 3, "an Extract face with nothing to take sleeps longer each time (" + sleeping + " empty turns)");
         PipeNetwork net = PipeNetworks.networkAt(world, idlePipe[0], y, idlePipe[2]);

@@ -30,6 +30,14 @@ public final class GridEnergy {
         return Math.max(0.01, TweaksConfig.gridRfPerEu);
     }
 
+    /** Whether a plug or point reaches out to this neighbour (drawn as an arm): anything that carries EU or RF. */
+    public static boolean connects(TileEntity te, ForgeDirection towards) {
+        if (te == null || te.isInvalid() || te instanceof TileGrid) return false;
+        if (GT && Gt.is(te)) return true;
+        if (IC2 && Ic2.isTile(te)) return true;
+        return RF && Rf.connects(te, towards.getOpposite());
+    }
+
     /** What a neighbour is to a point: 0 nothing, 1 a GregTech machine or cable, 2 an IC2 sink, 3 an RF receiver. */
     static int kind(TileEntity te, ForgeDirection towards) {
         if (te == null || te.isInvalid() || te instanceof TileGrid) return 0;
@@ -172,6 +180,10 @@ public final class GridEnergy {
 
     static final class Ic2 {
 
+        static boolean isTile(TileEntity te) {
+            return te instanceof ic2.api.energy.tile.IEnergyTile;
+        }
+
         static boolean isSink(TileEntity te) {
             return te instanceof ic2.api.energy.tile.IEnergySink;
         }
@@ -213,6 +225,10 @@ public final class GridEnergy {
     // ---- RF ------------------------------------------------------------------------------------------------------------
 
     static final class Rf {
+
+        static boolean connects(TileEntity te, ForgeDirection side) {
+            return te instanceof cofh.api.energy.IEnergyConnection && ((cofh.api.energy.IEnergyConnection) te).canConnectEnergy(side);
+        }
 
         static boolean isReceiver(TileEntity te, ForgeDirection side) {
             return te instanceof cofh.api.energy.IEnergyReceiver && ((cofh.api.energy.IEnergyReceiver) te).canConnectEnergy(side);

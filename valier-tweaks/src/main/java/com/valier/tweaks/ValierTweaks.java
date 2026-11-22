@@ -149,7 +149,11 @@ public class ValierTweaks {
                 "com.valier.tweaks.grid.GridWaila.callbackRegister");
             cpw.mods.fml.common.event.FMLInterModComms.sendMessage("Waila", "register",
                 "com.valier.tweaks.client.GridHud.callbackRegister");
+            cpw.mods.fml.common.event.FMLInterModComms.sendMessage("Waila", "register",
+                "com.valier.tweaks.storage.BarrelWaila.callbackRegister");
         }
+        // Holo Glasses show a barrel's whole count (the server reads it for them).
+        if (Loader.isModLoaded("holoinventory")) com.valier.tweaks.storage.BarrelHolo.register();
         cpw.mods.fml.common.network.NetworkRegistry.INSTANCE.registerGuiHandler(this, new ValierGui()); // pipe faces, loot spawners
         proxy.init(event);
     }
