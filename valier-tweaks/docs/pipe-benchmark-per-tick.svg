@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="1114" viewBox="0 0 880 1114" role="img" aria-labelledby="t d" font-family="Arial, Helvetica, sans-serif">
+<title id="t">Valier pipes: cost per tick, flat out</title>
+<desc id="d">Against GregTech and EnderIO, Items, 256 rigs: Valier Basic 0.19 ms a tick; Against GregTech and EnderIO, Items, 256 rigs: GregTech (LV conveyor) 0.20 ms a tick; Against GregTech and EnderIO, Items, 256 rigs: EnderIO 0.53 ms a tick; Against GregTech and EnderIO, Fluids, 128 rigs: Valier Basic 0.42 ms a tick; Against GregTech and EnderIO, Fluids, 128 rigs: GregTech (LV pump) 0.90 ms a tick; Against GregTech and EnderIO, Fluids, 128 rigs: EnderIO 1.31 ms a tick; Against GregTech and EnderIO, Idle, 2,048 item pipe blocks: Valier 0.00 ms a tick; Against GregTech and EnderIO, Idle, 2,048 item pipe blocks: GregTech 0.11 ms a tick; Against GregTech and EnderIO, Idle, 2,048 item pipe blocks: EnderIO 0.79 ms a tick; Against AE2, Items, 256 rigs: Valier Basic 0.15 ms a tick; Against AE2, Items, 256 rigs: AE2 buses 1.10 ms a tick; Against AE2, Fluids, 128 rigs: Valier Basic 0.30 ms a tick; Against AE2, Fluids, 128 rigs: Valier Advanced 0.47 ms a tick; Against AE2, Fluids, 128 rigs: Valier Elite 0.73 ms a tick; Against AE2, Fluids, 128 rigs: AE2 fluid buses 0.87 ms a tick</desc>
+<path d="M10.50,0.50 L869.50,0.50 C875.02,0.50 879.50,4.98 879.50,10.50 L879.50,1103.83 C879.50,1109.35 875.02,1113.83 869.50,1113.83 L10.50,1113.83 C4.98,1113.83 0.50,1109.35 0.50,1103.83 L0.50,10.50 C0.50,4.98 4.98,0.50 10.50,0.50Z" fill="#fdfdfe" stroke="#dfe3ea" stroke-width="1"/>
+<text x="28.00" y="46.05" font-size="19" fill="#10141a" font-weight="700">Cost per tick, flat out</text>
+<text x="28.00" y="69.05" font-size="13.5" fill="#4a5260">Milliseconds of server time each tick, out of the 50 ms a tick can take. The costliest case here, 256 AE2 item rigs, took 1.1 ms.</text>
+<path d="M30.64,83.22 L37.36,83.22 C38.82,83.22 40.00,84.41 40.00,85.86 L40.00,92.58 C40.00,94.04 38.82,95.22 37.36,95.22 L30.64,95.22 C29.18,95.22 28.00,94.04 28.00,92.58 L28.00,85.86 C28.00,84.41 29.18,83.22 30.64,83.22Z" fill="#2a78d6"/>
+<text x="46.00" y="93.54" font-size="12" fill="#4a5260">Valier</text>
+<path d="M97.32,83.22 L104.04,83.22 C105.50,83.22 106.68,84.41 106.68,85.86 L106.68,92.58 C106.68,94.04 105.50,95.22 104.04,95.22 L97.32,95.22 C95.86,95.22 94.68,94.04 94.68,92.58 L94.68,85.86 C94.68,84.41 95.86,83.22 97.32,83.22Z" fill="#a9b1bd"/>
+<text x="112.68" y="93.54" font-size="12" fill="#4a5260">Other mods</text>
+<text x="28.00" y="120.22" font-size="15" fill="#10141a" font-weight="700">Against GregTech and EnderIO</text>
+<text x="28.00" y="144.38" font-size="12" fill="#6f7988">One run. The rigs' chests and tanks are counted in every row alike, so Valier's real lead is a little bigger than shown.</text>
+<text x="28.00" y="171.38" font-size="11" fill="#6f7988" font-weight="700" letter-spacing="0.8">ITEMS, 256 RIGS</text>
+<line x1="274.00" y1="179.38" x2="274.00" y2="221.38" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="179.38" x2="480.43" y2="221.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="179.38" x2="686.86" y2="221.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="197.51" font-size="13.5" fill="#10141a">Valier Basic</text>
+<text x="28.00" y="213.31" font-size="11.5" fill="#6f7988">2,051 items/s</text>
+<path d="M274.00,191.38 L350.09,191.38 C352.30,191.38 354.09,193.17 354.09,195.38 L354.09,205.38 C354.09,207.58 352.30,209.38 350.09,209.38 L274.00,209.38 C274.00,209.38 274.00,209.38 274.00,209.38 L274.00,191.38 C274.00,191.38 274.00,191.38 274.00,191.38Z" fill="#2a78d6"/>
+<text x="346.09" y="204.88" font-size="12.5" fill="#ffffff" font-weight="700" text-anchor="end">0.19 ms</text>
+<line x1="274.00" y1="221.38" x2="274.00" y2="263.38" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="221.38" x2="480.43" y2="263.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="221.38" x2="686.86" y2="263.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="239.51" font-size="13.5" fill="#10141a">GregTech (LV conveyor)</text>
+<text x="28.00" y="255.31" font-size="11.5" fill="#6f7988">819 items/s</text>
+<path d="M274.00,233.38 L350.51,233.38 C352.72,233.38 354.51,235.17 354.51,237.38 L354.51,247.38 C354.51,249.58 352.72,251.38 350.51,251.38 L274.00,251.38 C274.00,251.38 274.00,251.38 274.00,251.38 L274.00,233.38 C274.00,233.38 274.00,233.38 274.00,233.38Z" fill="#a9b1bd"/>
+<text x="346.51" y="246.88" font-size="12.5" fill="#10141a" font-weight="700" text-anchor="end">0.20 ms</text>
+<line x1="274.00" y1="263.38" x2="274.00" y2="305.38" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="263.38" x2="480.43" y2="305.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="263.38" x2="686.86" y2="305.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="281.51" font-size="13.5" fill="#10141a">EnderIO</text>
+<text x="28.00" y="297.31" font-size="11.5" fill="#6f7988">2,048 items/s</text>
+<path d="M274.00,275.38 L487.16,275.38 C489.37,275.38 491.16,277.17 491.16,279.38 L491.16,289.38 C491.16,291.58 489.37,293.38 487.16,293.38 L274.00,293.38 C274.00,293.38 274.00,293.38 274.00,293.38 L274.00,275.38 C274.00,275.38 274.00,275.38 274.00,275.38Z" fill="#a9b1bd"/>
+<text x="483.16" y="288.88" font-size="12.5" fill="#10141a" font-weight="700" text-anchor="end">0.53 ms</text>
+<text x="28.00" y="332.38" font-size="11" fill="#6f7988" font-weight="700" letter-spacing="0.8">FLUIDS, 128 RIGS</text>
+<line x1="274.00" y1="340.38" x2="274.00" y2="382.38" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="340.38" x2="480.43" y2="382.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="340.38" x2="686.86" y2="382.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="358.51" font-size="13.5" fill="#10141a">Valier Basic</text>
+<text x="28.00" y="374.31" font-size="11.5" fill="#6f7988">128K mB/s</text>
+<path d="M274.00,352.38 L443.81,352.38 C446.02,352.38 447.81,354.17 447.81,356.38 L447.81,366.38 C447.81,368.58 446.02,370.38 443.81,370.38 L274.00,370.38 C274.00,370.38 274.00,370.38 274.00,370.38 L274.00,352.38 C274.00,352.38 274.00,352.38 274.00,352.38Z" fill="#2a78d6"/>
+<text x="439.81" y="365.88" font-size="12.5" fill="#ffffff" font-weight="700" text-anchor="end">0.42 ms</text>
+<line x1="274.00" y1="382.38" x2="274.00" y2="424.38" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="382.38" x2="480.43" y2="424.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="382.38" x2="686.86" y2="424.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="400.51" font-size="13.5" fill="#10141a">GregTech (LV pump)</text>
+<text x="28.00" y="416.31" font-size="11.5" fill="#6f7988">82K mB/s</text>
+<path d="M274.00,394.38 L643.22,394.38 C645.43,394.38 647.22,396.17 647.22,398.38 L647.22,408.38 C647.22,410.58 645.43,412.38 643.22,412.38 L274.00,412.38 C274.00,412.38 274.00,412.38 274.00,412.38 L274.00,394.38 C274.00,394.38 274.00,394.38 274.00,394.38Z" fill="#a9b1bd"/>
+<text x="639.22" y="407.88" font-size="12.5" fill="#10141a" font-weight="700" text-anchor="end">0.90 ms</text>
+<line x1="274.00" y1="424.38" x2="274.00" y2="466.38" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="424.38" x2="480.43" y2="466.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="424.38" x2="686.86" y2="466.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="442.51" font-size="13.5" fill="#10141a">EnderIO</text>
+<text x="28.00" y="458.31" font-size="11.5" fill="#6f7988">26K mB/s</text>
+<path d="M274.00,436.38 L812.08,436.38 C814.29,436.38 816.08,438.17 816.08,440.38 L816.08,450.38 C816.08,452.58 814.29,454.38 812.08,454.38 L274.00,454.38 C274.00,454.38 274.00,454.38 274.00,454.38 L274.00,436.38 C274.00,436.38 274.00,436.38 274.00,436.38Z" fill="#a9b1bd"/>
+<text x="808.08" y="449.88" font-size="12.5" fill="#10141a" font-weight="700" text-anchor="end">1.31 ms</text>
+<text x="28.00" y="493.38" font-size="11" fill="#6f7988" font-weight="700" letter-spacing="0.8">IDLE, 2,048 ITEM PIPE BLOCKS</text>
+<line x1="274.00" y1="501.38" x2="274.00" y2="543.38" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="501.38" x2="480.43" y2="543.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="501.38" x2="686.86" y2="543.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="519.51" font-size="13.5" fill="#10141a">Valier</text>
+<text x="28.00" y="535.31" font-size="11.5" fill="#6f7988">nothing to move</text>
+<text x="280.00" y="526.88" font-size="12.5" fill="#10141a" font-weight="700">0.00 ms</text>
+<line x1="274.00" y1="543.38" x2="274.00" y2="585.38" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="543.38" x2="480.43" y2="585.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="543.38" x2="686.86" y2="585.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="561.51" font-size="13.5" fill="#10141a">GregTech</text>
+<text x="28.00" y="577.31" font-size="11.5" fill="#6f7988">nothing to move</text>
+<path d="M274.00,555.38 L315.83,555.38 C318.04,555.38 319.83,557.17 319.83,559.38 L319.83,569.38 C319.83,571.58 318.04,573.38 315.83,573.38 L274.00,573.38 C274.00,573.38 274.00,573.38 274.00,573.38 L274.00,555.38 C274.00,555.38 274.00,555.38 274.00,555.38Z" fill="#a9b1bd"/>
+<text x="325.83" y="568.88" font-size="12.5" fill="#10141a" font-weight="700">0.11 ms</text>
+<line x1="274.00" y1="585.38" x2="274.00" y2="627.38" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="585.38" x2="480.43" y2="627.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="585.38" x2="686.86" y2="627.38" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="603.51" font-size="13.5" fill="#10141a">EnderIO</text>
+<text x="28.00" y="619.31" font-size="11.5" fill="#6f7988">nothing to move</text>
+<path d="M274.00,597.38 L594.09,597.38 C596.30,597.38 598.09,599.17 598.09,601.38 L598.09,611.38 C598.09,613.58 596.30,615.38 594.09,615.38 L274.00,615.38 C274.00,615.38 274.00,615.38 274.00,615.38 L274.00,597.38 C274.00,597.38 274.00,597.38 274.00,597.38Z" fill="#a9b1bd"/>
+<text x="590.09" y="610.88" font-size="12.5" fill="#10141a" font-weight="700" text-anchor="end">0.79 ms</text>
+<text x="274.00" y="642.88" font-size="11.5" fill="#6f7988">0</text>
+<text x="480.43" y="642.88" font-size="11.5" fill="#6f7988" text-anchor="middle">0.5</text>
+<text x="686.86" y="642.88" font-size="11.5" fill="#6f7988" text-anchor="middle">1.0 ms</text>
+<text x="28.00" y="681.88" font-size="15" fill="#10141a" font-weight="700">Against AE2</text>
+<text x="28.00" y="706.02" font-size="12" fill="#6f7988">The pipes' own cost: the chests and tanks were timed alone and taken off. Each case ran twice, the second pass in reverse order, and these are the</text>
+<text x="28.00" y="723.42" font-size="12" fill="#6f7988">means.</text>
+<text x="28.00" y="750.42" font-size="11" fill="#6f7988" font-weight="700" letter-spacing="0.8">ITEMS, 256 RIGS</text>
+<line x1="274.00" y1="758.42" x2="274.00" y2="800.42" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="758.42" x2="480.43" y2="800.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="758.42" x2="686.86" y2="800.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="776.56" font-size="13.5" fill="#10141a">Valier Basic</text>
+<text x="28.00" y="792.36" font-size="11.5" fill="#6f7988">2,051 items/s</text>
+<path d="M274.00,770.42 L330.28,770.42 C332.49,770.42 334.28,772.22 334.28,774.42 L334.28,784.42 C334.28,786.63 332.49,788.42 330.28,788.42 L274.00,788.42 C274.00,788.42 274.00,788.42 274.00,788.42 L274.00,770.42 C274.00,770.42 274.00,770.42 274.00,770.42Z" fill="#2a78d6"/>
+<text x="340.28" y="783.92" font-size="12.5" fill="#10141a" font-weight="700">0.15 ms</text>
+<line x1="274.00" y1="800.42" x2="274.00" y2="842.42" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="800.42" x2="480.43" y2="842.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="800.42" x2="686.86" y2="842.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="818.56" font-size="13.5" fill="#10141a">AE2 buses</text>
+<text x="28.00" y="834.36" font-size="11.5" fill="#6f7988">1,007 items/s</text>
+<path d="M274.00,812.42 L724.56,812.42 C726.76,812.42 728.56,814.22 728.56,816.42 L728.56,826.42 C728.56,828.63 726.76,830.42 724.56,830.42 L274.00,830.42 C274.00,830.42 274.00,830.42 274.00,830.42 L274.00,812.42 C274.00,812.42 274.00,812.42 274.00,812.42Z" fill="#a9b1bd"/>
+<text x="720.56" y="825.92" font-size="12.5" fill="#10141a" font-weight="700" text-anchor="end">1.10 ms</text>
+<text x="28.00" y="869.42" font-size="11" fill="#6f7988" font-weight="700" letter-spacing="0.8">FLUIDS, 128 RIGS</text>
+<line x1="274.00" y1="877.42" x2="274.00" y2="919.42" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="877.42" x2="480.43" y2="919.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="877.42" x2="686.86" y2="919.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="895.56" font-size="13.5" fill="#10141a">Valier Basic</text>
+<text x="28.00" y="911.36" font-size="11.5" fill="#6f7988">128K mB/s</text>
+<path d="M274.00,889.42 L395.10,889.42 C397.30,889.42 399.10,891.22 399.10,893.42 L399.10,903.42 C399.10,905.63 397.30,907.42 395.10,907.42 L274.00,907.42 C274.00,907.42 274.00,907.42 274.00,907.42 L274.00,889.42 C274.00,889.42 274.00,889.42 274.00,889.42Z" fill="#2a78d6"/>
+<text x="391.10" y="902.92" font-size="12.5" fill="#ffffff" font-weight="700" text-anchor="end">0.30 ms</text>
+<line x1="274.00" y1="919.42" x2="274.00" y2="961.42" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="919.42" x2="480.43" y2="961.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="919.42" x2="686.86" y2="961.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="937.56" font-size="13.5" fill="#10141a">Valier Advanced</text>
+<text x="28.00" y="953.36" font-size="11.5" fill="#6f7988">1.0M mB/s</text>
+<path d="M274.00,931.42 L464.46,931.42 C466.66,931.42 468.46,933.22 468.46,935.42 L468.46,945.42 C468.46,947.63 466.66,949.42 464.46,949.42 L274.00,949.42 C274.00,949.42 274.00,949.42 274.00,949.42 L274.00,931.42 C274.00,931.42 274.00,931.42 274.00,931.42Z" fill="#2a78d6"/>
+<text x="460.46" y="944.92" font-size="12.5" fill="#ffffff" font-weight="700" text-anchor="end">0.47 ms</text>
+<line x1="274.00" y1="961.42" x2="274.00" y2="1003.42" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="961.42" x2="480.43" y2="1003.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="961.42" x2="686.86" y2="1003.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="979.56" font-size="13.5" fill="#10141a">Valier Elite</text>
+<text x="28.00" y="995.36" font-size="11.5" fill="#6f7988">8.2M mB/s</text>
+<path d="M274.00,973.42 L570.56,973.42 C572.77,973.42 574.56,975.22 574.56,977.42 L574.56,987.42 C574.56,989.63 572.77,991.42 570.56,991.42 L274.00,991.42 C274.00,991.42 274.00,991.42 274.00,991.42 L274.00,973.42 C274.00,973.42 274.00,973.42 274.00,973.42Z" fill="#2a78d6"/>
+<text x="566.56" y="986.92" font-size="12.5" fill="#ffffff" font-weight="700" text-anchor="end">0.73 ms</text>
+<line x1="274.00" y1="1003.42" x2="274.00" y2="1045.42" stroke="#b9c1cd" stroke-width="1.0"/>
+<line x1="480.43" y1="1003.42" x2="480.43" y2="1045.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<line x1="686.86" y1="1003.42" x2="686.86" y2="1045.42" stroke="#e4e8ee" stroke-width="1.0"/>
+<text x="28.00" y="1021.56" font-size="13.5" fill="#10141a">AE2 fluid buses</text>
+<text x="28.00" y="1037.36" font-size="11.5" fill="#6f7988">508K mB/s</text>
+<path d="M274.00,1015.42 L630.42,1015.42 C632.63,1015.42 634.42,1017.22 634.42,1019.42 L634.42,1029.42 C634.42,1031.63 632.63,1033.42 630.42,1033.42 L274.00,1033.42 C274.00,1033.42 274.00,1033.42 274.00,1033.42 L274.00,1015.42 C274.00,1015.42 274.00,1015.42 274.00,1015.42Z" fill="#a9b1bd"/>
+<text x="626.42" y="1028.92" font-size="12.5" fill="#10141a" font-weight="700" text-anchor="end">0.87 ms</text>
+<text x="274.00" y="1060.92" font-size="11.5" fill="#6f7988">0</text>
+<text x="480.43" y="1060.92" font-size="11.5" fill="#6f7988" text-anchor="middle">0.5</text>
+<text x="686.86" y="1060.92" font-size="11.5" fill="#6f7988" text-anchor="middle">1.0 ms</text>
+<text x="28.00" y="1084.92" font-size="12" fill="#6f7988">Test server, 22 Nov 2026, valiertweaks selftest pipebench.</text>
+</svg>

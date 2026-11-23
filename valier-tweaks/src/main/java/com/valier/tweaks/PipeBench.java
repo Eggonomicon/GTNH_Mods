@@ -52,6 +52,14 @@ import cpw.mods.fml.common.registry.GameRegistry;
  * <li>Fluids: 128 rigs of EnderIO tank, pipe, pipe, tank, the first kept full of water. Valier: Basic fluid pipes, a Pull
  * face. GregTech: bronze fluid pipes, an LV pump cover set to import. EnderIO: basic fluid conduits set to extract.</li>
  * <li>Idle: 64 runs of 32 item pipes each (2,048 blocks) with nothing to move.</li>
+ * <li>AE2: the item and fluid rigs as small networks, an import bus to a storage bus (fluids: ae2fc's fluid buses), a
+ * creative energy cell each, no cards.</li>
+ * <li>Valier fluid pipes at Advanced and Elite too (bigger batches, more often). Fluid rigs are tended every 5 ticks (an
+ * Elite face moves a whole 16,000 mB tank every 5 ticks), item rigs every 20.</li>
+ * <li>{@code -Dvaliertweaks.pipebench.passes=2} runs the cases again in reverse order and gives each case's mean: slow drift
+ * in the server's own tick cancels out, and the two runs show how far a number can be trusted.</li>
+ * <li>The item rigs' chests and the fluid rigs' tanks alone, with no pipes: what the cases above pay besides their pipes,
+ * so a pipe's own cost is its case's less these.</li>
  * </ul>
  * Blocks in a world keep ticking all through (an empty server would stop them after a minute). Items and mB moved are
  * counted so each case is seen to work. Results go to the log as {@code pipebench:} lines.
@@ -61,7 +69,10 @@ public final class PipeBench { // public: Forge calls its tick handlers from ano
     enum Case {
         VALIER_ITEMS("Valier item pipes", "items"), GT_ITEMS("GregTech item pipes", "items"), EIO_ITEMS("EnderIO item conduits", "items"),
         VALIER_FLUIDS("Valier fluid pipes", "mB"), GT_FLUIDS("GregTech fluid pipes", "mB"), EIO_FLUIDS("EnderIO fluid conduits", "mB"),
-        VALIER_IDLE("Valier item pipes, idle", ""), GT_IDLE("GregTech item pipes, idle", ""), EIO_IDLE("EnderIO item conduits, idle", "");
+        VALIER_IDLE("Valier item pipes, idle", ""), GT_IDLE("GregTech item pipes, idle", ""), EIO_IDLE("EnderIO item conduits, idle", ""),
+        AE2_ITEMS("AE2 import bus to storage bus", "items"), AE2_FLUIDS("AE2 fluid import bus to fluid storage bus", "mB"),
+        CHESTS_ONLY("The item rigs' chests alone", "items"), TANKS_ONLY("The fluid rigs' tanks alone", "mB"),
+        VALIER_FLUIDS_ADV("Valier fluid pipes, Advanced", "mB"), VALIER_FLUIDS_ELITE("Valier fluid pipes, Elite", "mB");
 
         final String label, unit;
 
@@ -71,7 +82,23 @@ public final class PipeBench { // public: Forge calls its tick handlers from ano
         }
 
         boolean fluid() {
-            return this == VALIER_FLUIDS || this == GT_FLUIDS || this == EIO_FLUIDS;
+            return this == VALIER_FLUIDS || this == GT_FLUIDS || this == EIO_FLUIDS || this == AE2_FLUIDS || this == TANKS_ONLY
+                || this == VALIER_FLUIDS_ADV || this == VALIER_FLUIDS_ELITE;
+        }
+
+        /** A Valier pipe case, and the pipes' tier. */
+        boolean valier() {
+            return this == VALIER_ITEMS || this == VALIER_FLUIDS || this == VALIER_IDLE || this == VALIER_FLUIDS_ADV
+                || this == VALIER_FLUIDS_ELITE;
+        }
+
+        int tier() {
+            return this == VALIER_FLUIDS_ADV ? PipeTier.ADVANCED : this == VALIER_FLUIDS_ELITE ? PipeTier.ELITE : PipeTier.BASIC;
+        }
+
+        /** The rigs' chests or tanks with nothing between them: what every item or fluid case pays besides its pipes. */
+        boolean bare() {
+            return this == CHESTS_ONLY || this == TANKS_ONLY;
         }
 
         boolean idle() {
@@ -105,6 +132,11 @@ public final class PipeBench { // public: Forge calls its tick handlers from ano
         List<Case> list = new ArrayList<>();
         if (only.isEmpty()) list.addAll(Arrays.asList(Case.values()));
         else for (String name : only.split(",")) list.add(Case.valueOf(name.trim())); // in the order given
+        if (Integer.getInteger("valiertweaks.pipebench.passes", 1) >= 2) { // and back again: slow drift cancels out
+            List<Case> back = new ArrayList<>(list);
+            java.util.Collections.reverse(back);
+            list.addAll(back);
+        }
         cases = list.toArray(new Case[0]);
         baseMs = new double[cases.length + 1];
         runMs = new double[cases.length];
@@ -185,7 +217,7 @@ public final class PipeBench { // public: Forge calls its tick handlers from ano
         world.resetUpdateEntityTick(); // keep blocks ticking with nobody on
         ticks++;
         Case c = at >= 0 && at < cases.length ? cases[at] : null;
-        if (phase >= 2 && ticks % 20 == 0) {
+        if (phase >= 2 && ticks % (c != null && c.fluid() ? 5 : 20) == 0) { // tanks hold 16,000 mB: an Elite face's batch
             long n = tend(c);
             if (phase == 3) moved[at] += n;
         }
@@ -225,13 +257,31 @@ public final class PipeBench { // public: Forge calls its tick handlers from ano
             .unregister(this);
         clear();
         SelfTest.log("pipebench: results (cost = the tick with it, less the mean of the empty corner before and after)");
+        java.util.Map<Case, List<double[]>> byCase = new java.util.LinkedHashMap<>();
         for (int i = 0; i < cases.length && i < at; i++) {
             Case c = cases[i];
             double without = (baseMs[i] + baseMs[i + 1]) / 2, cost = runMs[i] - without;
             double perSec = moved[i] / (MEASURE / 20.0);
             SelfTest.log(String.format("pipebench:   %s: %.3f ms a tick (%.3f with it, %.3f / %.3f without)%s", c.label, cost,
                 runMs[i], baseMs[i], baseMs[i + 1], c.idle() ? "" : String.format(", %,.0f %s a second", perSec, c.unit)));
-            SelfTest.check(c.idle() || moved[i] > 0, c.label + " moved something (" + moved[i] + " " + c.unit + ")");
+            if (c.bare()) SelfTest.check(moved[i] == 0, c.label + " moved nothing (" + moved[i] + " " + c.unit + ")");
+            else SelfTest.check(c.idle() || moved[i] > 0, c.label + " moved something (" + moved[i] + " " + c.unit + ")");
+            byCase.computeIfAbsent(c, k -> new ArrayList<>())
+                .add(new double[] { cost, perSec });
+        }
+        SelfTest.log("pipebench: mean of each case's runs");
+        for (java.util.Map.Entry<Case, List<double[]>> e : byCase.entrySet()) {
+            double cost = 0, perSec = 0;
+            StringBuilder each = new StringBuilder();
+            for (double[] r : e.getValue()) {
+                cost += r[0];
+                perSec += r[1];
+                each.append(each.length() == 0 ? "" : ", ").append(String.format("%.3f", r[0]));
+            }
+            int n = e.getValue().size();
+            Case c = e.getKey();
+            SelfTest.log(String.format("pipebench:   %s: %.3f ms a tick (runs: %s)%s", c.label, cost / n, each,
+                c.idle() || c.bare() ? "" : String.format(", %,.0f %s a second", perSec / n, c.unit)));
         }
         SelfTest.summary();
     }
@@ -266,6 +316,12 @@ public final class PipeBench { // public: Forge calls its tick handlers from ano
             if (te instanceof gregtech.api.interfaces.tileentity.IGregTechTileEntity) b.append(Gt.describe(te));
         } catch (Throwable ignored) {}
         b.append(Eio.describe(te));
+        if (te instanceof appeng.api.parts.IPartHost) {
+            for (ForgeDirection d : new ForgeDirection[] { ForgeDirection.WEST, ForgeDirection.EAST }) {
+                appeng.api.parts.IPart part = ((appeng.api.parts.IPartHost) te).getPart(d);
+                if (part != null) b.append(" ").append(d).append(" ").append(part.getClass().getSimpleName());
+            }
+        }
         return b.toString();
     }
 
@@ -307,15 +363,20 @@ public final class PipeBench { // public: Forge calls its tick handlers from ano
             }
             sources.add(new int[] { x, z });
             sinks.add(new int[] { x + 3, z });
+            if (c.bare()) continue;
+            if (c == Case.AE2_ITEMS || c == Case.AE2_FLUIDS) {
+                Ae2.rig(this, x, z, c.fluid());
+                continue;
+            }
             for (int i = 1; i <= 2; i++) {
-                if (c == Case.VALIER_ITEMS) valierPipe(x + i, z, ModBlocks.itemPipe);
-                else if (c == Case.VALIER_FLUIDS) valierPipe(x + i, z, ModBlocks.fluidPipe);
+                if (c == Case.VALIER_ITEMS) valierPipe(x + i, z, ModBlocks.itemPipe, c.tier());
+                else if (c.valier()) valierPipe(x + i, z, ModBlocks.fluidPipe, c.tier());
                 else if (c == Case.GT_ITEMS || c == Case.GT_FLUIDS) Gt.pipe(this, x + i, z, c.fluid());
                 else Eio.conduit(this, x + i, z, c.fluid());
             }
             connect(c, x + 1, z, true, true);
             connect(c, x + 2, z, true, true);
-            if (c == Case.VALIER_ITEMS || c == Case.VALIER_FLUIDS) {
+            if (c.valier()) {
                 valierFace(x + 1, z, ForgeDirection.WEST, FaceMode.EXTRACT);
                 valierFace(x + 2, z, ForgeDirection.EAST, FaceMode.INSERT);
             } else if (c == Case.GT_ITEMS || c == Case.GT_FLUIDS) Gt.importCover(this, x + 1, z, c.fluid());
@@ -332,14 +393,18 @@ public final class PipeBench { // public: Forge calls its tick handlers from ano
         if (c == Case.GT_ITEMS || c == Case.GT_FLUIDS || c == Case.GT_IDLE) {
             if (west) Gt.connect(this, x, z, ForgeDirection.WEST);
             if (east) Gt.connect(this, x, z, ForgeDirection.EAST);
-        } else if (c == Case.VALIER_ITEMS || c == Case.VALIER_FLUIDS || c == Case.VALIER_IDLE) {
+        } else if (c.valier()) {
             TileEntity te = world.getTileEntity(x, y, z);
             if (te instanceof TilePipe) ((TilePipe) te).updateConnections();
         }
     }
 
     void valierPipe(int x, int z, BlockPipe block) {
-        world.setBlock(x, y, z, block, PipeTier.BASIC, 2);
+        valierPipe(x, z, block, PipeTier.BASIC);
+    }
+
+    void valierPipe(int x, int z, BlockPipe block, int tier) {
+        world.setBlock(x, y, z, block, tier, 2);
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TilePipe) {
             BlockPipe.setOwner((TilePipe) te, PipeSelfTest.OWNER, "PipeTester");
@@ -401,7 +466,7 @@ public final class PipeBench { // public: Forge calls its tick handlers from ano
     }
 
     void clear() {
-        for (int x = bx - 1; x < bx + 82; x++) for (int z = bz - 1; z < bz + 130; z++) {
+        for (int x = bx - 1; x < bx + 82; x++) for (int z = bz - 1; z < bz + 130; z++) for (int y = this.y; y <= this.y + 1; y++) {
             if (world.isAirBlock(x, y, z)) continue;
             TileEntity te = world.getTileEntity(x, y, z);
             if (te instanceof IInventory) {
@@ -466,6 +531,53 @@ public final class PipeBench { // public: Forge calls its tick handlers from ano
             gregtech.common.covers.Cover on = c.getCoverAtSide(ForgeDirection.WEST);
             if (on instanceof gregtech.common.covers.CoverIOBase)
                 ((gregtech.common.covers.CoverIOBase) on).setIOMode(gregtech.common.covers.modes.TransferMode.IMPORT);
+        }
+    }
+
+    // ---- AE2 -----------------------------------------------------------------------------------------------------
+
+    /**
+     * AE2 (a compile-time dependency already): each rig its own small network, as a player would build it to move things
+     * from one block to another. Glass cable on both pipe spots, an import bus (items) or ae2fc fluid import bus on the
+     * source, a storage bus or fluid storage bus on the sink (no filters: everything), and a creative energy cell on the
+     * first cable for power. Two channels: no controller needed. No upgrade cards.
+     */
+    static final class Ae2 {
+
+        static void rig(PipeBench b, int x, int z, boolean fluid) {
+            appeng.api.definitions.IDefinitions d = appeng.api.AEApi.instance()
+                .definitions();
+            ItemStack cable = d.parts()
+                .cableGlass()
+                .stack(appeng.api.util.AEColor.Transparent, 1);
+            ItemStack in = fluid ? new ItemStack(GameRegistry.findItem("ae2fc", "part_fluid_import"))
+                : d.parts()
+                    .importBus()
+                    .maybeStack(1)
+                    .get();
+            ItemStack out = fluid ? new ItemStack(GameRegistry.findItem("ae2fc", "part_fluid_storage_bus"))
+                : d.parts()
+                    .storageBus()
+                    .maybeStack(1)
+                    .get();
+            Block bus = d.blocks()
+                .multiPart()
+                .maybeBlock()
+                .get();
+            for (int i = 1; i <= 2; i++) {
+                b.world.setBlock(x + i, b.y, z, bus, 0, 3);
+                TileEntity te = b.world.getTileEntity(x + i, b.y, z);
+                if (!(te instanceof appeng.api.parts.IPartHost)) throw new IllegalStateException("no AE2 cable bus at " + (x + i) + " " + b.y + " " + z);
+                appeng.api.parts.IPartHost host = (appeng.api.parts.IPartHost) te;
+                host.addPart(cable.copy(), ForgeDirection.UNKNOWN, b.player);
+                host.addPart(i == 1 ? in : out, i == 1 ? ForgeDirection.WEST : ForgeDirection.EAST, b.player);
+                host.markForUpdate();
+            }
+            Block cell = d.blocks()
+                .energyCellCreative()
+                .maybeBlock()
+                .get();
+            b.world.setBlock(x + 1, b.y + 1, z, cell, 0, 3);
         }
     }
 

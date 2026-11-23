@@ -1063,6 +1063,35 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
   | Fluids, 128 tank-pipe-pipe-tank rigs | 0.42 ms, 128,267 mB/s | 0.90 ms, 81,920 mB/s (LV pump) | 1.31 ms, 25,600 mB/s |
   | Idle, 2,048 item pipe blocks | 0.00 ms | 0.11 ms | 0.79 ms |
 
+  Against AE2 (each rig its own small network: glass cable, an import bus on the source and a storage bus on the sink,
+  ae2fc's fluid buses for fluids, a creative energy cell, no cards), two passes the second in reverse order, with the
+  chests and tanks alone measured too (0.03 and 0.17 ms) and taken off:
+
+  | Case | Valier | AE2 |
+  |---|---|---|
+  | Items, 256 rigs, the pipes' own cost | 0.15 ms, 2,051 items/s | 1.10 ms, 1,007 items/s |
+  | Fluids, 128 rigs, the pipes' own cost | 0.31 ms, 128,267 mB/s | 0.88 ms, 507,733 mB/s |
+
+  AE2's fluid import bus moves four times what a Basic fluid pipe does, so per mB moved it costs less than Basic.
+  The tanks' own cost varied between runs (0.05 to 0.30 ms), so the fluid figures are the less certain ones.
+
+  Valier's faster fluid tiers against the same AE2 rigs (two passes, tanks tended every 5 ticks, the tanks alone,
+  0.20 ms, taken off; the busier tanks' extra work at higher rates stays in):
+
+  | Fluid rigs, 128 | Cost a tick | mB a second | Cost per 10,000 mB/s |
+  |---|---|---|---|
+  | Valier Basic | 0.30 ms | 128,133 | 0.023 ms |
+  | Valier Advanced | 0.47 ms | 1,025,067 | 0.005 ms |
+  | Valier Elite | 0.73 ms | 8,200,533 | 0.001 ms |
+  | AE2 fluid buses, no cards | 0.87 ms | 507,733 | 0.017 ms |
+
+  The same results as charts. Per item or mB moved, Valier takes 60–95% less server time than the others; the one
+  exception is Basic fluid pipes against AE2's fluid bus (38% more). `tools/bench_charts.py` draws them, and a PDF.
+
+  ![Valier pipes: server time for the same amount moved, against GregTech, EnderIO and AE2](docs/pipe-benchmark-per-amount.svg)
+
+  ![Valier pipes: cost per tick, flat out, against GregTech, EnderIO and AE2](docs/pipe-benchmark-per-tick.svg)
+
   Costs are ms a tick and vary by about 0.1 ms between runs. The chests (items) and EnderIO tanks (fluids) are in
   every column alike. Gotchas found while building it: chests side by side join into double chests (the rigs are 5
   apart); EnderIO conduits extract only with a redstone signal unless set to always; timing the whole server tick is
