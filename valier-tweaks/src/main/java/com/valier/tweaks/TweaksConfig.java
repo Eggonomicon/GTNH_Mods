@@ -65,6 +65,7 @@ public final class TweaksConfig {
     public static boolean opLock = false;
     public static boolean opQuiet = false;
     public static boolean worldEditRanks = true;
+    public static boolean endlessWands = true;
 
     private TweaksConfig() {}
 
@@ -308,6 +309,11 @@ public final class TweaksConfig {
             + "online, the newly opped player too, a grey \"[Server: Opped X]\" line). Only the console sees it.");
         worldEditRanks = c.getBoolean("worldEditRanks", cat, true, "WorldEdit also asks the player's ServerUtilities rank, so a "
             + "rank with worldedit: true (or single worldedit.* nodes) gets WorldEdit without op. Ops keep it either way.");
+        cat = "thaumcraft";
+        c.setCategoryComment(cat, "Endless wands (2.3.5).");
+        endlessWands = c.getBoolean("endlessWands", cat, true, "Wands made with the server console's /valier wand <player> "
+            + "keep their vis full while their owner carries them (or has them in an open menu, such as an Arcane Worktable). "
+            + "In anyone else's hands they are plain wands. Off: every endless wand is a plain wand and /valier wand refuses.");
         if (c.hasChanged()) c.save();
     }
 

@@ -30,5 +30,7 @@ dependencies {
         "${gtnh}/mods/BaublesExpanded-2.2.27-GTNH.jar",
         "${gtnh}/mods/holoinventory-2.5.18-GTNH.jar",
         // 2.3.4: WorldEdit asks ServerUtilities ranks too (only used when both are loaded).
-        "${gtnh}/mods/worldedit-v0.0.10.jar"))
+        "${gtnh}/mods/worldedit-v0.0.10.jar",
+        // 2.3.5: endless Thaumcraft wands (only used when Thaumcraft is loaded).
+        "${gtnh}/mods/Thaumcraft-1.7.10-4.2.3.5.jar"))
 }

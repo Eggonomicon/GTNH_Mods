@@ -133,6 +133,9 @@ public class ValierTweaks {
             .register(loot); // the scan, on server ticks
         MinecraftForge.EVENT_BUS.register(new MobLoot.Guard()); // what a loot roll tries to add to the world
         MinecraftForge.EVENT_BUS.register(new OpLock()); // /op only from the console, when opLock is on
+        FMLCommonHandler.instance()
+            .bus()
+            .register(new EndlessWand()); // endless wands: topping up (server ticks), handing over (logins)
         proxy.preInit(event);
         if (Loader.isModLoaded("Railcraft")) {
             RailcraftBoilers boilers = RailcraftBoilers.make();

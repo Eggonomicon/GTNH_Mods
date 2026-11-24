@@ -6,6 +6,27 @@ Gameplay additions for the Valier server. **Since 2.0.0 it is needed on the serv
 The newest version is always at https://github.com/Eggonomicon/GTNH_Mods/releases/latest/download/valiertweaks.jar
 (the same jar, named `valiertweaks.jar`; keep only one Valier Tweaks jar in `mods`).
 
+## 2.3.5 and 2.3.4: endless wands, the op lock, WorldEdit by rank (server side only)
+
+Players don't need a new jar for these: a 2.3 jar on their computer still joins.
+
+- **Endless wands (2.3.5):** the server console's `/valier wand <player>` makes a Thaumcraft wand named "Endless Wand"
+  (the pack's biggest plain rod with its cheapest caps) that belongs to that player.
+  - While it is in its owner's inventory, or in a menu they have open (an Arcane Worktable's wand slot, a chest), the
+    server keeps its six primal vis full (it looks every 4 ticks).
+  - In anyone else's hands it's a plain wand that runs dry.
+  - A wand made for a player who is offline waits for their next login.
+  - Only the console can run it; players can't, ops included.
+  - It only ever fills to the wand's own capacity: Thaumcraft draws the vis bars at their real height, so an over-full
+    wand would paint them across the screen.
+  - Config `thaumcraft` / `endlessWands`.
+- **Op lock (2.3.4):** `permissions` / `opLock`: only the server console can op anyone. `opQuiet`: the console's `/op`
+  and `/deop` tell nobody in game.
+- **WorldEdit by rank (2.3.4):** `permissions` / `worldEditRanks`: a ServerUtilities rank with `worldedit: true` gets
+  WorldEdit without op.
+- **Wireless pipes (2.3.4):** a Wireless pipe joined into other pipes counts for the whole network (see Tags under
+  Valier pipes).
+
 ## 2.3.3: Satchels on chests, refill and hotbar restock, send home to a barrel channel, ore dictionary on barrels, /valier cost
 
 - **Sneak + right-click a container with a Satchel** (a chest, a double chest as one, a barrel, a machine, anything with
@@ -839,6 +860,7 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `permissions` / `opLock` | `false` | Only the server console can op anyone. `/op` from a player (whatever their op level or rank), a command block or RCON is refused and logged. `/deop` and every other command work as before. (2.3.4) |
 | `opQuiet` | `false` | The console's `/op` and `/deop` tell nobody in game: vanilla shows every op online, the newly opped player too, a grey "[Server: Opped X]" line. Only the console sees it. (2.3.4) |
 | `worldEditRanks` | `true` | WorldEdit also asks the player's ServerUtilities rank, so a rank with `worldedit: true` (or single `worldedit.*` nodes, the more exact one winning) gets WorldEdit without op. Ops keep it either way. (2.3.4) |
+| `thaumcraft` / `endlessWands` | `true` | Wands made with the server console's `/valier wand <player>` keep their vis full while their owner carries them (or has them in an open menu, such as an Arcane Worktable); in anyone else's hands they are plain wands. Off: every endless wand is a plain wand and `/valier wand` refuses. (2.3.5) |
 
 ## Build and test
 
@@ -1117,6 +1139,16 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
   - **Test order:** an empty server stops ticking blocks in a world 60 seconds (1,200 ticks) after the last player
     left. Steps that need blocks to tick (`grid`: GregTech hulls take no EU; `lootspawner`: the spawner left running)
     fail if they start later than that, so run them first in a `test_boot.py` batch.
+- **`valiertweaks selftest wand`** (`EndlessWandSelfTest`, 2.3.5):
+  - The wand is a Thaumcraft wand, not a staff or sceptre, named, owned, and full: exactly its capacity, never more.
+  - Drained in its owner's inventory, it's full again. In another player's inventory it stays empty, and so does a
+    plain wand in the owner's inventory.
+  - In a chest its owner has open (standing in for the Arcane Worktable's wand slot), it fills too.
+  - With `endlessWands` off nothing fills and the console's `/valier wand` refuses.
+  - A player's `/valier wand` is refused and makes no wand. The console's, for a player who is offline, keeps the wand
+    for them; their login hands it over, full, once.
+  - **24 Nov 2026, as 2.3.5-pre1:** wand 10 passed, 0 failed (the pack's pick: an Ichorcloth rod with Orichalcum caps,
+    1,000 vis of each); oplock 10 and mod 8 passed again.
 - **2.3.3 additions,** in `valiertweaks selftest satchels` (`SatchelStockSelfTest`):
   - **Containers:**
     - The selected cobblestone (190 of 200, keeping 10) goes past a full chest half into the double chest's other half.

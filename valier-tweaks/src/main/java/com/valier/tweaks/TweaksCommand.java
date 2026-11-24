@@ -7,13 +7,14 @@ import net.minecraft.command.WrongUsageException;
 /**
  * {@code /valiertweaks} (or {@code /valier}, 2.3.3), for ops: {@code cost} (how much server time Valier's blocks take,
  * {@link ValierCost}), {@code pipes} (how the pipes are doing; {@code pipes reset} starts the numbers again),
- * {@code revertblocks}, and, only on a test server started with the self-test flag, {@code selftest <step>}.
+ * {@code revertblocks}, {@code wand <player>} (2.3.5, from the server console only: an {@link EndlessWand}), and, only
+ * on a test server started with the self-test flag, {@code selftest <step>}.
  */
 public class TweaksCommand extends CommandBase {
 
-    private static final String USAGE = "/valier cost | pipes [reset] | revertblocks"
+    private static final String USAGE = "/valier cost | pipes [reset] | revertblocks | wand <player> (console)"
         + (SelfTest.ENABLED ? " | selftest trees|peaceful|boilers|lootspawner|xpcrafter|railboiler|mod|pipes|pipeperf|"
-            + "barrels|barrelperf|satchels|grid|gridperf|cost|oplock" : "");
+            + "barrels|barrelperf|satchels|grid|gridperf|cost|oplock|wand" : "");
 
     @Override
     public String getCommandName() {
@@ -43,6 +44,19 @@ public class TweaksCommand extends CommandBase {
 
     @Override
     public void processCommand(ICommandSender sender, String[] args) {
+        if (args.length >= 1 && "wand".equals(args[0])) {
+            if (!(sender instanceof net.minecraft.server.MinecraftServer)) {
+                net.minecraft.util.ChatComponentText m = new net.minecraft.util.ChatComponentText(
+                    "Only the server console can make an endless wand.");
+                m.getChatStyle()
+                    .setColor(net.minecraft.util.EnumChatFormatting.RED);
+                sender.addChatMessage(m);
+                return;
+            }
+            if (args.length != 2) throw new WrongUsageException("/valier wand <player>");
+            sender.addChatMessage(new net.minecraft.util.ChatComponentText(EndlessWand.give(args[1])));
+            return;
+        }
         if (args.length >= 1 && "revertblocks".equals(args[0])) {
             if (args.length < 2 || !"confirm".equals(args[1])) {
                 sender.addChatMessage(new net.minecraft.util.ChatComponentText("Before removing Valier Tweaks: turns loot "
