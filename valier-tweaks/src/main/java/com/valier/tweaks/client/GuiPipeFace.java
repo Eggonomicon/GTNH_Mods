@@ -203,8 +203,8 @@ public class GuiPipeFace extends ValierScreen {
         tagIcon.flat = true;
         tagIcon.tip = () -> lines(EnumChatFormatting.WHITE + "Tag" + (cfg().tag.isEmpty() ? " (none)" : ": " + cfg().tag),
             "Faces only trade with faces of the same tag.", PipeTier.wireless(c.pipe.tier())
-                ? "Wireless: links to your team's Wireless pipes" : "Within the pipes joined together (channels).",
-            PipeTier.wireless(c.pipe.tier()) ? "with the same tag, anywhere." : "Enter (or closing) saves it.");
+                ? "Wireless: links to your team's Wireless pipes" : "Within the pipes joined together; with a",
+            PipeTier.wireless(c.pipe.tier()) ? "with the same tag, anywhere." : "Wireless pipe joined in, it links like one.");
         // The three lists, as tabs over the filter, and the toolbar for the one shown.
         addListTabs(8, 73, FaceConfig.ALLOW, FaceConfig.DENY, FaceConfig.VOID);
         addToolbar(85);

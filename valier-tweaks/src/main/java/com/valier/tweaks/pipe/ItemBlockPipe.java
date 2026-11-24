@@ -40,7 +40,10 @@ public class ItemBlockPipe extends ItemBlock {
         lines.add(grey + "Up to " + PipeTier.max(kind, tier) + (kind == PipeKind.FLUID ? " mB" : " items") + " every "
             + PipeTier.interval(tier) + " ticks per Extract/Request face");
         lines.add(grey + "Instant: nothing travels along the pipe");
-        if (PipeTier.wireless(tier)) lines.add(grey + "Tagged faces link to your team's Wireless pipes with the same tag");
+        if (PipeTier.wireless(tier)) {
+            lines.add(grey + "Tagged faces link to your team's Wireless pipes with the same tag");
+            lines.add(grey + "So do tagged faces on any pipe joined to it");
+        }
         if (tier == PipeTier.CREATIVE) {
             String pink = EnumChatFormatting.LIGHT_PURPLE.toString();
             lines.add(pink + "Makes endless " + (kind == PipeKind.FLUID ? "fluid" : "items") + ": right-click its centre");

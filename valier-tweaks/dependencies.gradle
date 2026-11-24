@@ -28,5 +28,7 @@ dependencies {
         "${gtnh}/mods/industrialcraft-2-2.2.828-experimental.jar",
         "${gtnh}/mods/CoFHCore-[1.7.10]3.1.4-329.jar",
         "${gtnh}/mods/BaublesExpanded-2.2.27-GTNH.jar",
-        "${gtnh}/mods/holoinventory-2.5.18-GTNH.jar"))
+        "${gtnh}/mods/holoinventory-2.5.18-GTNH.jar",
+        // 2.3.4: WorldEdit asks ServerUtilities ranks too (only used when both are loaded).
+        "${gtnh}/mods/worldedit-v0.0.10.jar"))
 }

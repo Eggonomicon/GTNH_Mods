@@ -268,6 +268,10 @@ instead. The menu has:
 - On ordinary pipes that means channels within the pipes joined together.
 - On **Wireless** (and creative) pipes it means links: a tagged face trades with every Wireless face of the same tag,
   anywhere, as long as both are in loaded chunks. "001 in, 001 out". Wireless pipes don't need to be joined by pipes.
+- Since 2.3.4 a Wireless pipe joined into other pipes counts for the whole network. Every tagged face on that network
+  links too, even one on a Basic or Elite pipe. Example: a Wireless pipe joined to an Elite pipe whose face on a machine
+  is Push, tag Steam1, gets steam from your Steam1 Pull faces anywhere. Before, only the Wireless pipe's own faces
+  linked. Items and fluids work the same way.
 - Links work in any dimension (`pipeWirelessCrossDimension`).
 - Tags are private to the pipe owner's ServerUtilities team (or to the owner alone without a team), so nobody else can
   send to or take from yours.
@@ -832,6 +836,9 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `gridRfPerEu` | `3.6` | RF per EU, both ways (GregTech's own rate). |
 | `gridControllerCrossDimension` | `true` | Controllers charge players in any dimension. |
 | `gridLossPercent` | `0` | EU and RF lost on the way, as a percentage of what arrives (0 to 90). |
+| `permissions` / `opLock` | `false` | Only the server console can op anyone. `/op` from a player (whatever their op level or rank), a command block or RCON is refused and logged. `/deop` and every other command work as before. (2.3.4) |
+| `opQuiet` | `false` | The console's `/op` and `/deop` tell nobody in game: vanilla shows every op online, the newly opped player too, a grey "[Server: Opped X]" line. Only the console sees it. (2.3.4) |
+| `worldEditRanks` | `true` | WorldEdit also asks the player's ServerUtilities rank, so a rank with `worldedit: true` (or single `worldedit.*` nodes, the more exact one winning) gets WorldEdit without op. Ops keep it either way. (2.3.4) |
 
 ## Build and test
 

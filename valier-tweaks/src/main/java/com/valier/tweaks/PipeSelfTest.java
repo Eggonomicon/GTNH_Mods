@@ -51,6 +51,8 @@ import cpw.mods.fml.common.gameevent.TickEvent;
  * Void on a pulling face (with an amount kept) and on a pushing face (overflow), for fluids too; creative pipes (Pull,
  * Provide, wireless, fluid; only ops and creative players); the wrench picking a pipe up; the Pipe Configurator; 2.0
  * filters read in; the new tiers; what WAILA is sent.</li>
+ * <li>2.3.4 (seven blocks up): tagged faces on Basic or Elite pipes joined to a Wireless pipe link like Wireless faces,
+ * both ways, items and fluids; the same tag with no Wireless pipe joined in stays unlinked.</li>
  * </ul>
  */
 public final class PipeSelfTest { // public: Forge calls its tick handler from another class loader
@@ -81,6 +83,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         lootSpawner();
         filters();
         v21();
+        wirelessJoined();
         FMLCommonHandler.instance()
             .bus()
             .register(this);
@@ -411,6 +414,103 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
         } catch (Throwable e) {
             return null;
         }
+    }
+
+    // ---- 2.3.4: a Wireless pipe counts for its whole network ---------------------------------------------------------
+
+    int y7;
+    int[] jiSrc, jiDst, jiCtl, joSrc, joDst, jfSrc, jfDst, jgSrc, jgDst;
+
+    int[] at7(int dx, int dz) {
+        return new int[] { bx + dx, y7, bz + dz };
+    }
+
+    /**
+     * Tagged faces on Basic or Elite pipes joined to a Wireless pipe link like Wireless faces: both ways round, for items
+     * and for fluids (Adair77's steam line: a Wireless pipe under Elite pipes, the Elite face on Push with the tag). The
+     * same tag on pipes with no Wireless pipe still only trades within its own pipes.
+     */
+    void wirelessJoined() {
+        y7 = y + 7;
+        Block ip = ModBlocks.itemPipe, fp = ModBlocks.fluidPipe;
+        ForgeDirection w = ForgeDirection.WEST, e = ForgeDirection.EAST;
+        List<TilePipe> rig = new ArrayList<>();
+        // Items: a Wireless Pull face x1 -> a Basic pipe's Push face x1, joined to a Wireless pipe with no face of its own.
+        jiSrc = at7(1, 1);
+        jiDst = at7(6, 1);
+        chest(jiSrc).setInventorySlotContents(0, new ItemStack(Items.coal, 20));
+        chest(jiDst);
+        TilePipe a = pipe(at7(2, 1), ip, PipeTier.WIRELESS, OWNER), b = pipe(at7(5, 1), ip, PipeTier.BASIC, OWNER);
+        rig.add(a);
+        rig.add(b);
+        rig.add(pipe(at7(5, 2), ip, PipeTier.WIRELESS, OWNER));
+        // The control: x1 on a Basic pipe with no Wireless pipe, first in line if it were linked. It gets nothing.
+        jiCtl = at7(6, 7);
+        chest(jiCtl);
+        TilePipe c = pipe(at7(5, 7), ip, PipeTier.BASIC, OWNER);
+        rig.add(c);
+        // Items the other way: a Basic pipe's Pull face x2, joined to a Wireless pipe -> a far Wireless Push face x2.
+        joSrc = at7(1, 4);
+        joDst = at7(6, 4);
+        chest(joSrc).setInventorySlotContents(0, new ItemStack(Items.flint, 15));
+        chest(joDst);
+        TilePipe d = pipe(at7(2, 4), ip, PipeTier.BASIC, OWNER), g = pipe(at7(5, 4), ip, PipeTier.WIRELESS, OWNER);
+        rig.add(d);
+        rig.add(g);
+        rig.add(pipe(at7(2, 5), ip, PipeTier.WIRELESS, OWNER));
+        // Fluids: a Wireless Pull face f1 -> an Elite pipe's Push face f1, Elite pipes down to a Wireless pipe.
+        jfSrc = at7(1, 10);
+        jfDst = at7(6, 10);
+        crafter(jfSrc, 4000);
+        crafter(jfDst, 0);
+        TilePipe h = pipe(at7(2, 10), fp, PipeTier.WIRELESS, OWNER), k = pipe(at7(5, 10), fp, PipeTier.ELITE, OWNER);
+        rig.add(h);
+        rig.add(k);
+        rig.add(pipe(at7(5, 11), fp, PipeTier.ELITE, OWNER));
+        rig.add(pipe(at7(5, 12), fp, PipeTier.WIRELESS, OWNER));
+        // Fluids the other way: an Elite pipe's Pull face f2, joined to a Wireless pipe -> a far Wireless Push face f2.
+        jgSrc = at7(1, 14);
+        jgDst = at7(6, 14);
+        crafter(jgSrc, 3000);
+        crafter(jgDst, 0);
+        TilePipe m = pipe(at7(2, 14), fp, PipeTier.ELITE, OWNER), n = pipe(at7(5, 14), fp, PipeTier.WIRELESS, OWNER);
+        rig.add(m);
+        rig.add(n);
+        rig.add(pipe(at7(2, 15), fp, PipeTier.WIRELESS, OWNER));
+        for (TilePipe p : rig) if (p != null) p.updateConnections(); // every pipe is placed now: join them all
+        Object[][] faces = { { a, w, "x1", FaceMode.EXTRACT }, { b, e, "x1", FaceMode.INSERT }, { c, e, "x1", FaceMode.INSERT },
+            { d, w, "x2", FaceMode.EXTRACT }, { g, e, "x2", FaceMode.INSERT }, { h, w, "f1", FaceMode.EXTRACT },
+            { k, e, "f1", FaceMode.INSERT }, { m, w, "f2", FaceMode.EXTRACT }, { n, e, "f2", FaceMode.INSERT } };
+        for (Object[] f : faces) {
+            TilePipe p = (TilePipe) f[0];
+            ForgeDirection side = (ForgeDirection) f[1];
+            if (p == null || p.face(side.ordinal()) == null) {
+                SelfTest.check(false, "the joined-Wireless rig's pipe touches its block on " + side);
+                continue;
+            }
+            p.face(side.ordinal()).tag = (String) f[2];
+            mode(p, side, (FaceMode) f[3]);
+        }
+        if (c != null && c.face(e.ordinal()) != null) c.face(e.ordinal()).priority = 50; // would win if it were linked
+    }
+
+    void checkWirelessJoined() {
+        int coal = count(inv(jiDst), Items.coal), ctl = count(inv(jiCtl), Items.coal);
+        SelfTest.check(coal == 20 && ctl == 0 && count(inv(jiSrc), Items.coal) == 0,
+            "items: a Wireless Pull face x1 feeds a Basic pipe's Push face x1 joined to a Wireless pipe; x1 on pipes with no "
+                + "Wireless pipe gets nothing, though it is first in line (" + coal + " / " + ctl + ")");
+        int flint = count(inv(joDst), Items.flint);
+        SelfTest.check(flint == 15 && count(inv(joSrc), Items.flint) == 0,
+            "items the other way: a Basic pipe's Pull face x2 joined to a Wireless pipe feeds a far Wireless Push face (" + flint
+                + " flint)");
+        int f1s = mB(world.getTileEntity(jfSrc[0], y7, jfSrc[2])), f1d = mB(world.getTileEntity(jfDst[0], y7, jfDst[2]));
+        SelfTest.check(f1d == 4000 && f1s == 0,
+            "fluids: a Wireless Pull face f1 feeds an Elite pipe's Push face f1, Elite pipes joined to a Wireless pipe (" + f1s
+                + " left, " + f1d + " mB there)");
+        int f2s = mB(world.getTileEntity(jgSrc[0], y7, jgSrc[2])), f2d = mB(world.getTileEntity(jgDst[0], y7, jgDst[2]));
+        SelfTest.check(f2d == 3000 && f2s == 0,
+            "fluids the other way: an Elite pipe's Pull face f2 joined to a Wireless pipe feeds a far Wireless Push face (" + f2s
+                + " left, " + f2d + " mB there)");
     }
 
     TileXpCrafter crafter(int[] p, int mB) {
@@ -774,6 +874,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
             "the network knows its pipe and two faces");
         checkFilters();
         checkV21();
+        checkWirelessJoined();
         List<String> stats = PipeNetworks.stats();
         SelfTest.check(stats.size() >= 2 && stats.get(0)
             .contains("pipe networks"), "/valiertweaks pipes answers (" + stats.get(0) + ")");
@@ -781,7 +882,7 @@ public final class PipeSelfTest { // public: Forge calls its tick handler from a
     }
 
     void clear() {
-        for (int x = bx; x < bx + 16; x++) for (int z = bz; z < bz + 16; z++) for (int yy = y; yy < y + 6; yy++) {
+        for (int x = bx; x < bx + 16; x++) for (int z = bz; z < bz + 16; z++) for (int yy = y; yy < y + 10; yy++) {
             TileEntity te = world.getTileEntity(x, yy, z);
             if (te instanceof IInventory && !(te instanceof TileXpCrafter)) {
                 IInventory i = (IInventory) te;

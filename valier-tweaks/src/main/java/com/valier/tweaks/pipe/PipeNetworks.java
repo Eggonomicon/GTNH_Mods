@@ -213,6 +213,7 @@ public class PipeNetworks {
                 net.kind.word, start.xCoord, start.yCoord, start.zCoord, members.size(), max);
             return;
         }
+        for (TilePipe p : members) if (PipeTier.wireless(p.tier())) net.wireless = true; // before any face asks
         for (TilePipe p : members) {
             for (int s = 0; s < 6; s++) {
                 if (!p.blockOn(s) || p.face(s) == null || p.face(s).mode == FaceMode.OFF) continue;
@@ -257,8 +258,8 @@ public class PipeNetworks {
     }
 
     /**
-     * The faces of a role that {@code f} trades with: those of its own network with its tag, and for a Wireless face
-     * with a tag also the Wireless faces of that tag (same team) on other networks, other dimensions too if the config
+     * The faces of a role that {@code f} trades with: those of its own network with its tag, and when its network has a
+     * Wireless pipe also the wireless faces of that tag (same team) on other networks, other dimensions too if the config
      * allows. Sorted by priority.
      */
     static List<PipeNetwork.Face> partners(PipeNetwork.Face f, FaceMode role, boolean overflowOnly) {

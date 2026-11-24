@@ -132,6 +132,7 @@ public class ValierTweaks {
             .bus()
             .register(loot); // the scan, on server ticks
         MinecraftForge.EVENT_BUS.register(new MobLoot.Guard()); // what a loot roll tries to add to the world
+        MinecraftForge.EVENT_BUS.register(new OpLock()); // /op only from the console, when opLock is on
         proxy.preInit(event);
         if (Loader.isModLoaded("Railcraft")) {
             RailcraftBoilers boilers = RailcraftBoilers.make();
@@ -190,5 +191,14 @@ public class ValierTweaks {
     public void serverStarting(FMLServerStartingEvent event) {
         event.registerServerCommand(new PdimCommand());
         event.registerServerCommand(new TweaksCommand()); // pipes (and, on a test server, selftest)
+        // WorldEdit made its own permission check at server-about-to-start; ranks go in front of it now, before it
+        // registers its commands (server started).
+        if (TweaksConfig.worldEditRanks && Loader.isModLoaded("worldedit") && Loader.isModLoaded("serverutilities")) {
+            try {
+                WorldEditRanks.install();
+            } catch (Throwable t) { // another WorldEdit build: leave its own check alone
+                LOG.warn("WorldEdit by rank couldn't be set up; WorldEdit stays ops-only", t);
+            }
+        }
     }
 }

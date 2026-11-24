@@ -20,6 +20,12 @@ public final class PipeNetwork {
         extracts = new ArrayList<>(), overflow = new ArrayList<>();
     /** More pipes than {@code pipeNetworkMax}: it does nothing at all (and WAILA, the menu and the command say so). */
     boolean tooBig;
+    /**
+     * It has a Wireless (or creative) pipe somewhere: every tagged face on it links to the team's other wireless faces
+     * with that tag, not only the faces on the Wireless pipe itself (2.3.4; before, a Basic or Elite pipe joined to a
+     * Wireless one only traded within its own pipes).
+     */
+    boolean wireless;
 
     PipeNetwork(PipeKind kind) {
         this.kind = kind;
@@ -115,8 +121,9 @@ public final class PipeNetwork {
             this.source = side == TilePipe.SOURCE ? new CreativeSource(cfg, pipe.kind(), tier) : null;
         }
 
+        /** A tagged face on a network with a Wireless pipe: it links by tag beyond its own pipes. */
         boolean wireless() {
-            return PipeTier.wireless(tier) && !cfg.tag.isEmpty();
+            return net.wireless && !cfg.tag.isEmpty();
         }
 
         /** Faces trade only with faces of the same tag. */

@@ -62,6 +62,9 @@ public final class TweaksConfig {
     public static String[] xpCrafterCosts = {};
     public static int xpCrafterSmallTimes = 4;
     public static boolean chainArmourFullDust = true;
+    public static boolean opLock = false;
+    public static boolean opQuiet = false;
+    public static boolean worldEditRanks = true;
 
     private TweaksConfig() {}
 
@@ -247,12 +250,14 @@ public final class TweaksConfig {
         c.setCategoryComment(cat, "Valier item and fluid pipes. Seven tiers each; the lists give each tier's value in this "
             + "order: Basic, Advanced, Elite, Wireless, Superior, Ultimate, Creative (the block metadata). Players need the "
             + "same values for their menus to show them right; the server's are what count.");
+        String order = " One line per tier: Basic, Advanced, Elite, Wireless, Superior, Ultimate, Creative (the 4th line is "
+            + "Wireless). A face moves at its own pipe's tier, also when it links through a Wireless pipe.";
         pipeItems = tiers(c.get(cat, "pipeItems", com.valier.tweaks.pipe.PipeTier.ITEMS, "Items one Extract or Request face "
-            + "moves per transfer, at most (a face's own amount can be lower)."), com.valier.tweaks.pipe.PipeTier.ITEMS);
+            + "moves per transfer, at most (a face's own amount can be lower)." + order), com.valier.tweaks.pipe.PipeTier.ITEMS);
         pipeFluids = tiers(c.get(cat, "pipeFluids", com.valier.tweaks.pipe.PipeTier.FLUIDS, "Fluid (mB) one Extract or "
-            + "Request face moves per transfer, at most."), com.valier.tweaks.pipe.PipeTier.FLUIDS);
+            + "Request face moves per transfer, at most." + order), com.valier.tweaks.pipe.PipeTier.FLUIDS);
         pipeTicks = tiers(c.get(cat, "pipeTicks", com.valier.tweaks.pipe.PipeTier.TICKS, "Ticks between an Extract or "
-            + "Request face's transfers (20 = once a second)."), com.valier.tweaks.pipe.PipeTier.TICKS);
+            + "Request face's transfers (20 = once a second)." + order), com.valier.tweaks.pipe.PipeTier.TICKS);
         pipeMaxSleepTicks = c.getInt("pipeMaxSleepTicks", cat, 100, 20, 1200, "A face that finds nothing to do waits twice as "
             + "long each time, up to this many ticks (a change in the block it touches wakes it sooner).");
         pipeBudgetMicros = c.getInt("pipeBudgetMicros", cat, 2000, 100, 50000, "At most this many microseconds a tick on "
@@ -295,6 +300,14 @@ public final class TweaksConfig {
             + "any dimension (else only in their own).");
         gridLossPercent = c.getInt("gridLossPercent", cat, 0, 0, 90, "EU (and RF) lost on the way, as a percentage of what arrives: "
             + "at 10, 100 EU delivered costs the network 110. 0: nothing is lost.");
+        cat = "permissions";
+        c.setCategoryComment(cat, "Who may op, and WorldEdit by ServerUtilities rank.");
+        opLock = c.getBoolean("opLock", cat, false, "Only the server console can op anyone: /op from a player (whatever their "
+            + "op level or rank), a command block or RCON is refused and logged. /deop and every other command work as before.");
+        opQuiet = c.getBoolean("opQuiet", cat, false, "The console's /op and /deop tell nobody in game (vanilla shows every op "
+            + "online, the newly opped player too, a grey \"[Server: Opped X]\" line). Only the console sees it.");
+        worldEditRanks = c.getBoolean("worldEditRanks", cat, true, "WorldEdit also asks the player's ServerUtilities rank, so a "
+            + "rank with worldedit: true (or single worldedit.* nodes) gets WorldEdit without op. Ops keep it either way.");
         if (c.hasChanged()) c.save();
     }
 

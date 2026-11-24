@@ -83,8 +83,9 @@ public final class SelfTest {
         if (!"trees".equals(step) && !"peaceful".equals(step) && !"boilers".equals(step) && !"lootspawner".equals(step)
             && !"xpcrafter".equals(step) && !"railboiler".equals(step) && !"mod".equals(step) && !"pipes".equals(step) && !"pipeperf".equals(step)
             && !"barrels".equals(step) && !"barrelperf".equals(step) && !"satchels".equals(step)
-            && !"grid".equals(step) && !"gridperf".equals(step) && !"cost".equals(step) && !"pipebench".equals(step)) {
-            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner, xpcrafter, railboiler, mod, pipes, pipeperf, barrels, barrelperf, satchels, grid, gridperf, cost, pipebench"));
+            && !"grid".equals(step) && !"gridperf".equals(step) && !"cost".equals(step) && !"pipebench".equals(step)
+            && !"oplock".equals(step)) {
+            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner, xpcrafter, railboiler, mod, pipes, pipeperf, barrels, barrelperf, satchels, grid, gridperf, cost, pipebench, oplock"));
             return;
         }
         passed = failed = 0;
@@ -105,6 +106,10 @@ public final class SelfTest {
             else if ("gridperf".equals(step)) new com.valier.tweaks.grid.GridPerfTest().start();
             else if ("cost".equals(step)) new CostSelfTest().start();
             else if ("pipebench".equals(step)) new PipeBench().start();
+            else if ("oplock".equals(step)) {
+                OpLockSelfTest.run();
+                summary();
+            }
             else if ("mod".equals(step)) {
                 ModSelfTest.run();
                 summary();

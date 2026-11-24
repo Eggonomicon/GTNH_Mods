@@ -13,7 +13,7 @@ public class TweaksCommand extends CommandBase {
 
     private static final String USAGE = "/valier cost | pipes [reset] | revertblocks"
         + (SelfTest.ENABLED ? " | selftest trees|peaceful|boilers|lootspawner|xpcrafter|railboiler|mod|pipes|pipeperf|"
-            + "barrels|barrelperf|satchels|grid|gridperf|cost" : "");
+            + "barrels|barrelperf|satchels|grid|gridperf|cost|oplock" : "");
 
     @Override
     public String getCommandName() {
