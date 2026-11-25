@@ -13,21 +13,21 @@ def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Ins
 
 dependencies {
     compileOnly(files(
-        "${gtnh}/mods/TConstruct-1.14.123-GTNH.jar",
+        "${gtnh}/mods/TConstruct-1.14.124-GTNH.jar",
         "${gtnh}/mods/+unimixins-all-1.7.10-0.3.1.jar",
-        "${gtnh}/mods/gregtech-5.09.54.265.jar",
-        "${gtnh}/mods/gtnhlib-0.11.54.jar",
-        "${gtnh}/mods/modularui2-2.3.94-1.7.10.jar",
-        "${gtnh}/mods/appliedenergistics2-rv3-beta-1095-GTNH.jar",
-        "${gtnh}/mods/Waila-1.19.34.jar",
-        "${gtnh}/mods/Railcraft-9.17.36.jar",
-        "${gtnh}/mods/ServerUtilities-2.4.22.jar",
-        "${gtnh}/mods/NotEnoughItems-2.8.171-GTNH.jar",
-        "${gtnh}/mods/CodeChickenCore-1.4.22.jar",
+        "${gtnh}/mods/gregtech-5.09.54.277.jar",
+        "${gtnh}/mods/gtnhlib-0.11.58.jar",
+        "${gtnh}/mods/modularui2-2.3.97-1.7.10.jar",
+        "${gtnh}/mods/appliedenergistics2-rv3-beta-1104-GTNH.jar",
+        "${gtnh}/mods/Waila-1.19.36.jar",
+        "${gtnh}/mods/Railcraft-9.17.37.jar",
+        "${gtnh}/mods/ServerUtilities-2.5.4.jar",
+        "${gtnh}/mods/NotEnoughItems-2.8.176-GTNH.jar",
+        "${gtnh}/mods/CodeChickenCore-1.4.24.jar",
         // 2.3.0's Valier Grid: IC2 EU and CoFH RF in and out, Baubles to charge worn items (each only used when loaded).
         "${gtnh}/mods/industrialcraft-2-2.2.828-experimental.jar",
         "${gtnh}/mods/CoFHCore-[1.7.10]3.1.4-329.jar",
-        "${gtnh}/mods/BaublesExpanded-2.2.27-GTNH.jar",
+        "${gtnh}/mods/BaublesExpanded-2.2.29-GTNH.jar",
         "${gtnh}/mods/holoinventory-2.5.18-GTNH.jar",
         // 2.3.4: WorldEdit asks ServerUtilities ranks too (only used when both are loaded).
         "${gtnh}/mods/worldedit-v0.0.10.jar",

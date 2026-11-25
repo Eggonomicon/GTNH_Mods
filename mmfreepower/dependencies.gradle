@@ -8,12 +8,12 @@ def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Ins
 
 dependencies {
     compileOnly(files(
-        "${gtnh}/mods/matter-manipulator-0.1.75-GTNH.jar",
+        "${gtnh}/mods/matter-manipulator-0.1.77-GTNH.jar",
         "${gtnh}/mods/+unimixins-all-1.7.10-0.3.1.jar",
         "${gtnh}/falsepattern/it.unimi.dsi-fastutil-8.5.18.jar",
         "${gtnh}/mods/industrialcraft-2-2.2.828-experimental.jar",
-        "${gtnh}/mods/appliedenergistics2-rv3-beta-1095-GTNH.jar",
-        "${gtnh}/mods/gtnhlib-0.11.54.jar",
-        "${gtnh}/mods/gregtech-5.09.54.265.jar",
+        "${gtnh}/mods/appliedenergistics2-rv3-beta-1104-GTNH.jar",
+        "${gtnh}/mods/gtnhlib-0.11.58.jar",
+        "${gtnh}/mods/gregtech-5.09.54.277.jar",
         "${gtnh}/mods/visualprospecting-1.5.42.jar"))
 }

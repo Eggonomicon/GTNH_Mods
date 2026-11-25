@@ -6,6 +6,6 @@ def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Ins
 
 dependencies {
     compileOnly(files(
-        "${gtnh}/mods/ServerUtilities-2.4.22.jar",
+        "${gtnh}/mods/ServerUtilities-2.5.4.jar",
         "${gtnh}/falsepattern/it.unimi.dsi-fastutil-8.5.18.jar"))
 }

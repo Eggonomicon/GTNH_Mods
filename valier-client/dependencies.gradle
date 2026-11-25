@@ -7,11 +7,11 @@ def gtnh = project.findProperty("gtnhInstance") ?: "${projectDir}/../../GTNH_Ins
 
 dependencies {
     compileOnly(files(
-        "${gtnh}/mods/Waila-1.19.34.jar",
-        "${gtnh}/mods/gregtech-5.09.54.265.jar",
-        "${gtnh}/mods/gtnhlib-0.11.54.jar",
-        "${gtnh}/mods/modularui2-2.3.94-1.7.10.jar",
-        "${gtnh}/mods/appliedenergistics2-rv3-beta-1095-GTNH.jar",
-        "${gtnh}/mods/NotEnoughItems-2.8.171-GTNH.jar",
-        "${gtnh}/mods/CodeChickenCore-1.4.22.jar"))
+        "${gtnh}/mods/Waila-1.19.36.jar",
+        "${gtnh}/mods/gregtech-5.09.54.277.jar",
+        "${gtnh}/mods/gtnhlib-0.11.58.jar",
+        "${gtnh}/mods/modularui2-2.3.97-1.7.10.jar",
+        "${gtnh}/mods/appliedenergistics2-rv3-beta-1104-GTNH.jar",
+        "${gtnh}/mods/NotEnoughItems-2.8.176-GTNH.jar",
+        "${gtnh}/mods/CodeChickenCore-1.4.24.jar"))
 }
