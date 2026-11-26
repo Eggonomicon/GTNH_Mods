@@ -32,5 +32,7 @@ dependencies {
         // 2.3.4: WorldEdit asks ServerUtilities ranks too (only used when both are loaded).
         "${gtnh}/mods/worldedit-v0.0.10.jar",
         // 2.3.5: endless Thaumcraft wands (only used when Thaumcraft is loaded).
-        "${gtnh}/mods/Thaumcraft-1.7.10-4.2.3.5.jar"))
+        "${gtnh}/mods/Thaumcraft-1.7.10-4.2.3.5.jar",
+        // 2.3.6: /pdim reset (only used when Personal Space is loaded).
+        "${gtnh}/mods/personalspace-1.0.42.jar"))
 }

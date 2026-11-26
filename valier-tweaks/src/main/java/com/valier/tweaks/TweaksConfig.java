@@ -11,6 +11,8 @@ public final class TweaksConfig {
     public static int maxExtraLogs = 1024;
     public static int logsPerTick = 128;
     public static boolean peacefulDimensions = true;
+    public static boolean pdimReset = true;
+    public static int pdimResetConfirmSeconds = 30;
     public static boolean noBoilerAsh = true;
     public static boolean noRailcraftBoilerExplosions = true;
     public static boolean lootSpawners = true;
@@ -103,6 +105,21 @@ public final class TweaksConfig {
             "Let players make their own Personal Space dimension peaceful with /pdim peaceful on|off: no hostile mobs "
                 + "spawn there, and ones already there are removed (no drops). Anyone who could break blocks where they "
                 + "stand may switch it, so a claim keeps visitors from changing it; ops always may.");
+        pdimReset = c.getBoolean(
+            "pdimReset",
+            "pdim",
+            true,
+            "Let players reset their own Personal Space dimension with /pdim reset next to its portal, then /pdim reset "
+                + "confirm: it is wiped and generates again from scratch, with one more change of its layers and biome. "
+                + "Only while nobody is in it. Anyone who could break the portal block may (so a claim keeps others out); "
+                + "ops and the console may name any personal dimension. The old files are moved to pdim-reset-backups.");
+        pdimResetConfirmSeconds = c.getInt(
+            "pdimResetConfirmSeconds",
+            "pdim",
+            30,
+            5,
+            300,
+            "How long /pdim reset waits for /pdim reset confirm, in seconds.");
         noBoilerAsh = c.getBoolean(
             "noBoilerAsh",
             "boilers",

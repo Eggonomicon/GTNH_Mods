@@ -585,6 +585,30 @@ dimension peaceful:
 
 Personal Space is optional: without it, `/pdim peaceful` simply finds no personal dimensions.
 
+## Resetting a personal dimension (2.3.6)
+
+Personal Space locks a dimension's layers and biome once it exists. `/pdim reset` starts one over:
+
+| Command | What it does |
+|---|---|
+| `/pdim reset` | Next to the portal of a personal dimension (within 4 blocks, outside it): says what will be wiped and waits. |
+| `/pdim reset confirm` | Within 30 seconds of that: resets it. |
+| `/pdim reset <dimension>` then `/pdim reset <dimension> confirm` | Ops and the console: any personal dimension. |
+
+- **What happens:** the dimension is unloaded and everything in its folder (chunks, chunk loaders' tickets, its data)
+  moves to `pdim-reset-backups/<folder>-<time>/` next to the world. Only Personal Space's own settings file stays.
+  Its layers and biome may then be changed once more in the portal's settings (sneak + right-click). The next trip in
+  generates it fresh, and you land on the new ground with a new return portal: Personal Space alone would keep the old
+  arrival height and build no return portal, so the mod moves every portal leading there to the new ground level + 1
+  when the dimension loads again, and builds the return portal the tick after.
+- **Who may:** anyone who could break the portal block, the same rule Personal Space uses for its settings, so claim
+  the portal's chunk. Ops always may.
+- **Only while nobody is in it:** checked when asked, when confirmed, and again at the start of the tick that unloads
+  it (Forge would otherwise unload a world with a player in it).
+- **Undo:** stop the server, move the files from the backup folder back into the dimension's folder.
+- `/pdim peaceful` stays as it was. Settings: `pdimReset` (default true), `pdimResetConfirmSeconds` (default 30).
+  Saved: `data/valiertweaks_pdimreset.dat`.
+
 ## No ash from boilers (1.2.0)
 
 GregTech's solid fuel boilers put ash or dark ash into their output slot as they burn coal, charcoal, coke and so on.

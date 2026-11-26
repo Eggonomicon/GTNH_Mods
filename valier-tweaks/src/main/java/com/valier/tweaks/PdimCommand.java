@@ -22,10 +22,14 @@ import net.minecraftforge.event.world.BlockEvent;
  * break blocks where they stand may switch it (the same rule Personal Space uses for its portal settings, so a claim
  * keeps visitors out); ops always may. Ops and the console can also name a dimension ({@code /pdim peaceful on 183})
  * and list the peaceful ones ({@code /pdim list}).
+ * <p>
+ * {@code /pdim reset} then {@code /pdim reset confirm} (2.3.6) wipes a personal dimension so it generates again, with
+ * one more change of its layers and biome: next to its portal, for anyone who could break that portal block, or
+ * {@code /pdim reset <dimension>} for ops and the console. See {@link PdimReset}.
  */
 public class PdimCommand extends CommandBase {
 
-    private static final String USAGE = "/pdim peaceful [on|off] [dimension]  |  /pdim list";
+    private static final String USAGE = "/pdim peaceful [on|off] [dimension]  |  /pdim reset [dimension] [confirm]  |  /pdim list";
 
     @Override
     public String getCommandName() {
@@ -53,6 +57,10 @@ public class PdimCommand extends CommandBase {
         if ("list".equalsIgnoreCase(args[0])) {
             Set<Integer> dims = PeacefulDims.peacefulDims();
             say(sender, dims.isEmpty() ? "No personal dimension is peaceful." : "Peaceful personal dimensions: " + dims);
+            return;
+        }
+        if ("reset".equalsIgnoreCase(args[0])) {
+            reset(sender, args);
             return;
         }
         if (!"peaceful".equalsIgnoreCase(args[0]) || args.length > 3) throw new WrongUsageException(USAGE);
@@ -105,6 +113,29 @@ public class PdimCommand extends CommandBase {
         if (changed) ValierTweaks.LOG.info("{} turned peaceful {} in dimension {}", sender.getCommandSenderName(), on ? "on" : "off", dim);
     }
 
+    /** {@code /pdim reset [dimension] [confirm]}. */
+    private static void reset(ICommandSender sender, String[] args) {
+        if (args.length > 3) throw new WrongUsageException(USAGE);
+        if (!TweaksConfig.pdimReset) {
+            say(sender, "Resetting personal dimensions is turned off in the server's config.");
+            return;
+        }
+        if (!cpw.mods.fml.common.Loader.isModLoaded("personalspace")) {
+            say(sender, "Personal Space isn't installed on this server.");
+            return;
+        }
+        Integer dim = null;
+        boolean confirm = false;
+        for (int i = 1; i < args.length; i++) {
+            if ("confirm".equalsIgnoreCase(args[i]) && !confirm) confirm = true;
+            else if (dim == null) dim = parseInt(sender, args[i]);
+            else throw new WrongUsageException(USAGE);
+        }
+        boolean op = isOp(sender);
+        if (confirm) PdimReset.confirm(sender, dim, op);
+        else PdimReset.ask(sender, dim, op);
+    }
+
     /**
      * Whether the player could break the block they stand on: asks with a break event, so claims (ServerUtilities)
      * and other protection decide, exactly as for Personal Space's own portal settings.
@@ -131,8 +162,9 @@ public class PdimCommand extends CommandBase {
 
     @Override
     public List<String> addTabCompletionOptions(ICommandSender sender, String[] args) {
-        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "peaceful", "list");
+        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "peaceful", "reset", "list");
         if (args.length == 2 && "peaceful".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "on", "off");
+        if (args.length == 2 && "reset".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "confirm");
         return Collections.emptyList();
     }
 }

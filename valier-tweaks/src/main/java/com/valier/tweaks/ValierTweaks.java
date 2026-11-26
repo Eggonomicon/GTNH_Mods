@@ -92,6 +92,13 @@ public class ValierTweaks {
         FMLCommonHandler.instance()
             .bus()
             .register(peaceful); // the sweep, on server ticks
+        if (Loader.isModLoaded("personalspace")) {
+            PdimReset reset = new PdimReset();
+            MinecraftForge.EVENT_BUS.register(reset); // a reset dimension loading again, chunk loads (its portals)
+            FMLCommonHandler.instance()
+                .bus()
+                .register(reset); // finishing resets, building return portals, on server ticks
+        }
         ModBlocks.register(); // both sides, whatever the settings: blocks must match the server's
         NET.registerMessage(com.valier.tweaks.pipe.PipeFaceMessage.Handler.class, com.valier.tweaks.pipe.PipeFaceMessage.class, 0,
             Side.CLIENT);
