@@ -29,10 +29,11 @@ import net.minecraftforge.event.world.BlockEvent;
  * <p>
  * {@code /pdim terrain [realistic|flat]} (2.3.7) shows or sets whether a personal dimension generates with real RWG2
  * terrain for its biome (Jungle Canyon) instead of flat layers, before it first generates. See {@link PdimTerrain}.
+ * {@code /pdim rivers} (2.3.8), inside such a dimension, names the nearest river and river junction.
  */
 public class PdimCommand extends CommandBase {
 
-    private static final String USAGE = "/pdim peaceful [on|off] [dimension]  |  /pdim reset [dimension] [confirm]  |  /pdim terrain [realistic|flat] [dimension]  |  /pdim list";
+    private static final String USAGE = "/pdim peaceful [on|off] [dimension]  |  /pdim reset [dimension] [confirm]  |  /pdim terrain [realistic|flat] [dimension]  |  /pdim rivers  |  /pdim list";
 
     @Override
     public String getCommandName() {
@@ -68,6 +69,14 @@ public class PdimCommand extends CommandBase {
         }
         if ("terrain".equalsIgnoreCase(args[0])) {
             terrain(sender, args);
+            return;
+        }
+        if ("rivers".equalsIgnoreCase(args[0])) {
+            if (!cpw.mods.fml.common.Loader.isModLoaded("personalspace") || !cpw.mods.fml.common.Loader.isModLoaded("rwg2")) {
+                say(sender, "Real terrain needs Personal Space and Realistic World Gen 2 on the server.");
+                return;
+            }
+            PdimTerrain.rivers(sender);
             return;
         }
         if (!"peaceful".equalsIgnoreCase(args[0]) || args.length > 3) throw new WrongUsageException(USAGE);
@@ -187,7 +196,7 @@ public class PdimCommand extends CommandBase {
 
     @Override
     public List<String> addTabCompletionOptions(ICommandSender sender, String[] args) {
-        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "peaceful", "reset", "terrain", "list");
+        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "peaceful", "reset", "terrain", "rivers", "list");
         if (args.length == 2 && "terrain".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "realistic", "flat");
         if (args.length == 2 && "peaceful".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "on", "off");
         if (args.length == 2 && "reset".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "confirm");

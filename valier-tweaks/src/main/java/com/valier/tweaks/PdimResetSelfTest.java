@@ -228,14 +228,13 @@ public final class PdimResetSelfTest {
             "the new layers took (ground level " + (cfg == null ? -1 : cfg.getGroundLevel()) + ") and generation is locked again");
         check(portal.targetPosY == 129, "Personal Space alone leaves the portal landing at y 129 (" + portal.targetPosY + ")");
         check(!click(false), "with the settings saved, a plain right-click goes through again");
-
-        DimensionManager.initDimension(dim); // what the next trip through the portal does first
-        check(DimensionManager.getWorld(dim) != null, "the dimension loads again");
-        check(portal.targetPosY == 6, "as it loads, the portal is pointed at the new ground level + 1, y 6 (" + portal.targetPosY + ")");
-        check(PdimReset.relink.contains(portal), "its return portal is due to be built the next tick");
+        check(portal.targetPosY == 6, "that click points the portal at the new ground level + 1, y 6, before Personal Space's teleporter reads it ("
+            + portal.targetPosY + ")");
+        check(PdimReset.relink.contains(portal), "its return portal is due to be built at the end of the tick");
         PdimReset.Data data = PdimReset.Data.get();
-        check(!data.waiting.contains(dim) && Integer.valueOf(6).equals(data.arrival.get(dim)),
-            "with the new settings in, it no longer waits, and its arrival height (6) is saved");
+        check(Integer.valueOf(6).equals(data.arrival.get(dim)), "its arrival height (6) is saved");
+        DimensionManager.initDimension(dim); // the trip itself
+        check(DimensionManager.getWorld(dim) != null, "the dimension loads again");
     }
 
     private void afterReload() {
@@ -250,6 +249,7 @@ public final class PdimResetSelfTest {
         check(d != null && d.isAirBlock(tx, 129, tz) && d.isAirBlock(tx + 3, 140, tz),
             "nothing is left at the old height, and the stone built before the reset is gone");
         check(PdimReset.relink.isEmpty(), "nothing else waits to be relinked");
+        check(!PdimReset.Data.get().waiting.contains(dim), "after that first trip it no longer waits for a fresh start");
 
         // A portal in a chunk that loads later.
         portal.targetPosY = 129;

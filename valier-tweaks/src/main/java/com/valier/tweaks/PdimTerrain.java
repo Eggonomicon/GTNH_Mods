@@ -129,6 +129,55 @@ public final class PdimTerrain {
             : "Personal dimension " + dim + " will generate from its flat layers again.");
     }
 
+    /** What {@code /pdim rivers} found last ({x, z}, or null), for the self-test. */
+    static int[] lastRiver, lastJunction;
+
+    /**
+     * {@code /pdim rivers} (2.3.8): for a player in a real-terrain dimension, the nearest river channel and river
+     * junction, from RWG2's own river noise (the same calls its generator makes), so they're right even where nothing
+     * has generated yet. RWG2's rivers run along the borders of cells about 1,250 blocks across, so they can be a few
+     * hundred blocks away.
+     */
+    static void rivers(ICommandSender sender) {
+        if (!available()) {
+            PdimReset.say(sender, "Real terrain for personal dimensions is turned off on this server (or RWG2 isn't installed).");
+            return;
+        }
+        if (!(sender instanceof EntityPlayerMP)) {
+            PdimReset.say(sender, "Stand in a personal dimension with real terrain and run it there.");
+            return;
+        }
+        EntityPlayerMP p = (EntityPlayerMP) sender;
+        World w = p.worldObj;
+        if (!PeacefulDims.isPersonal(w) || !isOneBiome(w.getWorldChunkManager())) {
+            PdimReset.say(sender, "This only works inside a personal dimension with real terrain (/pdim terrain realistic).");
+            return;
+        }
+        int px = (int) Math.floor(p.posX), pz = (int) Math.floor(p.posZ);
+        lastRiver = Rwg.nearestRiver(w, px, pz);
+        lastJunction = Rwg.nearestJunction(w, px, pz);
+        PdimReset.say(sender, lastRiver == null ? "No river within " + Rwg.SEARCH + " blocks."
+            : "Nearest river: " + where(px, pz, lastRiver) + " (the middle of its channel; the water is at about y 60).");
+        PdimReset.say(sender, lastJunction == null ? "No river junction within " + Rwg.SEARCH + " blocks."
+            : "Nearest river junction: " + where(px, pz, lastJunction) + ".");
+        PdimReset.say(sender, "From RWG2's own river noise, so they're there even if those chunks haven't generated yet.");
+    }
+
+    static String where(int px, int pz, int[] t) {
+        int dx = t[0] - px, dz = t[1] - pz;
+        long d = Math.round(Math.sqrt((double) dx * dx + (double) dz * dz));
+        return "about " + d + " blocks " + direction(dx, dz) + ", at x " + t[0] + ", z " + t[1];
+    }
+
+    /** One of eight compass directions (north is -z). */
+    static String direction(int dx, int dz) {
+        if (dx == 0 && dz == 0) return "here";
+        double a = Math.toDegrees(Math.atan2(dx, -dz));
+        if (a < 0) a += 360;
+        String[] names = { "north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west" };
+        return names[(int) ((a + 22.5) / 45) % 8];
+    }
+
     /** Whether the dimension's folder holds any chunks. */
     static boolean hasChunks(int dim) {
         File region = new File(new File(DimensionManager.getCurrentSaveRootDirectory(), PdimReset.saveFolder(dim)), "region");
@@ -173,6 +222,71 @@ public final class PdimTerrain {
 
     /** RWG2's classes, only touched when RWG2 is loaded. */
     static final class Rwg {
+
+        /** How far {@code /pdim rivers} looks, in blocks. */
+        static final int SEARCH = 2500;
+
+        /**
+         * How deep a river cuts here, 0 to 1 (1 = the middle of its channel), exactly as RWG2's generator works it out:
+         * the river strength (getRiverStrength) gates it, and calculateRiver blends a height towards the riverbed.
+         */
+        static float channel(ChunkManagerRealistic m, int x, int z, float[] sample) {
+            float river = m.getRiverStrength(x, z, sample);
+            if (river >= 0) return 0;
+            float h = m.calculateRiver(x, z, river, 100F, sample);
+            return (100F - h) / 41F; // 100 untouched, ~59 (the bed) in the middle
+        }
+
+        static int[] nearestRiver(World w, int px, int pz) {
+            ChunkManagerRealistic m = (ChunkManagerRealistic) w.getWorldChunkManager();
+            float[] sample = new float[4];
+            int[] near = spiral(px, pz, (x, z) -> channel(m, x, z, sample) > 0.3F);
+            return near == null ? null : best(near, 24, 1, (x, z) -> channel(m, x, z, sample));
+        }
+
+        static int[] nearestJunction(World w, int px, int pz) {
+            ChunkManagerRealistic m = (ChunkManagerRealistic) w.getWorldChunkManager();
+            int[] near = spiral(px, pz, (x, z) -> m.getRiverJunctionStrength(x, z) > 0.8F);
+            return near == null ? null : best(near, 32, 2, m::getRiverJunctionStrength);
+        }
+
+        interface Test {
+
+            boolean at(int x, int z);
+        }
+
+        interface Value {
+
+            float at(int x, int z);
+        }
+
+        /** The first point that passes, in square rings 16 blocks apart going outwards. */
+        static int[] spiral(int px, int pz, Test test) {
+            if (test.at(px, pz)) return new int[] { px, pz };
+            for (int r = 16; r <= SEARCH; r += 16) {
+                for (int d = -r; d < r; d += 16) {
+                    if (test.at(px + d, pz - r)) return new int[] { px + d, pz - r };
+                    if (test.at(px + r, pz + d)) return new int[] { px + r, pz + d };
+                    if (test.at(px - d, pz + r)) return new int[] { px - d, pz + r };
+                    if (test.at(px - r, pz - d)) return new int[] { px - r, pz - d };
+                }
+            }
+            return null;
+        }
+
+        /** The highest value within {@code radius} of a point, every {@code step} blocks. */
+        static int[] best(int[] at, int radius, int step, Value value) {
+            int[] out = at;
+            float top = value.at(at[0], at[1]);
+            for (int dx = -radius; dx <= radius; dx += step) for (int dz = -radius; dz <= radius; dz += step) {
+                float v = value.at(at[0] + dx, at[1] + dz);
+                if (v > top) {
+                    top = v;
+                    out = new int[] { at[0] + dx, at[1] + dz };
+                }
+            }
+            return out;
+        }
 
         /** RWG2's realistic biome whose base biome this is, or null. */
         static RealisticBiomeBase realisticFor(BiomeGenBase base) {

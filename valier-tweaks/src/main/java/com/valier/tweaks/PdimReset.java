@@ -30,7 +30,6 @@ import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.event.world.ChunkEvent;
-import net.minecraftforge.event.world.WorldEvent;
 
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -56,10 +55,11 @@ import me.eigenraven.personalspace.world.DimensionConfig;
  * <p>
  * <b>The arrival point:</b> a portal remembers where it lands (the ground level + 1 when the dimension was made) and
  * Personal Space never changes it, and it only builds the return portal when a dimension is first made or a portal item
- * is placed. So when a reset dimension next loads, every loaded portal leading there gets the new ground level + 1, and
- * the next tick its return portal is built again ({@link PortalTileEntity#linkOtherPortal}). The world loads before the
- * teleport reads the portal, so the trip that loads it already lands on the new ground. Portals in chunks that weren't
- * loaded then get the same height when their chunk loads. Saved in {@code data/valiertweaks_pdimreset.dat}.
+ * is placed. Its teleporter reads the landing point when the portal is clicked, before the dimension loads. So the click
+ * that starts the first trip after a reset points every loaded portal leading there at the new ground level + 1 (or,
+ * for real terrain, up in the air, moved onto the ground at the end of the tick), and the return portal is built at the
+ * end of that tick ({@link PortalTileEntity#linkOtherPortal}). Portals in chunks that weren't loaded then get the same
+ * landing point when their chunk loads. Saved in {@code data/valiertweaks_pdimreset.dat}.
  * <p>
  * Nothing here runs without work: the server tick returns at once unless a reset or a relink is waiting, and chunk
  * loads only look at tile entities once some dimension has been reset.
@@ -79,6 +79,8 @@ public final class PdimReset {
     static final List<PortalTileEntity> relink = new ArrayList<>();
     /** Real-terrain dimensions whose arrival spot is found on the ground the tick their portal relinks. */
     static final Set<Integer> groundPending = new java.util.HashSet<>();
+    /** Reset dimensions whose fresh start (first trip with the new settings) happens this tick. */
+    static final Set<Integer> freshPending = new java.util.HashSet<>();
     /** Where a real-terrain dimension's portals land until the ground under them is known: in the air. */
     static final int AIR_ARRIVAL = 250;
     /** How far from a portal's spot the ground for its arrival is looked for, in blocks. */
@@ -235,14 +237,21 @@ public final class PdimReset {
             relink.clear();
             for (PortalTileEntity te : now) {
                 if (te.isInvalid() || te.getWorldObj() == null || !te.active) continue;
+                int dim = te.targetDimId;
                 try {
-                    if (groundPending.remove(te.targetDimId)) settle(te);
+                    if (groundPending.remove(dim)) settle(te);
                     te.linkOtherPortal(true, null);
                 } catch (RuntimeException e) {
                     ValierTweaks.LOG.warn("[pdim reset] couldn't build the return portal for the portal at {},{},{}", te.xCoord, te.yCoord, te.zCoord, e);
                 }
+                if (freshPending.remove(dim)) {
+                    Data data = Data.get();
+                    data.waiting.remove(dim);
+                    data.markDirty();
+                }
             }
             groundPending.clear();
+            freshPending.clear();
         }
         for (Iterator<Job> it = jobs.iterator(); it.hasNext();) {
             Job job = it.next();
@@ -286,30 +295,29 @@ public final class PdimReset {
         else ValierTweaks.LOG.info("[pdim reset] {}", text);
     }
 
-    // ---- the dimension loading again: the arrival point and the return portal -------------------------------------
+    // ---- the first trip after a reset: the arrival point and the return portal -----------------------------------------
 
-    @SubscribeEvent
-    public void onWorldLoad(WorldEvent.Load event) {
-        if (event.world.isRemote) return;
-        int dim = event.world.provider.dimensionId;
-        Data data = Data.get();
-        if (!data.waiting.contains(dim)) return;
-        DimensionConfig cfg = DimensionConfig.getForDimension(dim, false);
-        if (cfg == null) return;
-        // Real terrain: the ground isn't known before it generates, so the trip lands in the air and the arrival moves
-        // onto the ground at the end of the tick (settle). Flat layers: the ground level + 1, as Personal Space does.
-        boolean real = Loader.isModLoaded("rwg2") && PdimTerrain.isOneBiome(event.world.getWorldChunkManager());
+    /**
+     * The first trip after a reset, as its portal is clicked and before Personal Space's teleporter reads where to land
+     * (it reads it before the dimension even loads): every loaded portal leading there is pointed at the new ground
+     * level + 1 (flat layers) or up in the air (real terrain, where the ground isn't known before it generates). At the
+     * end of the tick the return portal is built and, for real terrain, the arrival moves onto dry ground (settle).
+     */
+    static void prepare(PortalTileEntity portal, DimensionConfig cfg, Data data) {
+        int dim = portal.targetDimId;
+        boolean real = Loader.isModLoaded("rwg2") && PdimTerrain.isRealistic(dim);
         int y = real ? AIR_ARRIVAL : cfg.getGroundLevel() + 1;
         if (!real) {
             data.arrival.put(dim, y);
             data.arrivalXZ.remove(dim);
+            data.markDirty();
         }
-        if (!cfg.getAllowGenerationChanges()) data.waiting.remove(dim); // the new settings are in: this was the fresh start
-        data.markDirty();
-        int fixed = aimAll(dim, y, null, event.world, true);
-        if (real && fixed > 0) groundPending.add(dim);
-        ValierTweaks.LOG.info("[pdim reset] personal dimension {} loaded after its reset: arrival at y {}{}, {} portal(s) leading there", dim, y,
-            real ? " until the ground is found (real terrain)" : "", fixed);
+        int n = aimAll(dim, y, null, null, false);
+        if (!relink.contains(portal)) relink.add(portal);
+        if (real) groundPending.add(dim);
+        freshPending.add(dim);
+        ValierTweaks.LOG.info("[pdim reset] first trip into personal dimension {} after its reset: landing at y {}{}, {} portal(s) leading there", dim, y,
+            real ? " until the ground is found (real terrain)" : "", n);
     }
 
     /** Aims every loaded portal leading to {@code dim} (from outside it); returns how many there are. */
@@ -331,12 +339,16 @@ public final class PdimReset {
 
     /**
      * A real-terrain dimension, just generated around its portal's spot: finds dry ground near it (not water, not
-     * leaves, room for the portal and a player), points every loaded portal there, and moves players who just arrived
-     * in the air down to it.
+     * leaves, room for the portal and a player), points every loaded portal there, and moves players who just arrived,
+     * wherever they are in that column (in the air, or inside a hill if they came another way), onto it.
      */
     static void settle(PortalTileEntity te) {
         int dim = te.targetDimId;
         WorldServer w = DimensionManager.getWorld(dim);
+        if (w == null) {
+            DimensionManager.initDimension(dim);
+            w = DimensionManager.getWorld(dim);
+        }
         if (w == null) return;
         int oldX = te.targetPosX, oldZ = te.targetPosZ;
         int[] spot = findGround(w, oldX, oldZ, te.targetFacing.offsetX, te.targetFacing.offsetZ);
@@ -350,7 +362,7 @@ public final class PdimReset {
         for (Object o : new ArrayList<Object>(w.playerEntities)) {
             if (!(o instanceof EntityPlayerMP)) continue;
             EntityPlayerMP p = (EntityPlayerMP) o;
-            if (Math.abs(p.posX - (oldX + 0.5)) > 8 || Math.abs(p.posZ - (oldZ + 0.5)) > 8 || p.posY < spot[1]) continue;
+            if (Math.abs(p.posX - (oldX + 0.5)) > 8 || Math.abs(p.posZ - (oldZ + 0.5)) > 8) continue;
             p.fallDistance = 0;
             double tx = te.getTargetTeleportX() + 0.5, ty = te.getTargetTeleportY(), tz = te.getTargetTeleportZ() + 0.5;
             if (p.playerNetServerHandler != null) p.playerNetServerHandler.setPlayerLocation(tx, ty, tz, p.rotationYaw, p.rotationPitch);
@@ -392,7 +404,8 @@ public final class PdimReset {
 
     /**
      * Right after a reset, the portal sends nobody in until its new settings are saved (Done in its settings, even
-     * without changes): a trip in first would generate the area with the old settings.
+     * without changes): a trip in first would generate the area with the old settings. Once they are, the click that
+     * starts the first trip prepares its landing ({@link #prepare}).
      */
     @SubscribeEvent
     public void onInteract(net.minecraftforge.event.entity.player.PlayerInteractEvent event) {
@@ -405,7 +418,11 @@ public final class PdimReset {
         PortalTileEntity portal = (PortalTileEntity) te;
         if (!portal.active || portal.targetDimId == event.world.provider.dimensionId || !data.waiting.contains(portal.targetDimId)) return;
         DimensionConfig cfg = DimensionConfig.getForDimension(portal.targetDimId, false);
-        if (cfg == null || !cfg.getAllowGenerationChanges()) return;
+        if (cfg == null) return;
+        if (!cfg.getAllowGenerationChanges()) {
+            prepare(portal, cfg, data);
+            return;
+        }
         event.setCanceled(true);
         say(event.entityPlayer, "Personal dimension " + portal.targetDimId + " was reset: pick its layers and biome first."
             + " Sneak + right-click this portal and press Done (even without changes), then right-click to go in.");

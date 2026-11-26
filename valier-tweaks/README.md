@@ -624,12 +624,17 @@ biomes, volcanoes or lava caves).
 | `/pdim terrain` | Next to the portal: says whether the dimension has flat layers or real terrain, and its biome. |
 | `/pdim terrain realistic` / `flat` | Next to the portal, before the dimension has generated anything (right after `/pdim reset`): sets it. |
 | `/pdim terrain realistic\|flat <dimension>` | Ops and the console. |
+| `/pdim rivers` (2.3.8) | Inside such a dimension: the nearest river (middle of its channel) and river junction, with coordinates, distance and direction, from RWG2's own river noise (right even where nothing has generated yet). |
 
 - **Order:** `/pdim reset` and confirm; pick the biome (Jungle Canyon) in the portal's settings and press Done;
   `/pdim terrain realistic`; go in. The biome must have RWG2 terrain (in Valier's Personal Space list that's Jungle
   Canyon); the layers then only set the sky's horizon.
-- **Arriving:** the first trip lands in the air for an instant and is moved, the same tick, onto dry ground near the
-  portal's spot (not water or leaves, room for the return portal and a player), where the return portal is built.
+- **Arriving:** the click that starts the first trip points the portal up in the air (Personal Space's teleporter reads
+  where to land at the click, before the dimension loads; 2.3.7 set it too late and landed a player inside a hill); at
+  the end of that tick everyone who arrived there, at any height, is moved onto dry ground near the portal's spot (not
+  water or leaves, room for the return portal and a player), where the return portal is built (2.3.8).
+- **Rivers:** RWG2's rivers run along the borders of noise cells about 1,250 blocks across, so the nearest can be a few
+  hundred blocks away; `/pdim rivers` finds it (the self-test checks there is water where it points).
 - **How:** a server-side mixin in Personal Space's world provider gives such a dimension RWG2's chunk generator and a
   one-biome copy of RWG2's biome picker that answers "this biome, far inland, no volcano" everywhere; rivers and
   junctions are RWG2's own noise. The seed is the world's mixed with the dimension number. Players' clients are

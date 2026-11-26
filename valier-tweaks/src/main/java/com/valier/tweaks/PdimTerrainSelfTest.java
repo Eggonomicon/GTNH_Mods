@@ -125,16 +125,18 @@ public final class PdimTerrainSelfTest {
         r = run("terrain");
         check(r.contains("real (RWG2) terrain"), "/pdim terrain now says real terrain (" + r + ")");
 
+        int oldY = portal.targetPosY;
+        check(!click(), "with the settings saved and real terrain set, a plain right-click on the portal goes through");
+        check(portal.targetPosY == PdimReset.AIR_ARRIVAL && PdimReset.groundPending.contains(dim) && PdimReset.relink.contains(portal),
+            "that click points the portal up in the air (y " + portal.targetPosY + ", was " + oldY + ") before Personal Space's teleporter reads it");
         DimensionManager.initDimension(dim); // the trip in
         WorldServer d = DimensionManager.getWorld(dim);
         check(d != null && PdimTerrain.isOneBiome(d.getWorldChunkManager()), "it loads with RWG2's biome picker, one biome");
         check(d != null && d.theChunkProviderServer.currentChunkProvider instanceof ChunkGeneratorRealistic,
             "and RWG2's chunk generator (" + (d == null ? "?" : d.theChunkProviderServer.currentChunkProvider.getClass().getSimpleName()) + ")");
-        check(portal.targetPosY == PdimReset.AIR_ARRIVAL && PdimReset.groundPending.contains(dim) && PdimReset.relink.contains(portal),
-            "until the ground is known, the portal lands in the air (y " + portal.targetPosY + ")");
-        if (d != null) { // a player who just came through, up in the air
+        if (d != null) { // a player who came through and ended up inside the hill (what happened on Valier with 2.3.7)
             arriving = fake("TerrainArrival", "00000000-0000-4000-8000-000000000d05", d);
-            arriving.setPosition(portal.targetPosX + 0.5, PdimReset.AIR_ARRIVAL, portal.targetPosZ + 0.5);
+            arriving.setPosition(portal.targetPosX + 0.5, 65, portal.targetPosZ + 0.5);
             arriving.fallDistance = 5F;
             d.playerEntities.add(arriving);
         }
@@ -151,7 +153,8 @@ public final class PdimTerrainSelfTest {
             "solid, dry ground under it (" + d.getBlock(tx, ty - 1, tz).getUnlocalizedName() + ")");
         check(d.getBlock(tx, ty, tz) instanceof PortalBlock, "the return portal was built there");
         check(arriving != null && Math.abs(arriving.posY - portal.getTargetTeleportY()) < 0.01 && arriving.fallDistance == 0,
-            "a player who arrived in the air was moved down to it (y " + (arriving == null ? -1 : arriving.posY) + ")");
+            "a player who arrived inside the hill was moved up onto it (y " + (arriving == null ? -1 : arriving.posY) + ")");
+        check(!PdimReset.Data.get().waiting.contains(dim), "after that first trip it no longer waits for a fresh start");
         PdimReset.Data data = PdimReset.Data.get();
         int[] xz = data.arrivalXZ.get(dim);
         check(xz != null && xz[0] == tx && xz[1] == tz && Integer.valueOf(ty).equals(data.arrival.get(dim)), "the arrival spot is saved");
@@ -212,6 +215,26 @@ public final class PdimTerrainSelfTest {
         ValierTweaks.LOG.info("[ValierTweaks SelfTest] pdimterrain: river noise over +-2048 blocks ({} points): strength min {}, <-0.25 at {}, <-0.75 at {}; junction max {}, >0.5 at {}",
             n, rMin, r25, r75, jMax, j50);
 
+        // /pdim rivers, checked against what actually generates at the river it names.
+        FakePlayer finder = fake("RiverFinder", "00000000-0000-4000-8000-000000000d06", d);
+        finder.setPosition(tx + 0.5, ty, tz + 0.5);
+        said.clear();
+        new PdimCommand().processCommand(finder, new String[] { "rivers" });
+        String rv = String.join(" | ", said);
+        check(rv.contains("Nearest river: about") && PdimTerrain.lastRiver != null, "/pdim rivers names the nearest river (" + rv + ")");
+        check(rv.contains("Nearest river junction: about") && PdimTerrain.lastJunction != null, "and the nearest river junction");
+        if (PdimTerrain.lastRiver != null) {
+            int rx = PdimTerrain.lastRiver[0], rz = PdimTerrain.lastRiver[1];
+            for (int i = (rx >> 4) - 2; i <= (rx >> 4) + 2; i++) for (int k = (rz >> 4) - 2; k <= (rz >> 4) + 2; k++) d.theChunkProviderServer.loadChunk(i, k);
+            int wet = 0;
+            for (int bx = rx - 12; bx <= rx + 12; bx++) for (int bz = rz - 12; bz <= rz + 12; bz++) for (int by = 50; by <= 64; by++)
+                if (d.getBlock(bx, by, bz).getMaterial() == Material.water) {
+                    wet++;
+                    break;
+                }
+            check(wet > 0, "there is river water at the river it names (" + wet + " wet columns within 12 blocks of " + rx + "," + rz + ")");
+        }
+
         String r = run("terrain", "flat");
         check(r.contains("generated already") && PdimTerrain.isRealistic(dim), "flat is refused now that it has generated (" + r + ")");
         NBTTagCompound tag = new NBTTagCompound();
@@ -233,6 +256,15 @@ public final class PdimTerrainSelfTest {
         world.setBlockToAir(x, y, z);
         PdimReset.pending.clear();
         SelfTest.summary();
+    }
+
+    /** A plain right-click on the overworld portal by the owner; true if something stopped it. */
+    private boolean click() {
+        said.clear();
+        net.minecraftforge.event.entity.player.PlayerInteractEvent e = new net.minecraftforge.event.entity.player.PlayerInteractEvent(owner,
+            net.minecraftforge.event.entity.player.PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK, x, y, z, 1, world);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(e);
+        return e.isCanceled();
     }
 
     private String run(String... args) {
