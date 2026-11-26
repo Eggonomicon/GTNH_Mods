@@ -606,8 +606,37 @@ Personal Space locks a dimension's layers and biome once it exists. `/pdim reset
 - **Only while nobody is in it:** checked when asked, when confirmed, and again at the start of the tick that unloads
   it (Forge would otherwise unload a world with a player in it).
 - **Undo:** stop the server, move the files from the backup folder back into the dimension's folder.
+- **Settings first (2.3.7):** until the new settings are saved (Done in the portal's settings, even without changes), a
+  plain right-click on the portal sends nobody in and says why, since a trip in would generate the area with the old
+  settings.
 - `/pdim peaceful` stays as it was. Settings: `pdimReset` (default true), `pdimResetConfirmSeconds` (default 30).
   Saved: `data/valiertweaks_pdimreset.dat`.
+
+## Real terrain for a personal dimension (2.3.7)
+
+Personal Space only makes flat, layered worlds. `/pdim terrain realistic` gives a personal dimension Realistic World
+Gen 2's own terrain for its biome instead, everywhere and without end: for Jungle Canyon, its canyons, cliffs of banded
+hardened clay, jungle, rivers and river junctions, like the overworld's, but with nothing else (no oceans, coasts, other
+biomes, volcanoes or lava caves).
+
+| Command | What it does |
+|---|---|
+| `/pdim terrain` | Next to the portal: says whether the dimension has flat layers or real terrain, and its biome. |
+| `/pdim terrain realistic` / `flat` | Next to the portal, before the dimension has generated anything (right after `/pdim reset`): sets it. |
+| `/pdim terrain realistic\|flat <dimension>` | Ops and the console. |
+
+- **Order:** `/pdim reset` and confirm; pick the biome (Jungle Canyon) in the portal's settings and press Done;
+  `/pdim terrain realistic`; go in. The biome must have RWG2 terrain (in Valier's Personal Space list that's Jungle
+  Canyon); the layers then only set the sky's horizon.
+- **Arriving:** the first trip lands in the air for an instant and is moved, the same tick, onto dry ground near the
+  portal's spot (not water or leaves, room for the return portal and a player), where the return portal is built.
+- **How:** a server-side mixin in Personal Space's world provider gives such a dimension RWG2's chunk generator and a
+  one-biome copy of RWG2's biome picker that answers "this biome, far inland, no volcano" everywhere; rivers and
+  junctions are RWG2's own noise. The seed is the world's mixed with the dimension number. Players' clients are
+  unchanged (they get chunks); portals, reset and peaceful work as for any personal dimension.
+- **Not there:** GregTech ore veins (only RWG2's vanilla emerald and redstone showed up in the test).
+- Setting `pdimRealisticTerrain` (default true; off: those dimensions generate flat again). Needs Personal Space and
+  RWG2. Saved: `data/valiertweaks_pdimterrain.dat`.
 
 ## No ash from boilers (1.2.0)
 

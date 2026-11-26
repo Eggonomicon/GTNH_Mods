@@ -26,10 +26,13 @@ import net.minecraftforge.event.world.BlockEvent;
  * {@code /pdim reset} then {@code /pdim reset confirm} (2.3.6) wipes a personal dimension so it generates again, with
  * one more change of its layers and biome: next to its portal, for anyone who could break that portal block, or
  * {@code /pdim reset <dimension>} for ops and the console. See {@link PdimReset}.
+ * <p>
+ * {@code /pdim terrain [realistic|flat]} (2.3.7) shows or sets whether a personal dimension generates with real RWG2
+ * terrain for its biome (Jungle Canyon) instead of flat layers, before it first generates. See {@link PdimTerrain}.
  */
 public class PdimCommand extends CommandBase {
 
-    private static final String USAGE = "/pdim peaceful [on|off] [dimension]  |  /pdim reset [dimension] [confirm]  |  /pdim list";
+    private static final String USAGE = "/pdim peaceful [on|off] [dimension]  |  /pdim reset [dimension] [confirm]  |  /pdim terrain [realistic|flat] [dimension]  |  /pdim list";
 
     @Override
     public String getCommandName() {
@@ -61,6 +64,10 @@ public class PdimCommand extends CommandBase {
         }
         if ("reset".equalsIgnoreCase(args[0])) {
             reset(sender, args);
+            return;
+        }
+        if ("terrain".equalsIgnoreCase(args[0])) {
+            terrain(sender, args);
             return;
         }
         if (!"peaceful".equalsIgnoreCase(args[0]) || args.length > 3) throw new WrongUsageException(USAGE);
@@ -136,6 +143,24 @@ public class PdimCommand extends CommandBase {
         else PdimReset.ask(sender, dim, op);
     }
 
+    /** {@code /pdim terrain [realistic|flat] [dimension]}. */
+    private static void terrain(ICommandSender sender, String[] args) {
+        if (args.length > 3) throw new WrongUsageException(USAGE);
+        if (!cpw.mods.fml.common.Loader.isModLoaded("personalspace") || !cpw.mods.fml.common.Loader.isModLoaded("rwg2")) {
+            say(sender, "Real terrain needs Personal Space and Realistic World Gen 2 on the server.");
+            return;
+        }
+        String mode = null;
+        Integer dim = null;
+        for (int i = 1; i < args.length; i++) {
+            String a = args[i].toLowerCase(java.util.Locale.ROOT);
+            if (mode == null && ("realistic".equals(a) || "flat".equals(a))) mode = a;
+            else if (dim == null) dim = parseInt(sender, args[i]);
+            else throw new WrongUsageException(USAGE);
+        }
+        PdimTerrain.command(sender, mode, dim, isOp(sender));
+    }
+
     /**
      * Whether the player could break the block they stand on: asks with a break event, so claims (ServerUtilities)
      * and other protection decide, exactly as for Personal Space's own portal settings.
@@ -162,7 +187,8 @@ public class PdimCommand extends CommandBase {
 
     @Override
     public List<String> addTabCompletionOptions(ICommandSender sender, String[] args) {
-        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "peaceful", "reset", "list");
+        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "peaceful", "reset", "terrain", "list");
+        if (args.length == 2 && "terrain".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "realistic", "flat");
         if (args.length == 2 && "peaceful".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "on", "off");
         if (args.length == 2 && "reset".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "confirm");
         return Collections.emptyList();

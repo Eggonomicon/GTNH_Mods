@@ -34,5 +34,7 @@ dependencies {
         // 2.3.5: endless Thaumcraft wands (only used when Thaumcraft is loaded).
         "${gtnh}/mods/Thaumcraft-1.7.10-4.2.3.5.jar",
         // 2.3.6: /pdim reset (only used when Personal Space is loaded).
-        "${gtnh}/mods/personalspace-1.0.42.jar"))
+        "${gtnh}/mods/personalspace-1.0.42.jar",
+        // 2.3.7: real terrain for personal dimensions (only used when RWG2 is loaded too).
+        "${gtnh}/mods/rwg2-2.0.9.jar"))
 }

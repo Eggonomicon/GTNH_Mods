@@ -84,8 +84,8 @@ public final class SelfTest {
             && !"xpcrafter".equals(step) && !"railboiler".equals(step) && !"mod".equals(step) && !"pipes".equals(step) && !"pipeperf".equals(step)
             && !"barrels".equals(step) && !"barrelperf".equals(step) && !"satchels".equals(step)
             && !"grid".equals(step) && !"gridperf".equals(step) && !"cost".equals(step) && !"pipebench".equals(step)
-            && !"oplock".equals(step) && !"wand".equals(step) && !"pdimreset".equals(step)) {
-            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner, xpcrafter, railboiler, mod, pipes, pipeperf, barrels, barrelperf, satchels, grid, gridperf, cost, pipebench, oplock, wand, pdimreset"));
+            && !"oplock".equals(step) && !"wand".equals(step) && !"pdimreset".equals(step) && !"pdimterrain".equals(step)) {
+            sender.addChatMessage(new ChatComponentText("Steps: trees, peaceful, boilers, lootspawner, xpcrafter, railboiler, mod, pipes, pipeperf, barrels, barrelperf, satchels, grid, gridperf, cost, pipebench, oplock, wand, pdimreset, pdimterrain"));
             return;
         }
         passed = failed = 0;
@@ -107,6 +107,7 @@ public final class SelfTest {
             else if ("cost".equals(step)) new CostSelfTest().start();
             else if ("pipebench".equals(step)) new PipeBench().start();
             else if ("pdimreset".equals(step)) new PdimResetSelfTest().start();
+            else if ("pdimterrain".equals(step)) new PdimTerrainSelfTest().start();
             else if ("oplock".equals(step)) {
                 OpLockSelfTest.run();
                 summary();

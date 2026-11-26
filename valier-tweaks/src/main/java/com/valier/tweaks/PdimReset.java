@@ -77,6 +77,12 @@ public final class PdimReset {
     static final List<Job> jobs = new ArrayList<>();
     /** Portals whose return portal is built again on the next tick. */
     static final List<PortalTileEntity> relink = new ArrayList<>();
+    /** Real-terrain dimensions whose arrival spot is found on the ground the tick their portal relinks. */
+    static final Set<Integer> groundPending = new java.util.HashSet<>();
+    /** Where a real-terrain dimension's portals land until the ground under them is known: in the air. */
+    static final int AIR_ARRIVAL = 250;
+    /** How far from a portal's spot the ground for its arrival is looked for, in blocks. */
+    static final int GROUND_SEARCH = 32;
     /** What the last reset of each dimension did (for the self-test and the log). */
     static final Map<Integer, String> lastResult = new HashMap<>();
 
@@ -230,11 +236,13 @@ public final class PdimReset {
             for (PortalTileEntity te : now) {
                 if (te.isInvalid() || te.getWorldObj() == null || !te.active) continue;
                 try {
+                    if (groundPending.remove(te.targetDimId)) settle(te);
                     te.linkOtherPortal(true, null);
                 } catch (RuntimeException e) {
                     ValierTweaks.LOG.warn("[pdim reset] couldn't build the return portal for the portal at {},{},{}", te.xCoord, te.yCoord, te.zCoord, e);
                 }
             }
+            groundPending.clear();
         }
         for (Iterator<Job> it = jobs.iterator(); it.hasNext();) {
             Job job = it.next();
@@ -266,9 +274,10 @@ public final class PdimReset {
             text = "Sorry: " + problem;
             lastResult.put(job.dim, "failed: " + problem);
         } else {
-            text = "Personal dimension " + job.dim + " is reset. Open its portal's settings now (sneak + right-click) to"
-                + " pick the layers and biome (one change), then go in: it generates fresh."
-                + (backup != null ? " The old files are in " + backup + " on the server." : "");
+            text = "Personal dimension " + job.dim + " is reset. Open its portal's settings now (sneak + right-click), pick"
+                + " the layers and biome (one change) and press Done; the portal won't let anyone in before that. For real"
+                + " terrain instead of flat layers (Jungle Canyon), also type /pdim terrain realistic. Then go in: it"
+                + " generates fresh." + (backup != null ? " The old files are in " + backup + " on the server." : "");
             lastResult.put(job.dim, backup != null ? "reset: " + backup : "reset: nothing on disk");
             ValierTweaks.LOG.info("[pdim reset] personal dimension {} reset for {}; old files: {}", job.dim, job.by, backup != null ? backup : "none");
         }
@@ -287,23 +296,119 @@ public final class PdimReset {
         if (!data.waiting.contains(dim)) return;
         DimensionConfig cfg = DimensionConfig.getForDimension(dim, false);
         if (cfg == null) return;
-        int y = cfg.getGroundLevel() + 1;
-        data.arrival.put(dim, y);
+        // Real terrain: the ground isn't known before it generates, so the trip lands in the air and the arrival moves
+        // onto the ground at the end of the tick (settle). Flat layers: the ground level + 1, as Personal Space does.
+        boolean real = Loader.isModLoaded("rwg2") && PdimTerrain.isOneBiome(event.world.getWorldChunkManager());
+        int y = real ? AIR_ARRIVAL : cfg.getGroundLevel() + 1;
+        if (!real) {
+            data.arrival.put(dim, y);
+            data.arrivalXZ.remove(dim);
+        }
         if (!cfg.getAllowGenerationChanges()) data.waiting.remove(dim); // the new settings are in: this was the fresh start
         data.markDirty();
+        int fixed = aimAll(dim, y, null, event.world, true);
+        if (real && fixed > 0) groundPending.add(dim);
+        ValierTweaks.LOG.info("[pdim reset] personal dimension {} loaded after its reset: arrival at y {}{}, {} portal(s) leading there", dim, y,
+            real ? " until the ground is found (real terrain)" : "", fixed);
+    }
+
+    /** Aims every loaded portal leading to {@code dim} (from outside it); returns how many there are. */
+    private static int aimAll(int dim, int y, int[] xz, World skip, boolean relinkThem) {
         int fixed = 0;
         for (WorldServer w : DimensionManager.getWorlds()) {
-            if (w == null || w == event.world) continue;
+            if (w == null || w == skip) continue;
             for (Object c : w.theChunkProviderServer.loadedChunks) {
                 for (Object o : ((Chunk) c).chunkTileEntityMap.values()) {
-                    if (o instanceof PortalTileEntity && aim((PortalTileEntity) o, dim, y)) {
-                        relink.add((PortalTileEntity) o);
+                    if (o instanceof PortalTileEntity && aim((PortalTileEntity) o, dim, y, xz)) {
+                        if (relinkThem) relink.add((PortalTileEntity) o);
                         fixed++;
                     }
                 }
             }
         }
-        ValierTweaks.LOG.info("[pdim reset] personal dimension {} loaded after its reset: arrival at y {}, {} portal(s) leading there", dim, y, fixed);
+        return fixed;
+    }
+
+    /**
+     * A real-terrain dimension, just generated around its portal's spot: finds dry ground near it (not water, not
+     * leaves, room for the portal and a player), points every loaded portal there, and moves players who just arrived
+     * in the air down to it.
+     */
+    static void settle(PortalTileEntity te) {
+        int dim = te.targetDimId;
+        WorldServer w = DimensionManager.getWorld(dim);
+        if (w == null) return;
+        int oldX = te.targetPosX, oldZ = te.targetPosZ;
+        int[] spot = findGround(w, oldX, oldZ, te.targetFacing.offsetX, te.targetFacing.offsetZ);
+        if (spot == null) spot = new int[] { oldX, Math.max(2, w.getHeightValue(oldX, oldZ)), oldZ }; // on whatever is highest
+        Data data = Data.get();
+        data.arrival.put(dim, spot[1]);
+        data.arrivalXZ.put(dim, new int[] { spot[0], spot[2] });
+        data.markDirty();
+        aimAll(dim, spot[1], new int[] { spot[0], spot[2] }, w, false);
+        int moved = 0;
+        for (Object o : new ArrayList<Object>(w.playerEntities)) {
+            if (!(o instanceof EntityPlayerMP)) continue;
+            EntityPlayerMP p = (EntityPlayerMP) o;
+            if (Math.abs(p.posX - (oldX + 0.5)) > 8 || Math.abs(p.posZ - (oldZ + 0.5)) > 8 || p.posY < spot[1]) continue;
+            p.fallDistance = 0;
+            double tx = te.getTargetTeleportX() + 0.5, ty = te.getTargetTeleportY(), tz = te.getTargetTeleportZ() + 0.5;
+            if (p.playerNetServerHandler != null) p.playerNetServerHandler.setPlayerLocation(tx, ty, tz, p.rotationYaw, p.rotationPitch);
+            else p.setPosition(tx, ty, tz); // a fake player (the self-test)
+            moved++;
+        }
+        ValierTweaks.LOG.info("[pdim reset] personal dimension {} (real terrain): arrival on the ground at {},{},{}, {} player(s) moved down", dim,
+            spot[0], spot[1], spot[2], moved);
+    }
+
+    /**
+     * The nearest dry, open spot within {@value #GROUND_SEARCH} blocks: {x, first air above the ground, z}, or null.
+     * Asking an unloaded chunk for blocks gives an empty one here, so each candidate's chunk is loaded first, with the
+     * eight around it, so it has its trees and plants too (a chunk is decorated once its neighbours exist).
+     */
+    static int[] findGround(World w, int x0, int z0, int fx, int fz) {
+        java.util.Set<Long> loaded = new java.util.HashSet<>();
+        List<int[]> spots = new ArrayList<>();
+        for (int dx = -GROUND_SEARCH; dx <= GROUND_SEARCH; dx++) for (int dz = -GROUND_SEARCH; dz <= GROUND_SEARCH; dz++)
+            if ((Math.abs(dx) <= 4 && Math.abs(dz) <= 4) || (dx % 2 == 0 && dz % 2 == 0)) spots.add(new int[] { dx, dz });
+        spots.sort((a, b) -> Integer.compare(a[0] * a[0] + a[1] * a[1], b[0] * b[0] + b[1] * b[1]));
+        for (int[] d : spots) {
+            int x = x0 + d[0], z = z0 + d[1];
+            if (w instanceof WorldServer && loaded.add(((long) (x >> 4) << 32) ^ ((z >> 4) & 0xFFFFFFFFL))) {
+                for (int i = -1; i <= 1; i++) for (int k = -1; k <= 1; k++) ((WorldServer) w).theChunkProviderServer.loadChunk((x >> 4) + i, (z >> 4) + k);
+            }
+            int y = w.getTopSolidOrLiquidBlock(x, z);
+            if (y < 2 || y > 250) continue;
+            if (open(w, x, y, z) && open(w, x + fx, y, z + fz)) return new int[] { x, y, z };
+        }
+        return null;
+    }
+
+    /** Air at y and y + 1 (no water, no leaves) over solid ground. */
+    private static boolean open(World w, int x, int y, int z) {
+        return w.isAirBlock(x, y, z) && w.isAirBlock(x, y + 1, z) && w.getBlock(x, y - 1, z).getMaterial().isSolid()
+            && !w.getBlock(x, y - 1, z).getMaterial().isLiquid();
+    }
+
+    /**
+     * Right after a reset, the portal sends nobody in until its new settings are saved (Done in its settings, even
+     * without changes): a trip in first would generate the area with the old settings.
+     */
+    @SubscribeEvent
+    public void onInteract(net.minecraftforge.event.entity.player.PlayerInteractEvent event) {
+        if (event.action != net.minecraftforge.event.entity.player.PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK || event.world.isRemote
+            || event.entityPlayer.isSneaking()) return;
+        Data data = Data.peek();
+        if (data == null || data.waiting.isEmpty()) return;
+        TileEntity te = event.world.getTileEntity(event.x, event.y, event.z);
+        if (!(te instanceof PortalTileEntity)) return;
+        PortalTileEntity portal = (PortalTileEntity) te;
+        if (!portal.active || portal.targetDimId == event.world.provider.dimensionId || !data.waiting.contains(portal.targetDimId)) return;
+        DimensionConfig cfg = DimensionConfig.getForDimension(portal.targetDimId, false);
+        if (cfg == null || !cfg.getAllowGenerationChanges()) return;
+        event.setCanceled(true);
+        say(event.entityPlayer, "Personal dimension " + portal.targetDimId + " was reset: pick its layers and biome first."
+            + " Sneak + right-click this portal and press Done (even without changes), then right-click to go in.");
     }
 
     /** Portals that weren't loaded when their dimension came back get the same arrival height. */
@@ -321,16 +426,24 @@ public final class PdimReset {
             if (!(o instanceof PortalTileEntity)) continue;
             PortalTileEntity te = (PortalTileEntity) o;
             Integer y = te.active ? data.arrival.get(te.targetDimId) : null;
-            if (y != null && aim(te, te.targetDimId, y)) fixed++;
+            if (y != null && aim(te, te.targetDimId, y, data.arrivalXZ.get(te.targetDimId))) fixed++;
         }
         return fixed;
     }
 
-    /** Points an active portal leading to {@code dim} (from outside it) at height {@code y}; true if it leads there. */
-    private static boolean aim(PortalTileEntity te, int dim, int y) {
+    /**
+     * Points an active portal leading to {@code dim} (from outside it) at height {@code y}, and at {@code xz} if given;
+     * true if it leads there.
+     */
+    private static boolean aim(PortalTileEntity te, int dim, int y, int[] xz) {
         if (!te.active || te.targetDimId != dim || te.getWorldObj() == null || te.getWorldObj().provider.dimensionId == dim) return false;
-        if (te.targetPosY != y) {
+        boolean changed = te.targetPosY != y || xz != null && (te.targetPosX != xz[0] || te.targetPosZ != xz[1]);
+        if (changed) {
             te.targetPosY = y;
+            if (xz != null) {
+                te.targetPosX = xz[0];
+                te.targetPosZ = xz[1];
+            }
             te.markDirty();
         }
         return true;
@@ -456,6 +569,8 @@ public final class PdimReset {
         static final String NAME = "valiertweaks_pdimreset";
         final Set<Integer> waiting = new TreeSet<>();
         final Map<Integer, Integer> arrival = new TreeMap<>();
+        /** Real-terrain dimensions: where on the ground their portals land ({x, z}). */
+        final Map<Integer, int[]> arrivalXZ = new TreeMap<>();
         private static Data cached;
         private static Object cachedFor;
 
@@ -491,6 +606,9 @@ public final class PdimReset {
             for (int d : tag.getIntArray("Waiting")) waiting.add(d);
             int[] a = tag.getIntArray("Arrival");
             for (int i = 0; i + 1 < a.length; i += 2) arrival.put(a[i], a[i + 1]);
+            arrivalXZ.clear();
+            int[] b = tag.getIntArray("ArrivalXZ");
+            for (int i = 0; i + 2 < b.length; i += 3) arrivalXZ.put(b[i], new int[] { b[i + 1], b[i + 2] });
         }
 
         @Override
@@ -506,6 +624,14 @@ public final class PdimReset {
                 a[i++] = e.getValue();
             }
             tag.setIntArray("Arrival", a);
+            int[] b = new int[arrivalXZ.size() * 3];
+            i = 0;
+            for (Map.Entry<Integer, int[]> e : arrivalXZ.entrySet()) {
+                b[i++] = e.getKey();
+                b[i++] = e.getValue()[0];
+                b[i++] = e.getValue()[1];
+            }
+            tag.setIntArray("ArrivalXZ", b);
         }
     }
 }

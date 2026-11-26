@@ -213,6 +213,12 @@ public final class PdimResetSelfTest {
         check(cfg != null && cfg.getAllowGenerationChanges(), "its layers and biome may be changed once more");
         check(PdimReset.Data.get().waiting.contains(dim), "it waits for its fresh start (saved)");
 
+        // The guard (2.3.7): no trip in before the new settings are saved.
+        boolean refused = click(false);
+        String r = String.join(" | ", said);
+        check(refused && r.contains("pick its layers and biome first"), "a plain right-click on the portal doesn't send anyone in yet (" + r + ")");
+        check(!click(true), "sneak + right-click (the settings) still works");
+
         // New layers through the menu's code: bedrock, 3 dirt, grass.
         DimensionConfig next = new DimensionConfig();
         next.setLayers("minecraft:bedrock;minecraft:dirt*3;minecraft:grass");
@@ -221,6 +227,7 @@ public final class PdimResetSelfTest {
         check(cfg != null && cfg.getGroundLevel() == 5 && !cfg.getAllowGenerationChanges(),
             "the new layers took (ground level " + (cfg == null ? -1 : cfg.getGroundLevel()) + ") and generation is locked again");
         check(portal.targetPosY == 129, "Personal Space alone leaves the portal landing at y 129 (" + portal.targetPosY + ")");
+        check(!click(false), "with the settings saved, a plain right-click goes through again");
 
         DimensionManager.initDimension(dim); // what the next trip through the portal does first
         check(DimensionManager.getWorld(dim) != null, "the dimension loads again");
@@ -267,6 +274,17 @@ public final class PdimResetSelfTest {
     private void cleanup() {
         world.setBlockToAir(x, y, z);
         PdimReset.pending.clear();
+    }
+
+    /** A right-click on the overworld portal by the owner; true if something stopped it. */
+    private boolean click(boolean sneaking) {
+        said.clear();
+        owner.setSneaking(sneaking);
+        net.minecraftforge.event.entity.player.PlayerInteractEvent e = new net.minecraftforge.event.entity.player.PlayerInteractEvent(owner,
+            net.minecraftforge.event.entity.player.PlayerInteractEvent.Action.RIGHT_CLICK_BLOCK, x, y, z, 1, world);
+        MinecraftForge.EVENT_BUS.post(e);
+        owner.setSneaking(false);
+        return e.isCanceled();
     }
 
     private File dir() {

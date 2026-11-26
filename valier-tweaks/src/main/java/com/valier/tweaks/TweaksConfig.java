@@ -13,6 +13,7 @@ public final class TweaksConfig {
     public static boolean peacefulDimensions = true;
     public static boolean pdimReset = true;
     public static int pdimResetConfirmSeconds = 30;
+    public static boolean pdimRealisticTerrain = true;
     public static boolean noBoilerAsh = true;
     public static boolean noRailcraftBoilerExplosions = true;
     public static boolean lootSpawners = true;
@@ -120,6 +121,13 @@ public final class TweaksConfig {
             5,
             300,
             "How long /pdim reset waits for /pdim reset confirm, in seconds.");
+        pdimRealisticTerrain = c.getBoolean(
+            "pdimRealisticTerrain",
+            "pdim",
+            true,
+            "Let /pdim terrain realistic give a Personal Space dimension Realistic World Gen 2's own terrain for its biome "
+                + "(such as Jungle Canyon) everywhere, instead of flat layers. Only before the dimension first generates "
+                + "(right after /pdim reset). Server side only; needs RWG2. Off: such dimensions generate flat again.");
         noBoilerAsh = c.getBoolean(
             "noBoilerAsh",
             "boilers",
