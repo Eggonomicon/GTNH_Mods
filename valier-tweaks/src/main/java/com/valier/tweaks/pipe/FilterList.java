@@ -106,6 +106,10 @@ public final class FilterList {
 
     /** Whether the inventory holds an item like s (by this list's item rules, as if s were listed). */
     boolean holds(IInventory inv, ItemStack s) {
+        if (inv instanceof com.valier.tweaks.storage.ManyStorage && damage == FaceConfig.Damage.EXACT && !oreDict) {
+            return !((com.valier.tweaks.storage.ManyStorage) inv).manyPeek(s, !matchNbt)
+                .isEmpty();
+        }
         for (int i = 0; i < inv.getSizeInventory(); i++) {
             ItemStack in = inv.getStackInSlot(i);
             if (in != null && sameItem(in, s)) return true;

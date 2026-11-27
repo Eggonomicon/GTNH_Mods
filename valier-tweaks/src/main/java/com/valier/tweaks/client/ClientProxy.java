@@ -52,4 +52,9 @@ public class ClientProxy extends CommonProxy {
     public Object barrelGui(com.valier.tweaks.storage.BarrelMenu container) {
         return new GuiBarrel(container);
     }
+
+    @Override
+    public Object barrelControllerGui(com.valier.tweaks.storage.BarrelControllerMenu container) {
+        return new GuiBarrelController(container);
+    }
 }

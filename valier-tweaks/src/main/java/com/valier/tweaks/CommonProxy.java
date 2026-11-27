@@ -40,4 +40,9 @@ public class CommonProxy {
     public Object barrelGui(com.valier.tweaks.storage.BarrelMenu container) {
         return null;
     }
+
+    /** A Barrel Controller's menu screen (players' computers only). */
+    public Object barrelControllerGui(com.valier.tweaks.storage.BarrelControllerMenu container) {
+        return null;
+    }
 }

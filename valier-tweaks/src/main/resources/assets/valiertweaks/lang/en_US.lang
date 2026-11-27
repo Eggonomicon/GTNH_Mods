@@ -46,6 +46,7 @@ tile.valiertweaks.barrel.4.name=Valier Barrel (EV)
 tile.valiertweaks.barrel.5.name=Valier Barrel (IV)
 tile.valiertweaks.barrel.6.name=Valier Barrel (LuV)
 tile.valiertweaks.barrel.7.name=Creative Valier Barrel
+tile.valiertweaks.barrel_controller.name=Valier Barrel Controller
 item.valiertweaks.barrel_upgrade.1.name=Barrel Upgrade (LV)
 item.valiertweaks.barrel_upgrade.2.name=Barrel Upgrade (MV)
 item.valiertweaks.barrel_upgrade.3.name=Barrel Upgrade (HV)

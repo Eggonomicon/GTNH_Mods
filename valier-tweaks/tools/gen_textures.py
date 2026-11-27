@@ -287,6 +287,60 @@ def barrel_upgrade(tier):
     return px
 
 
+STONE_LO = (84, 84, 88)
+STONE = (120, 120, 124)
+STONE_HI = (160, 160, 164)
+CTRL_RED = (214, 40, 30)
+CTRL_RED_HI = (255, 150, 120)
+GEM = (70, 200, 210)
+GEM_HI = (190, 250, 250)
+
+
+def ctrl_frame(x, y, n):
+    """The Barrel Controller's 2 px stone frame, lit from the top left; None inside it."""
+    if x in (0, 15) or y in (0, 15):
+        return shade(mix(STONE, STONE_HI if (x == 0 or y == 0) else STONE_LO, 0.6), 1.05 if (x == 0 or y == 0) else 0.8)
+    if x in (1, 14) or y in (1, 14):
+        return shade(mix(STONE_LO, STONE, 0.5 + n[y][x] * 0.3), 1.1 if (x == 1 or y == 1) else 0.85)
+    return None
+
+
+def barrel_controller(face):
+    """The Valier Barrel Controller (2.4.0): a stone block around barrel wood. Sides: staves with an iron band. Front:
+    four little barrel heads round a red lamp. Top: smooth stone with a diamond set in the middle."""
+    n = noise({'side': 131, 'front': 137, 'top': 139}[face])
+    lo, hi = BARREL_METAL[0]
+
+    def px(x, y):
+        f = ctrl_frame(x, y, n)
+        if f is not None:
+            return f + (255,)
+        if face == 'side':
+            if y in (7, 8):
+                if x in (2, 13):
+                    return shade(IRON_HI, 1.2) + (255,)
+                return shade(mix(IRON, IRON_HI, 0.45 + n[y][x] * 0.2), 1.1 if y == 7 else 0.85) + (255,)
+            return barrel_wood(x, y, n) + (255,)
+        if face == 'front':
+            if 7 <= x <= 8 and 7 <= y <= 8:
+                return (CTRL_RED_HI if (x == 7 and y == 7) else CTRL_RED) + (255,)
+            if x in (7, 8) or y in (7, 8):
+                return shade(mix(IRON, IRON_HI, 0.35 + n[y][x] * 0.2), 0.9) + (255,)
+            tx, ty = x - 2 if x < 7 else x - 9, y - 2 if y < 7 else y - 9
+            if tx in (0, 4) or ty in (0, 4):
+                return shade(mix(lo, hi, 0.5), 1.15 if (tx == 0 or ty == 0) else 0.8) + (255,)
+            return shade(barrel_wood(x, y, n), 0.95) + (255,)
+        # top
+        d = abs(x - 7.5) + abs(y - 7.5)
+        if d <= 2.0:
+            return (GEM_HI if (x + y) <= 14 and d <= 1.0 else GEM) + (255,)
+        if d <= 3.0:
+            return shade(IRON_HI, 1.1 if (x + y) < 15 else 0.8) + (255,)
+        return shade(mix(STONE, STONE_HI, 0.25 + n[y][x] * 0.3), 1.0) + (255,)
+
+    return px
+
+
 # Satchel and Flask tiers (metadata order): LV to LuV in the barrels' hull metals, then Creative's bands.
 LEATHER_LO = (92, 54, 30)
 LEATHER = (138, 86, 48)
@@ -506,6 +560,8 @@ for _t in range(8):
     TEXTURES['barrel_side_%d' % _t] = ('blocks', (lambda t: lambda: barrel_side(t))(_t))
     TEXTURES['barrel_front_%d' % _t] = ('blocks', (lambda t: lambda: barrel_side(t, True))(_t))
     TEXTURES['barrel_top_%d' % _t] = ('blocks', (lambda t: lambda: barrel_top(t))(_t))
+for _f in ('side', 'front', 'top'):
+    TEXTURES['barrel_controller_' + _f] = ('blocks', (lambda f: lambda: barrel_controller(f))(_f))
 for _t in range(1, 7):
     TEXTURES['barrel_upgrade_%d' % _t] = ('items', (lambda t: lambda: barrel_upgrade(t))(_t))
 for _t in range(7):

@@ -48,6 +48,8 @@ public final class TweaksConfig {
     public static boolean pipeWirelessCrossDimension = true;
     public static int pipeHeldStacks = 4;
     public static int[] barrelStacks = com.valier.tweaks.storage.BarrelTier.STACKS.clone();
+    public static int barrelControllerMax = 2048;
+    public static int barrelControllerRange = 64;
     public static int[] satchelSlots = com.valier.tweaks.storage.SatchelTier.SLOTS.clone();
     public static int[] satchelPerSlot = com.valier.tweaks.storage.SatchelTier.PER_SLOT.clone();
     public static int[] flaskTanks = com.valier.tweaks.storage.SatchelTier.TANKS.clone();
@@ -319,6 +321,10 @@ public final class TweaksConfig {
             + "linked barrels share one store, holding the sum of their tiers.");
         barrelStacks = tiers(c.get(cat, "barrelStacks", com.valier.tweaks.storage.BarrelTier.STACKS, "Stacks of its item each "
             + "tier holds (64 stacks of iron ingots: 4,096)."), com.valier.tweaks.storage.BarrelTier.STACKS);
+        barrelControllerMax = c.getInt("barrelControllerMax", cat, 2048, 1, 65536, "Barrels one Valier Barrel Controller "
+            + "reaches at most (barrels touching it, or touching one that does).");
+        barrelControllerRange = c.getInt("barrelControllerRange", cat, 64, 1, 512, "How far (blocks, along each axis) a "
+            + "Barrel Controller reaches barrels from itself.");
         cat = "satchels";
         c.setCategoryComment(cat, "Valier Satchels (items) and Flasks (fluids). Seven tiers each: LV, MV, HV, EV, IV, LuV, "
             + "Creative (Creative is endless whatever these say). Slots and tanks: 1 to 54.");

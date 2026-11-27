@@ -6,7 +6,18 @@ Gameplay additions for the Valier server. **Since 2.0.0 it is needed on the serv
 The newest version is always at https://github.com/Eggonomicon/GTNH_Mods/releases/latest/download/valiertweaks.jar
 (the same jar, named `valiertweaks.jar`; keep only one Valier Tweaks jar in `mods`).
 
-## 2.3.5 and 2.3.4: endless wands, the op lock, WorldEdit by rank (server side only)
+## 2.4.0: the Valier Barrel Controller (every player needs 2.4.0)
+
+A new block, so every player needs Valier Tweaks 2.4.0 (a 2.3 jar can't join a 2.4 server).
+
+- **Valier Barrel Controller:** one block in front of every Valier Barrel touching it, or touching a barrel that does.
+  Whatever goes in (hoppers, pipes, conveyors, a right-click, AE2) goes to the barrel holding that item. See
+  [Valier Barrel Controller](#valier-barrel-controller-240).
+- **Valier pipes and the controller:** Push, Pull, Request and Provide faces all work on it, Wireless ones too. A
+  Request face on a machine asking for charcoal gets charcoal from whichever barrel holds it; the controller finds it
+  with one lookup, not by looking through slots.
+- **AE2:** one storage bus on the controller sees every barrel behind it.
+
 
 Players don't need a new jar for these: a 2.3 jar on their computer still joins.
 
@@ -441,6 +452,46 @@ One kind of item, lots of it, with the item and its count on the front.
   its void overflow is on, then its item goes in and is destroyed (a sink for that item). No upgrades, no channel;
   comparators read 15. A wrench or a break drops it as a Creative barrel still set to its item.
 
+## Valier Barrel Controller (2.4.0)
+
+Like a Storage Drawers controller, for Valier Barrels.
+
+- **Which barrels:** every Valier Barrel touching it, or touching a barrel that does, in a chain, up to 2,048 barrels
+  within 64 blocks along each axis (config). Only loaded barrels count; it never loads a chunk. Barrels linked on one
+  channel count once, as they share one store.
+- **In:** whatever goes in goes to the barrel holding that item, or locked to it. Ore dictionary barrels take what they
+  would take by hand. Barrels' own void overflow and keep settings apply.
+  - An item no barrel holds is refused and stays where it came from (a hopper keeps it, a pipe leaves it in its block).
+  - Its menu's **Fill empty barrels** switch (off by default) sends such an item into an empty, unlocked barrel
+    instead.
+  - NBT counts: an enchanted book goes to the barrel holding that same book.
+- **Clicks:** right-click with an item puts the stack in. A quick second right-click puts in everything you carry that a
+  barrel already holds; it never starts an empty barrel. Right-click with an empty hand opens its menu (only for
+  players who may change it, as for barrels).
+- **Menu:** how many barrels it reaches, how many kinds of item they hold, the empty ones, the eight items held most,
+  and Fill empty barrels. It says so when it reached its most.
+- **Valier pipes:** a face on the controller works on the whole network.
+  - **Request** (on a machine, from a Provide face on the controller, Wireless pipes too): the controller is asked for
+    exactly the item on the Request list. A machine asking for 32 charcoal gets charcoal, never coal.
+  - **Pull** with items on its Allow list takes those items out, found the same way. A Pull with no list (or a list by
+    mod, wear or ore name) takes everything out, looking at 64 kinds a transfer and going round all of them.
+  - **Push** into the controller: each item goes to its barrel. What no barrel holds stays in the block it came from.
+  - Amounts are whole counts, not stacks: an Ultimate pipe moves its 320 at once.
+- **Other automation:** one input slot, and one output slot per barrel (each the barrel's own output), so hoppers,
+  GregTech conveyors and other mods can put in and take out.
+- **AE2:** one storage bus on it sees every barrel's whole count, puts items in where they belong (exactly that item:
+  AE2 keeps items apart, so no ore dictionary) and takes them out.
+- **Cost:** it never ticks.
+  - It finds its barrels once, and again only after a barrel within its reach appeared, went or changed channel.
+  - Putting an item in is one lookup and the barrel's own insert. An item it doesn't know gets one look over the
+    barrels, at most once a second per item (a barrel can be given a new item by hand).
+  - A storage bus costs nothing while nobody watches; while one does, each barrel tells it of changes at most every 10
+    ticks.
+  - Measured on the test server with 1,024 barrels, each holding a different item: finding them all 6 ms (only after
+    a change near it), putting an item in 0.7 microseconds, a pipe asking for an item 0.8 microseconds.
+- **Recipe:** laid out like Storage Drawers' controller: 5 stone, 2 comparators, a Basic Valier Barrel in the middle
+  and a diamond. Assembler: 2 stone, 1 comparator, the barrel and the diamond (LV, 10 s).
+
 ## Valier Satchels, Flasks and the Dock (2.3.0)
 
 | Tier | Satchel slots × items each | Flask tanks × mB each |
@@ -529,6 +580,7 @@ conveyors, pumps, emitters, sensors, hulls) stay one each.
 | XP Crafter | 3 tanks, 2 LV pumps, LV conveyor, LV robot arm, crafting table, LV circuit | 1 tank, 1 pump, the rest |
 | Basic barrel | 4 wood slabs, 4 planks, chest | 2 slabs, 2 planks, chest |
 | Barrel Upgrade | 4 plates, 2 circuits, chest (LV) or conveyor, hammer, wrench | 2 plates, 1 circuit, chest or conveyor |
+| Barrel Controller (2.4.0) | 5 stone, 2 comparators, Basic barrel, diamond | 2 stone, 1 comparator, the barrel, the diamond |
 | Satchel / Flask (LV) | 4 steel plates, 2 LV circuits, LV conveyor/pump, chest/large steel fluid cell, hammer | 2 plates, 1 circuit, the rest |
 | Satchel / Flask Upgrade | 4 plates, 2 circuits, conveyor/pump, hammer, wrench | 2 plates, 1 circuit, conveyor/pump |
 | Satchel Dock | LV hull, 2 LV circuits, chest | hull, 1 circuit, chest |
@@ -932,6 +984,8 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
 | `pipeWirelessCrossDimension` | `true` | Wireless pipes link across dimensions. |
 | `pipeHeldStacks` | `4` | Stacks a face may hold back before the oldest drops. |
 | `barrels` / `barrelStacks` | `64, 512, 4096, 32768, 262144, 2097152, 16777216` | Stacks of its item a barrel of each tier holds (Basic, LV to LuV). (2.3.0) |
+| `barrels` / `barrelControllerMax` | `2048` | Barrels one Barrel Controller reaches at most. (2.4.0) |
+| `barrels` / `barrelControllerRange` | `64` | How far (blocks, along each axis) a Barrel Controller reaches barrels. (2.4.0) |
 | `satchels` / `satchelSlots` | `9, 18, 27, 36, 45, 54, 54` | Slots of each Satchel tier (LV to LuV, Creative), 1 to 54. |
 | `satchelPerSlot` | `1024, 4096, 16384, 65536, 262144, 2147483647, …` | Items one Satchel slot holds, per tier. |
 | `flaskTanks` | `9, 9, 18, 18, 27, 27, 27` | Tanks of each Flask tier. |
@@ -1166,6 +1220,25 @@ still shows the small piles. The arc furnace (nuggets) is unchanged.
   - **21 Nov 2026, as 2.3.1-pre2:** all 14 steps on the test server, 441 checks, none failed (mod 8, barrels 48,
     satchels 36, grid 20, lootspawner 153, xpcrafter 70, pipes 43, pipeperf 0.272 ms, barrelperf 0.288 ms, gridperf
     0.036 ms, railboiler 12, boilers 18, trees 12, peaceful 15; the perf numbers with Valier busy beside it).
+- **`valiertweaks selftest barrelcontroller`** (`BarrelControllerSelfTest`, 2.4.0):
+  - **Routing:** it reaches the 3 barrels chained to it, not one a block apart. Iron and gold go to their barrels.
+    Dirt is refused with fill empty barrels off and starts the empty barrel with it on. A barrel emptied and given
+    emeralds by hand is found for emeralds. NBT tells two enchanted books apart. Two linked barrels count as one store.
+  - **Changes:** a barrel placed onto the chain joins (the network found again once). One placed 80 blocks away costs
+    nothing. A broken one leaves.
+  - **Slots, clicks, menu:** one output slot per barrel, a hopper under it pulling, a stack changed in place followed.
+    Right-click and a quick second right-click (never into an empty barrel). The menu's switch and what it shows.
+  - **AE2:** a storage bus seeing both barrels, putting in, refusing what no barrel holds, taking out, one item's amount
+    from the lookup. A listening bus told of a barrel joining and of items put in by hand. Nobody listening: no watching.
+  - **Valier pipes** (100 ticks later): a Request face keeping 32 charcoal stocked from a controller holding charcoal and
+    coal (no coal taken); the same over Wireless pipes; a filtered Pull; a Push into it (dirt staying in the chest); a
+    Pull with no list taking everything; a Request for white wool ignoring damage getting orange wool.
+  - **Cost** (1,024 barrels, each holding a different item): checks on finding them again (under 25 ms), putting an
+    item in (under 10 us), a pipe's lookup (under 10 us), an item no barrel holds (under 5 us) and the pipes' list of
+    everything (under 10 ms).
+  - **27 Nov 2026, as 2.4.0:** barrelcontroller 40, barrels 48, pipes 47, mod 8 (59 craftable items with both recipes),
+    143 checks, none failed. With 1,024 barrels: found in 6.0 ms, put in 0.67 us, a pipe's lookup 0.81 us, an unknown
+    item 0.17 us, the pipes' list 1.77 ms, a hopper's look over all 1,025 slots 1.19 ms.
 - **`valiertweaks selftest pipebench`** (`PipeBench`, after 2.3.3; a benchmark, not part of a release's checks): Valier
   pipes against GregTech pipes and EnderIO conduits on the same rigs, each at its starting tier with default settings.
   It times the overworld's tick and the server's tick handlers with each case built, against the same empty corner

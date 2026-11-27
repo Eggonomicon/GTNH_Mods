@@ -15,6 +15,7 @@ public final class ModBlocks {
     public static com.valier.tweaks.pipe.ItemPipeConfigurator pipeConfigurator;
     public static com.valier.tweaks.storage.BlockBarrel barrel;
     public static com.valier.tweaks.storage.ItemBarrelUpgrade barrelUpgrade;
+    public static com.valier.tweaks.storage.BlockBarrelController barrelController;
     public static com.valier.tweaks.storage.ItemSatchel satchel, flask;
     public static com.valier.tweaks.storage.ItemSatchelUpgrade satchelUpgrade;
     public static com.valier.tweaks.storage.BlockSatchelDock satchelDock;
@@ -55,6 +56,10 @@ public final class ModBlocks {
         barrel.setCreativeTab(tab);
         GameRegistry.registerBlock(barrel, com.valier.tweaks.storage.ItemBlockBarrel.class, "barrel");
         GameRegistry.registerTileEntity(com.valier.tweaks.storage.TileBarrel.class, ValierTweaks.MODID + ".Barrel");
+        barrelController = new com.valier.tweaks.storage.BlockBarrelController(); // 2.4.0
+        barrelController.setCreativeTab(tab);
+        GameRegistry.registerBlock(barrelController, "barrel_controller");
+        GameRegistry.registerTileEntity(com.valier.tweaks.storage.TileBarrelController.class, ValierTweaks.MODID + ".BarrelController");
         barrelUpgrade = new com.valier.tweaks.storage.ItemBarrelUpgrade();
         barrelUpgrade.setCreativeTab(tab);
         GameRegistry.registerItem(barrelUpgrade, "barrel_upgrade");

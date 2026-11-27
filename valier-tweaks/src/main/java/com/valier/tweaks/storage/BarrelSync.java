@@ -69,8 +69,14 @@ public final class BarrelSync {
         if (!LOADED.isEmpty()) {
             TileBarrel[] now = LOADED.toArray(new TileBarrel[0]);
             LOADED.clear();
-            for (TileBarrel t : now) if (!t.isInvalid() && t.getWorldObj() != null) t.store();
+            for (TileBarrel t : now) {
+                if (t.isInvalid() || t.getWorldObj() == null) continue;
+                t.store();
+                // Again now its chunk is all there: a controller that looked while it loaded didn't see it yet.
+                TileBarrelController.changed(t);
+            }
         }
+        TileBarrelController.refreshWatched();
         if (++tick % 10 != 0 || DIRTY.isEmpty()) return;
         BarrelStore[] now = DIRTY.toArray(new BarrelStore[0]);
         DIRTY.clear();
@@ -85,6 +91,7 @@ public final class BarrelSync {
     public void onWorldUnload(WorldEvent.Unload event) {
         if (event.world.isRemote || event.world.provider.dimensionId != 0) return;
         BarrelChannels.forget();
+        TileBarrelController.aeWatched.clear();
         DIRTY.clear();
         LOADED.clear();
         PLACED.clear();

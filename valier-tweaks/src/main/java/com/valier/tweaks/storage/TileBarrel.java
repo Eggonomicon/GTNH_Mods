@@ -94,6 +94,7 @@ public class TileBarrel extends TileEntity
 
     void linkTo(BarrelChannels.Channel c) {
         linked = c;
+        TileBarrelController.changed(this); // controllers near it find their barrels' stores again
         store();
         markChunk();
         // Storage buses and the like look again (they see the channel's store now, or its own).
@@ -124,19 +125,24 @@ public class TileBarrel extends TileEntity
     @Override
     public void validate() {
         super.validate();
-        if (worldObj != null && !worldObj.isRemote) BarrelSync.loaded(this);
+        if (worldObj != null && !worldObj.isRemote) {
+            BarrelSync.loaded(this);
+            TileBarrelController.changed(this); // a barrel appeared: controllers near it look for their barrels again
+        }
     }
 
     @Override
     public void invalidate() {
         super.invalidate();
         unwatch();
+        TileBarrelController.changed(this);
     }
 
     @Override
     public void onChunkUnload() {
         super.onChunkUnload();
         unwatch();
+        TileBarrelController.changed(this);
     }
 
     private void ownChanged() {

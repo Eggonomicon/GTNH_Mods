@@ -18,6 +18,7 @@ side.
 | `blocks/barrel_side_7.png`, `barrel_front_7.png`, `barrel_top_7.png` (2.3.1) | The Creative barrel: the same staves, rim and lid, with the metal in the diagonal magenta, cyan and gold bands of the Creative Satchel and Flask |
 | `blocks/barrel_side_0..6.png`, `barrel_front_0..6.png`, `barrel_top_0..6.png` (2.3.0) | Wooden staves held by two metal bands and a rim in each tier's GregTech hull metal (iron, steel, aluminium, stainless steel, titanium, tungstensteel, chrome); the front with a recessed label panel; the lid with planks across and a small metal plate |
 | `items/barrel_upgrade_1..6.png` (2.3.0) | A band of the tier's metal around a green up arrow |
+| `blocks/barrel_controller_side.png`, `barrel_controller_front.png`, `barrel_controller_top.png` (2.4.0) | The Barrel Controller: a 2 px stone frame around barrel staves with an iron band (sides), four small barrel heads around a red lamp (front), and smooth stone with a set diamond (top) |
 | `items/satchel_0..6.png` (2.3.0) | A leather satchel with a strap loop, a flap edged in the tier's metal and a clasp (Creative: rainbow bands) |
 | `items/flask_0..6.png` (2.3.0) | A round glass flask of blue fluid with a neck band and cap in the tier's metal |
 | `items/satchel_upgrade_1..5.png`, `flask_upgrade_1..5.png` (2.3.0) | The barrel upgrade's band around a small satchel or a blue drop |

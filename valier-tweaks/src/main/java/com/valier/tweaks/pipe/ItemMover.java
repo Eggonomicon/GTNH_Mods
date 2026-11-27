@@ -1,5 +1,6 @@
 package com.valier.tweaks.pipe;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import net.minecraft.inventory.IInventory;
@@ -11,6 +12,7 @@ import net.minecraft.tileentity.TileEntityHopper;
 import net.minecraft.world.World;
 
 import com.valier.tweaks.storage.BigStorage;
+import com.valier.tweaks.storage.ManyStorage;
 
 import com.valier.tweaks.TweaksConfig;
 
@@ -30,6 +32,10 @@ import com.valier.tweaks.TweaksConfig;
  * </ul>
  * Every step is bounded: one face's turn looks at its own block's slots once and at each destination's slots at most
  * twice (room, then the move). Nothing is allocated per slot.
+ * <p>
+ * A Valier Barrel Controller ({@link ManyStorage}) has no slots to look at: what a face's lists name exactly is asked
+ * for by item from its lookup, and a face pulling everything (or by mod, wear or ore name) looks at {@link #MANY_LOOK}
+ * kinds a transfer, going round all of them over its transfers.
  */
 final class ItemMover {
 
@@ -62,6 +68,8 @@ final class ItemMover {
         World w = f.pipe.getWorldObj();
         long tick = w.getTotalWorldTime();
         Object srcKey = key(w, f.tx, f.ty, f.tz);
+        if (src instanceof ManyStorage) return extractMany(f, (ManyStorage) src, src, budget, srcKey, tick, inserts, requests,
+            overflow, anywhere, voiding);
         int moved = 0;
         int[] slots = slots(src, f.access);
         for (int k = 0; k < slots.length && moved < budget; k++) {
@@ -94,6 +102,41 @@ final class ItemMover {
             f.cfg.flow.add(got, took - back, false, tick);
             if (f.source != null) left = null; // a creative source: what nobody took just goes
             if (left != null) left = putBack(src, slot, f.access, left);
+            if (left != null) hold(f, left);
+            moved += took - back;
+        }
+        return moved;
+    }
+
+    /** A Pull from a Barrel Controller: the kinds its lists name, from the lookup, or a few of everything a transfer. */
+    private static int extractMany(PipeNetwork.Face f, ManyStorage m, IInventory src, int budget, Object srcKey, long tick,
+        List<PipeNetwork.Face> inserts, List<PipeNetwork.Face> requests, List<PipeNetwork.Face> overflow, boolean anywhere,
+        boolean voiding) {
+        int moved = 0;
+        for (ItemStack s : manyWanted(m, f.cfg, src, anywhere, voiding)) {
+            if (moved >= budget) break;
+            if (s == null || s.stackSize <= 0) continue;
+            if (voiding && f.cfg.voids(s, src)) {
+                int n = Math.min(budget - moved, Math.min(s.stackSize, voidSpare(f.cfg, src, s)));
+                if (n <= 0) continue;
+                ItemStack gone = m.manyExtract(s, n);
+                if (gone == null || gone.stackSize <= 0) continue;
+                f.cfg.flow.add(gone, gone.stackSize, true, tick);
+                moved += gone.stackSize;
+                continue;
+            }
+            if (!anywhere || !f.cfg.passes(s, src)) continue;
+            int want = Math.min(budget - moved, Math.min(s.stackSize, spare(f.cfg, src, s)));
+            if (want <= 0) continue;
+            int n = Math.min(want, room(srcKey, s, want, inserts, requests, overflow));
+            if (n <= 0) continue;
+            ItemStack got = m.manyExtract(s, n);
+            if (got == null || got.stackSize <= 0) continue;
+            int took = got.stackSize;
+            ItemStack left = deliver(f, srcKey, got, inserts, requests, overflow);
+            int back = left == null ? 0 : left.stackSize;
+            f.cfg.flow.add(got, took - back, false, tick);
+            if (left != null) left = insert(src, f.access, left);
             if (left != null) hold(f, left);
             moved += took - back;
         }
@@ -289,6 +332,12 @@ final class ItemMover {
                 if (!pw.blockExists(p.tx, p.ty, p.tz)) continue;
                 IInventory src = own(p);
                 if (src == null || same(dstKey, key(pw, p.tx, p.ty, p.tz))) continue;
+                if (src instanceof ManyStorage) {
+                    int got = requestMany(f, dst, p, (ManyStorage) src, src, want, need, tick);
+                    moved += got;
+                    need -= got;
+                    continue;
+                }
                 int[] slots = slots(src, p.access);
                 for (int k = 0; k < slots.length && need > 0; k++) {
                     int slot = slots[k];
@@ -313,6 +362,86 @@ final class ItemMover {
             }
         }
         return moved;
+    }
+
+    /** A Request from a Barrel Controller's Provide face: the item asked for, from the controller's lookup. */
+    private static int requestMany(PipeNetwork.Face f, IInventory dst, PipeNetwork.Face p, ManyStorage m, IInventory src,
+        ItemStack want, int need, long tick) {
+        FilterList allow = f.cfg.allow;
+        List<ItemStack> found = exact(allow) ? m.manyPeek(want, !allow.matchNbt)
+            : m.manyPeekSome(MANY_LOOK, s -> allow.same(want, s) && p.cfg.passes(s, src));
+        int moved = 0;
+        for (ItemStack s : found) {
+            int left_ = need - moved;
+            if (left_ <= 0) break;
+            if (s.stackSize <= 0 || !p.cfg.passes(s, src)) continue;
+            int n = Math.min(left_, Math.min(s.stackSize, Math.min(spare(p.cfg, src, s), space(dst, f.access, s, left_))));
+            if (n <= 0) continue;
+            ItemStack got = m.manyExtract(s, n);
+            if (got == null || got.stackSize <= 0) continue;
+            int took = got.stackSize;
+            ItemStack left = insert(dst, f.access, got);
+            int back = left == null ? 0 : left.stackSize;
+            f.cfg.flow.add(got, took - back, false, tick);
+            if (left != null) left = insert(src, p.access, left);
+            if (left != null) hold(f, left);
+            moved += took - back;
+        }
+        return moved;
+    }
+
+    // ---- many-item storage (a Valier Barrel Controller) ----------------------------------------------------------------
+
+    /** Kinds a face looks at in a Barrel Controller per transfer when its lists don't name exact items. */
+    static final int MANY_LOOK = 64;
+
+    /** Whether the list's entries each name one item and damage (so the controller's lookup can answer them). */
+    static boolean exact(FilterList list) {
+        return list.kind != FaceConfig.Kind.MODS && list.damage == FaceConfig.Damage.EXACT && !list.oreDict;
+    }
+
+    /** A list with entries naming exact items: what it names can be asked for by item. */
+    static boolean named(FilterList list) {
+        return list.hasEntries() && list.kind == FaceConfig.Kind.ITEMS && exact(list);
+    }
+
+    /**
+     * The kinds a pulling face looks at in a Barrel Controller this transfer: what its Allow (and Void) list names, by
+     * item, when they name exact items; otherwise up to {@link #MANY_LOOK} kinds it would move or destroy, going round.
+     */
+    static List<ItemStack> manyWanted(ManyStorage m, FaceConfig cfg, IInventory src, boolean anywhere, boolean voiding) {
+        if ((!anywhere || named(cfg.allow)) && (!voiding || named(cfg.voids))) {
+            List<ItemStack> out = new ArrayList<>();
+            if (anywhere) addNamed(out, m, cfg.allow);
+            if (voiding) addNamed(out, m, cfg.voids);
+            return out;
+        }
+        return m.manyPeekSome(MANY_LOOK, s -> voiding && cfg.voids(s, src) || anywhere && cfg.passes(s, src));
+    }
+
+    private static void addNamed(List<ItemStack> out, ManyStorage m, FilterList list) {
+        for (ItemStack want : list.filter) {
+            if (want == null) continue;
+            for (ItemStack s : m.manyPeek(want, !list.matchNbt)) {
+                if (s.stackSize <= 0) continue;
+                boolean dup = false;
+                for (ItemStack o : out) {
+                    if (stackable(o, s)) {
+                        dup = true;
+                        break;
+                    }
+                }
+                if (!dup) out.add(s);
+            }
+        }
+    }
+
+    /** How many items matching list entry want (by the list's rules) a Barrel Controller has for automation. */
+    static int countMany(ManyStorage m, FilterList list, ItemStack want) {
+        long n = 0;
+        if (exact(list)) for (ItemStack s : m.manyPeek(want, !list.matchNbt)) n += s.stackSize;
+        else for (ItemStack s : m.manyPeek()) if (list.same(want, s)) n += s.stackSize;
+        return (int) Math.min(Integer.MAX_VALUE, n);
     }
 
     // ---- held items -------------------------------------------------------------------------------------------------
@@ -429,6 +558,7 @@ final class ItemMover {
     static int space(IInventory inv, int side, ItemStack s, int max) {
         if (max <= 0) return 0;
         if (inv instanceof BigStorage) return Math.min(max, ((BigStorage) inv).bigRoom(s, max));
+        if (inv instanceof ManyStorage) return Math.min(max, ((ManyStorage) inv).manyRoom(s, max));
         int limit = Math.min(s.getMaxStackSize(), inv.getInventoryStackLimit());
         int room = 0;
         for (int slot : slots(inv, side)) {
@@ -446,6 +576,10 @@ final class ItemMover {
         if (inv == null || s == null) return s;
         if (inv instanceof BigStorage) {
             s.stackSize -= ((BigStorage) inv).bigInsert(s, s.stackSize);
+            return s.stackSize <= 0 ? null : s;
+        }
+        if (inv instanceof ManyStorage) {
+            s.stackSize -= ((ManyStorage) inv).manyInsert(s, s.stackSize);
             return s.stackSize <= 0 ? null : s;
         }
         int limit = Math.min(s.getMaxStackSize(), inv.getInventoryStackLimit());
@@ -472,7 +606,7 @@ final class ItemMover {
 
     /** What the destinations didn't take goes back into the slot it came from, or anywhere it fits; returns the rest. */
     static ItemStack putBack(IInventory inv, int slot, int side, ItemStack s) {
-        if (inv instanceof BigStorage) return insert(inv, side, s);
+        if (inv instanceof BigStorage || inv instanceof ManyStorage) return insert(inv, side, s);
         ItemStack in = inv.getStackInSlot(slot);
         if (in == null) {
             inv.setInventorySlotContents(slot, s);
@@ -495,6 +629,7 @@ final class ItemMover {
             ItemStack b = ((BigStorage) inv).bigPeek();
             return b != null && list.same(want, b) ? b.stackSize : 0;
         }
+        if (inv instanceof ManyStorage) return countMany((ManyStorage) inv, list, want);
         int n = 0;
         for (int i = 0; i < inv.getSizeInventory(); i++) {
             ItemStack s = inv.getStackInSlot(i);

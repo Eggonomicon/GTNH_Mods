@@ -19,6 +19,8 @@ import gregtech.api.enums.ItemList;
  * Barrel Upgrade, LV:  4 steel plates, 2 LV circuits, a chest, hammer and wrench
  * Barrel Upgrade, MV+: 4 of the tier's plates, 2 of its circuits, its conveyor, hammer and wrench
  *                      (assembler: 2 plates, 1 circuit, the chest or conveyor)
+ * Barrel Controller:   5 stone, 2 comparators, a Basic barrel and a diamond, laid out as Storage Drawers' controller
+ *                      (assembler: 2 stone, 1 comparator, the barrel, the diamond)
  * </pre>
  *
  * Plates: steel, aluminium, stainless steel, titanium, tungstensteel, chrome. Without GregTech (a test client): iron
@@ -34,6 +36,13 @@ public final class StorageRecipes {
             "slabWood", 'P', "plankWood", 'C', new ItemStack(Blocks.chest)));
         if (gt) ValierRecipes.assembler(new ItemStack(ModBlocks.barrel, 1, BarrelTier.BASIC), 10, ValierRecipes.STEAM,
             ValierRecipes.ore("slabWood", 2), ValierRecipes.ore("plankWood", 2), new ItemStack(Blocks.chest));
+        ItemStack ctrl = new ItemStack(ModBlocks.barrelController);
+        GameRegistry.addRecipe(new ShapedOreRecipe(ctrl, "SSS", "CBC", "SDS", 'S', new ItemStack(Blocks.stone), 'C',
+            new ItemStack(net.minecraft.init.Items.comparator), 'B', new ItemStack(ModBlocks.barrel, 1, BarrelTier.BASIC), 'D',
+            "gemDiamond"));
+        if (gt) ValierRecipes.assembler(ctrl, 10, ValierRecipes.LV, new ItemStack(Blocks.stone, 2),
+            new ItemStack(net.minecraft.init.Items.comparator), new ItemStack(ModBlocks.barrel, 1, BarrelTier.BASIC),
+            ValierRecipes.ore("gemDiamond", 1));
         long[] eut = { 0, ValierRecipes.LV, ValierRecipes.MV, ValierRecipes.HV, ValierRecipes.EV, ValierRecipes.IV, ValierRecipes.LUV };
         for (int t = 1; t < BarrelTier.COUNT; t++) {
             ItemStack out = new ItemStack(ModBlocks.barrelUpgrade, 1, t);
