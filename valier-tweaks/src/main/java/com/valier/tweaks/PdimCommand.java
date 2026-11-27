@@ -33,7 +33,7 @@ import net.minecraftforge.event.world.BlockEvent;
  */
 public class PdimCommand extends CommandBase {
 
-    private static final String USAGE = "/pdim peaceful [on|off] [dimension]  |  /pdim reset [dimension] [confirm]  |  /pdim terrain [realistic|flat] [dimension]  |  /pdim rivers  |  /pdim list";
+    private static final String USAGE = "/pdim peaceful [on|off] [dimension]  |  /pdim reset [dimension] [confirm]  |  /pdim terrain [realistic|flat] [dimension]  |  /pdim rivers  |  /pdim moveportal [dimension] <x> <y> <z>  |  /pdim list";
 
     @Override
     public String getCommandName() {
@@ -69,6 +69,17 @@ public class PdimCommand extends CommandBase {
         }
         if ("terrain".equalsIgnoreCase(args[0])) {
             terrain(sender, args);
+            return;
+        }
+        if ("moveportal".equalsIgnoreCase(args[0])) {
+            if (!cpw.mods.fml.common.Loader.isModLoaded("personalspace")) {
+                say(sender, "Personal Space isn't installed on this server.");
+                return;
+            }
+            if (args.length != 4 && args.length != 5) throw new WrongUsageException(USAGE);
+            int o = args.length == 5 ? 1 : 0;
+            Integer dim = o == 1 ? parseInt(sender, args[1]) : null;
+            PdimReset.movePortal(sender, dim, parseInt(sender, args[1 + o]), parseInt(sender, args[2 + o]), parseInt(sender, args[3 + o]), isOp(sender));
             return;
         }
         if ("rivers".equalsIgnoreCase(args[0])) {
@@ -196,7 +207,7 @@ public class PdimCommand extends CommandBase {
 
     @Override
     public List<String> addTabCompletionOptions(ICommandSender sender, String[] args) {
-        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "peaceful", "reset", "terrain", "rivers", "list");
+        if (args.length == 1) return getListOfStringsMatchingLastWord(args, "peaceful", "reset", "terrain", "rivers", "moveportal", "list");
         if (args.length == 2 && "terrain".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "realistic", "flat");
         if (args.length == 2 && "peaceful".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "on", "off");
         if (args.length == 2 && "reset".equalsIgnoreCase(args[0])) return getListOfStringsMatchingLastWord(args, "confirm");

@@ -14,6 +14,9 @@ public final class TweaksConfig {
     public static boolean pdimReset = true;
     public static int pdimResetConfirmSeconds = 30;
     public static boolean pdimRealisticTerrain = true;
+    public static boolean spectatorMode = true;
+    public static boolean spectatorVanish = true;
+    public static boolean spectatorNightVision = true;
     public static boolean noBoilerAsh = true;
     public static boolean noRailcraftBoilerExplosions = true;
     public static boolean lootSpawners = true;
@@ -128,6 +131,23 @@ public final class TweaksConfig {
             "Let /pdim terrain realistic give a Personal Space dimension Realistic World Gen 2's own terrain for its biome "
                 + "(such as Jungle Canyon) everywhere, instead of flat layers. Only before the dimension first generates "
                 + "(right after /pdim reset). Server side only; needs RWG2. Off: such dimensions generate flat again.");
+        spectatorMode = c.getBoolean(
+            "spectatorMode",
+            "spectator",
+            true,
+            "/spectate: fly everywhere, through blocks (the player needs Valier Tweaks 2.3.9 or newer for that part), "
+                + "untouchable, with no breaking, placing, using, attacking or picking up. For ops, the console and "
+                + "players with the ServerUtilities permission valiertweaks.spectate.");
+        spectatorVanish = c.getBoolean(
+            "spectatorVanish",
+            "spectator",
+            true,
+            "Spectators are hidden with ServerUtilities' vanish while spectating.");
+        spectatorNightVision = c.getBoolean(
+            "spectatorNightVision",
+            "spectator",
+            true,
+            "Spectators get night vision while spectating, to see inside rock and caves.");
         noBoilerAsh = c.getBoolean(
             "noBoilerAsh",
             "boilers",

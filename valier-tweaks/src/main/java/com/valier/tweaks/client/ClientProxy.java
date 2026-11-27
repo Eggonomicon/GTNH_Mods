@@ -19,6 +19,10 @@ public class ClientProxy extends CommonProxy {
         cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(com.valier.tweaks.storage.TileBarrel.class,
             new RenderBarrel()); // barrel labels
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new SatchelHud()); // sneak + wheel, the held satchel's slot
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientSpectator.Events()); // spectator: hello, no overlay
+        cpw.mods.fml.common.FMLCommonHandler.instance()
+            .bus()
+            .register(new ClientSpectator.Ticks()); // spectator: through blocks
         if (DevClient.ENABLED) DevClient.register();
         else if (DevClient.JOIN) DevClient.registerJoin();
         if (cpw.mods.fml.common.Loader.isModLoaded("NotEnoughItems")) NeiPipes.register(); // drag items into pipe filters

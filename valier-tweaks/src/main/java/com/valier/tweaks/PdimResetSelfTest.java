@@ -256,11 +256,29 @@ public final class PdimResetSelfTest {
         int n = PdimReset.fixChunk(world.getChunkFromBlockCoords(x, z), PdimReset.Data.get());
         check(n == 1 && portal.targetPosY == 6, "a portal in a chunk that loads later gets the same height (" + portal.targetPosY + ")");
 
+        // /pdim moveportal (2.3.9): the return portal moves, the overworld portal follows, a blocked spot is refused.
+        int nx = tx + 20;
+        String mv = run(console, "moveportal", String.valueOf(dim), String.valueOf(nx), "6", String.valueOf(tz));
+        PortalTileEntity moved = d != null && d.getTileEntity(nx, 6, tz) instanceof PortalTileEntity ? (PortalTileEntity) d.getTileEntity(nx, 6, tz) : null;
+        check(mv.contains("Moved personal dimension " + dim) && moved != null && d.isAirBlock(tx, 6, tz),
+            "/pdim moveportal moves the return portal to " + nx + ",6," + tz + " (" + mv + ")");
+        check(portal.targetPosX == nx && portal.targetPosY == 6 && portal.targetPosZ == tz, "the overworld portal now arrives at the new spot");
+        check(moved != null && moved.targetDimId == 0 && moved.targetPosX == x && moved.targetPosY == y && moved.targetPosZ == z,
+            "and the new return portal leads back to it");
+        check(PdimReset.fixChunk(world.getChunkFromBlockCoords(x, z), PdimReset.Data.get()) == 0 && portal.targetPosX == nx,
+            "a moved portal isn't pointed back at the old spot when its chunk loads");
+        if (d != null) d.setBlock(nx + 5, 6, tz, Blocks.stone);
+        mv = run(console, "moveportal", String.valueOf(dim), String.valueOf(nx + 5), "6", String.valueOf(tz));
+        check(mv.contains("clear the spot first") && moved != null && d.getTileEntity(nx, 6, tz) instanceof PortalTileEntity,
+            "a spot with stone in it is refused, and nothing moves (" + mv + ")");
+
         NBTTagCompound tag = new NBTTagCompound();
         PdimReset.Data.get().writeToNBT(tag);
         PdimReset.Data copy = new PdimReset.Data("copy");
         copy.readFromNBT(tag);
-        check(Integer.valueOf(6).equals(copy.arrival.get(dim)) && copy.waiting.equals(PdimReset.Data.get().waiting), "the reset data saves and loads");
+        PdimReset.Data live = PdimReset.Data.get();
+        check(copy.arrival.equals(live.arrival) && copy.waiting.equals(live.waiting) && copy.arrivalFrom.keySet().equals(live.arrivalFrom.keySet())
+            && !copy.arrival.containsKey(dim), "the reset data saves and loads (and the moved dimension isn't re-aimed any more)");
     }
 
     private void finish() {

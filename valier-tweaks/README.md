@@ -643,6 +643,33 @@ biomes, volcanoes or lava caves).
 - Setting `pdimRealisticTerrain` (default true; off: those dimensions generate flat again). Needs Personal Space and
   RWG2. Saved: `data/valiertweaks_pdimterrain.dat`.
 
+## Moving a return portal (2.3.9)
+
+`/pdim moveportal <x> <y> <z>`, standing next to the return portal inside a personal dimension (for anyone who could
+break it), moves that return portal to another spot in the dimension and points the portal it leads back to at the new
+spot, so trips in arrive there. Ops and the console: `/pdim moveportal <dimension> <x> <y> <z>`. The new spot, and the
+arrival spot just in front of it (the portal's facing, north by default) with two blocks of room, must be clear. After a
+move, the reset code no longer re-aims that dimension's portals (it only ever re-aims portals still pointing where they
+did before a reset).
+
+## Spectator mode (2.3.9)
+
+Minecraft 1.7.10 has none. `/spectate` toggles one: fly everywhere, **through blocks**, unseen (ServerUtilities'
+vanish) and untouchable, with night vision to see inside rock, and hands off the world (no breaking, placing, using,
+attacking or picking up; mobs drop you as a target). `/spectate` again puts flying, damage and vanish back as they were;
+stopping inside a block lifts you to the first spot above where you can stand. It survives logging out.
+
+- **Who:** ops, the console, and players with the ServerUtilities permission `valiertweaks.spectate`. Ops and the
+  console can switch others: `/spectate <player> [on|off]`.
+- **Through blocks** needs this jar (2.3.9 or newer) on the player's own computer too: 1.7.10's own movement code
+  already lets an entity with `noClip` through blocks (client movement, the client's push-out, and the server's "moved
+  wrongly" check all honour it), so the server sets it every tick and the player's Valier Tweaks does on their side, and
+  hides the "inside a block" overlay. Their game says it can, on joining a world, only to a server with 2.3.9 or newer
+  (FML disconnects a player whose message a server doesn't know); the server only answers games that said so. With an
+  older jar, `/spectate` still flies, hides and protects, but stops at walls.
+- Settings: `spectatorMode`, `spectatorVanish`, `spectatorNightVision` (all default true). Saved in the player's
+  persisted data (`ValierSpectator`).
+
 ## No ash from boilers (1.2.0)
 
 GregTech's solid fuel boilers put ash or dark ash into their output slot as they burn coal, charcoal, coke and so on.

@@ -305,6 +305,8 @@ public final class PdimReset {
      */
     static void prepare(PortalTileEntity portal, DimensionConfig cfg, Data data) {
         int dim = portal.targetDimId;
+        data.arrivalFrom.put(dim, new int[] { portal.targetPosX, portal.targetPosY, portal.targetPosZ });
+        data.markDirty();
         boolean real = Loader.isModLoaded("rwg2") && PdimTerrain.isRealistic(dim);
         int y = real ? AIR_ARRIVAL : cfg.getGroundLevel() + 1;
         if (!real) {
@@ -443,7 +445,10 @@ public final class PdimReset {
             if (!(o instanceof PortalTileEntity)) continue;
             PortalTileEntity te = (PortalTileEntity) o;
             Integer y = te.active ? data.arrival.get(te.targetDimId) : null;
-            if (y != null && aim(te, te.targetDimId, y, data.arrivalXZ.get(te.targetDimId))) fixed++;
+            int[] from = y != null ? data.arrivalFrom.get(te.targetDimId) : null;
+            // only portals still pointing where they did before the reset (a portal moved since is left alone)
+            if (from == null || te.targetPosX != from[0] || te.targetPosY != from[1] || te.targetPosZ != from[2]) continue;
+            if (aim(te, te.targetDimId, y, data.arrivalXZ.get(te.targetDimId))) fixed++;
         }
         return fixed;
     }
@@ -464,6 +469,140 @@ public final class PdimReset {
             te.markDirty();
         }
         return true;
+    }
+
+    // ---- moving a return portal ------------------------------------------------------------------------------------
+
+    /**
+     * {@code /pdim moveportal [dimension] <x> <y> <z>} (2.3.9): moves a personal dimension's return portal to another
+     * spot in it, and points the portal it leads back to at the new spot, so trips in arrive there. A player stands next
+     * to the return portal inside the dimension (and could break it); ops and the console name the dimension. The new
+     * spot and the arrival spot in front of it (the portal's facing) must be clear.
+     */
+    static void movePortal(ICommandSender sender, Integer named, int x, int y, int z, boolean op) {
+        PortalTileEntity ret;
+        int dim;
+        if (named != null) {
+            if (!op) {
+                say(sender, "Only ops can name a dimension. Stand next to the return portal inside your personal dimension and leave the number off.");
+                return;
+            }
+            dim = named;
+            if (!isPersonalDim(dim)) {
+                say(sender, "Dimension " + dim + " isn't a personal dimension (made with a Personal Space portal).");
+                return;
+            }
+            if (DimensionManager.getWorld(dim) == null) DimensionManager.initDimension(dim);
+            ret = findReturnPortal(DimensionManager.getWorld(dim));
+            if (ret == null) {
+                say(sender, "Couldn't find personal dimension " + dim + "'s return portal. Stand next to it and run /pdim moveportal <x> <y> <z> there.");
+                return;
+            }
+        } else if (sender instanceof EntityPlayerMP) {
+            EntityPlayerMP player = (EntityPlayerMP) sender;
+            dim = player.worldObj.provider.dimensionId;
+            ret = isPersonalDim(dim) ? nearestReturnPortal(player) : null;
+            if (ret == null) {
+                say(sender, "Stand next to the return portal inside your personal dimension (within " + RADIUS + " blocks).");
+                return;
+            }
+            if (!op && !mayChange(player, ret)) {
+                say(sender, "You can't move this portal: it's claimed by someone else.");
+                return;
+            }
+        } else {
+            say(sender, "From the console, name the dimension: /pdim moveportal <dimension> <x> <y> <z>");
+            return;
+        }
+        WorldServer w = (WorldServer) ret.getWorldObj();
+        if (y < 1 || y > 254) {
+            say(sender, "The height must be between 1 and 254.");
+            return;
+        }
+        WorldServer ow = DimensionManager.getWorld(ret.targetDimId);
+        if (ow == null) {
+            DimensionManager.initDimension(ret.targetDimId);
+            ow = DimensionManager.getWorld(ret.targetDimId);
+        }
+        TileEntity ote = null;
+        if (ow != null) {
+            ow.theChunkProviderServer.loadChunk(ret.targetPosX >> 4, ret.targetPosZ >> 4);
+            ote = ow.getTileEntity(ret.targetPosX, ret.targetPosY, ret.targetPosZ);
+        }
+        if (!(ote instanceof PortalTileEntity) || !((PortalTileEntity) ote).active || ((PortalTileEntity) ote).targetDimId != dim) {
+            say(sender, "The portal this one leads back to (" + ret.targetPosX + "," + ret.targetPosY + "," + ret.targetPosZ + " in dimension "
+                + ret.targetDimId + ") isn't there any more, so there's nothing to move it for.");
+            return;
+        }
+        PortalTileEntity src = (PortalTileEntity) ote;
+        for (int i = -1; i <= 1; i++) for (int k = -1; k <= 1; k++) w.theChunkProviderServer.loadChunk((x >> 4) + i, (z >> 4) + k);
+        if (!w.isAirBlock(x, y, z) && !w.getBlock(x, y, z).isReplaceable(w, x, y, z)) {
+            say(sender, "There's " + w.getBlock(x, y, z).getLocalizedName() + " at " + x + "," + y + "," + z + ": clear the spot first.");
+            return;
+        }
+        int px = x + src.targetFacing.offsetX, pz = z + src.targetFacing.offsetZ;
+        if (!passable(w, px, y, pz) || !passable(w, px, y + 1, pz)) {
+            say(sender, "Players arrive just in front of the portal, at " + px + "," + y + "," + pz + ", and that needs two blocks of room: clear it first.");
+            return;
+        }
+        int ox = ret.xCoord, oy = ret.yCoord, oz = ret.zCoord;
+        w.setBlockToAir(ox, oy, oz);
+        src.targetPosX = x;
+        src.targetPosY = y;
+        src.targetPosZ = z;
+        src.markDirty();
+        src.linkOtherPortal(true, sender instanceof EntityPlayerMP ? (EntityPlayerMP) sender : null);
+        Data data = Data.get();
+        data.arrival.remove(dim);
+        data.arrivalXZ.remove(dim);
+        data.arrivalFrom.remove(dim);
+        data.markDirty();
+        boolean ok = w.getTileEntity(x, y, z) instanceof PortalTileEntity;
+        say(sender, ok ? "Moved personal dimension " + dim + "'s return portal from " + ox + "," + oy + "," + oz + " to " + x + "," + y + "," + z
+            + ". The portal at " + src.xCoord + "," + src.yCoord + "," + src.zCoord + " (dimension " + src.getWorldObj().provider.dimensionId
+            + ") now arrives there." : "Something went wrong building the new return portal at " + x + "," + y + "," + z + ".");
+        ValierTweaks.LOG.info("[pdim moveportal] {} moved personal dimension {}'s return portal from {},{},{} to {},{},{} ({})", sender.getCommandSenderName(),
+            dim, ox, oy, oz, x, y, z, ok ? "done" : "failed");
+    }
+
+    /** A return portal in a personal dimension's loaded chunks, or at its recorded arrival spot, or null. */
+    static PortalTileEntity findReturnPortal(WorldServer w) {
+        int dim = w.provider.dimensionId;
+        for (Object c : w.theChunkProviderServer.loadedChunks) for (Object o : ((Chunk) c).chunkTileEntityMap.values())
+            if (o instanceof PortalTileEntity && ((PortalTileEntity) o).active && ((PortalTileEntity) o).targetDimId != dim) return (PortalTileEntity) o;
+        Data data = Data.get();
+        int[] xz = data.arrivalXZ.get(dim);
+        if (xz == null) return null;
+        Chunk c = w.theChunkProviderServer.loadChunk(xz[0] >> 4, xz[1] >> 4);
+        for (Object o : c.chunkTileEntityMap.values())
+            if (o instanceof PortalTileEntity && ((PortalTileEntity) o).active && ((PortalTileEntity) o).targetDimId != dim) return (PortalTileEntity) o;
+        return null;
+    }
+
+    /** The nearest active portal within {@value #RADIUS} blocks that leads out of the player's dimension. */
+    static PortalTileEntity nearestReturnPortal(EntityPlayer player) {
+        World world = player.worldObj;
+        int px = (int) Math.floor(player.posX), py = (int) Math.floor(player.posY), pz = (int) Math.floor(player.posZ);
+        PortalTileEntity best = null;
+        double bestD = Double.MAX_VALUE;
+        for (int x = px - RADIUS; x <= px + RADIUS; x++) for (int y = Math.max(0, py - RADIUS); y <= Math.min(255, py + RADIUS); y++)
+            for (int z = pz - RADIUS; z <= pz + RADIUS; z++) {
+                if (!world.blockExists(x, y, z)) continue;
+                TileEntity te = world.getTileEntity(x, y, z);
+                if (!(te instanceof PortalTileEntity)) continue;
+                PortalTileEntity p = (PortalTileEntity) te;
+                if (!p.active || p.targetDimId == world.provider.dimensionId) continue;
+                double d = player.getDistanceSq(x + 0.5, y + 0.5, z + 0.5);
+                if (d < bestD) {
+                    bestD = d;
+                    best = p;
+                }
+            }
+        return best;
+    }
+
+    private static boolean passable(World w, int x, int y, int z) {
+        return w.getBlock(x, y, z).getCollisionBoundingBoxFromPool(w, x, y, z) == null;
     }
 
     // ---- helpers ---------------------------------------------------------------------------------------------------
@@ -588,6 +727,8 @@ public final class PdimReset {
         final Map<Integer, Integer> arrival = new TreeMap<>();
         /** Real-terrain dimensions: where on the ground their portals land ({x, z}). */
         final Map<Integer, int[]> arrivalXZ = new TreeMap<>();
+        /** Where portals pointed before the first trip after the reset ({x, y, z}): only those are re-aimed. */
+        final Map<Integer, int[]> arrivalFrom = new TreeMap<>();
         private static Data cached;
         private static Object cachedFor;
 
@@ -626,6 +767,9 @@ public final class PdimReset {
             arrivalXZ.clear();
             int[] b = tag.getIntArray("ArrivalXZ");
             for (int i = 0; i + 2 < b.length; i += 3) arrivalXZ.put(b[i], new int[] { b[i + 1], b[i + 2] });
+            arrivalFrom.clear();
+            int[] f = tag.getIntArray("ArrivalFrom");
+            for (int i = 0; i + 3 < f.length; i += 4) arrivalFrom.put(f[i], new int[] { f[i + 1], f[i + 2], f[i + 3] });
         }
 
         @Override
@@ -649,6 +793,15 @@ public final class PdimReset {
                 b[i++] = e.getValue()[1];
             }
             tag.setIntArray("ArrivalXZ", b);
+            int[] f = new int[arrivalFrom.size() * 4];
+            i = 0;
+            for (Map.Entry<Integer, int[]> e : arrivalFrom.entrySet()) {
+                f[i++] = e.getKey();
+                f[i++] = e.getValue()[0];
+                f[i++] = e.getValue()[1];
+                f[i++] = e.getValue()[2];
+            }
+            tag.setIntArray("ArrivalFrom", f);
         }
     }
 }

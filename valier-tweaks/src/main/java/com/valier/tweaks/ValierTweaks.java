@@ -60,7 +60,29 @@ public class ValierTweaks {
      */
     @NetworkCheckHandler
     public boolean checkRemote(Map<String, String> mods, Side remote) {
+        if (remote == Side.SERVER) serverVersion = mods.get(MODID); // on a player's computer: the server's version
         return compatible(mods.get(MODID), remote, Tags.VERSION);
+    }
+
+    /** On a player's computer: the joined server's Valier Tweaks version (null without it). */
+    public static volatile String serverVersion;
+
+    /** Whether the joined server knows spectator mode's messages (2.3.9 or newer). */
+    public static boolean serverHasSpectator() {
+        return atLeast(serverVersion, 2, 3, 9);
+    }
+
+    /** Whether a version like "2.3.9", "v2.3.9-pre1" or "2.4" is at least major.minor.patch. */
+    static boolean atLeast(String version, int major, int minor, int patch) {
+        if (version == null) return false;
+        String v = version.trim();
+        if (v.startsWith("v") || v.startsWith("V")) v = v.substring(1);
+        String[] p = v.split("[.\\-+ ]");
+        int[] n = new int[3];
+        for (int i = 0; i < 3; i++) n[i] = i < p.length && p[i].matches("\\d+") ? Integer.parseInt(p[i]) : 0;
+        if (n[0] != major) return n[0] > major;
+        if (n[1] != minor) return n[1] > minor;
+        return n[2] >= patch;
     }
 
     /** Whether the other side's version ({@code theirs}, null if it hasn't the mod) can play with {@code ours}. */
@@ -125,6 +147,13 @@ public class ValierTweaks {
             .register(new ValierCost()); // /valier cost: Valier's share of each server tick
         NET.registerMessage(com.valier.tweaks.storage.SatchelEvents.Scroll.Handler.class, com.valier.tweaks.storage.SatchelEvents.Scroll.class, 2,
             Side.SERVER);
+        NET.registerMessage(SpectatorMessage.HelloHandler.class, SpectatorMessage.Hello.class, 3, Side.SERVER); // spectator mode
+        NET.registerMessage(SpectatorMessage.StateHandler.class, SpectatorMessage.State.class, 4, Side.CLIENT);
+        Spectators spectators = new Spectators();
+        MinecraftForge.EVENT_BUS.register(spectators); // hands off: clicks, breaking, picking up, mobs
+        FMLCommonHandler.instance()
+            .bus()
+            .register(spectators); // every tick, joining, leaving
         com.valier.tweaks.storage.BarrelSync barrels = new com.valier.tweaks.storage.BarrelSync();
         MinecraftForge.EVENT_BUS.register(barrels); // the overworld unloading
         FMLCommonHandler.instance()
@@ -200,6 +229,8 @@ public class ValierTweaks {
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
         event.registerServerCommand(new PdimCommand());
+        event.registerServerCommand(new Spectators.Command());
+        if (Loader.isModLoaded("serverutilities")) Spectators.Su.register(); // valiertweaks.spectate
         event.registerServerCommand(new TweaksCommand()); // pipes (and, on a test server, selftest)
         // WorldEdit made its own permission check at server-about-to-start; ranks go in front of it now, before it
         // registers its commands (server started).
